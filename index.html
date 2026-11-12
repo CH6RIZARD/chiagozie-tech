@@ -1,0 +1,909 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<script>/* iOS zooms the whole page in when a field rendered under 16px gets focus (the embedded apps sit scaled down inside their frames) and never zooms back out. Capping the scale stops that; pinch zoom still works on iOS. */
+if (/iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)) document.querySelector('meta[name=viewport]').content += ',maximum-scale=1';
+/* Every load opens at the top of the scroll home: no restored scroll position (a #hash in the URL still jumps). */
+history.scrollRestoration = 'manual';
+/* Theme: dark for every first visit (same as the Read less frame, whatever the OS says); only a choice made with the Theme button changes it. Applied here so the page never paints in the wrong theme. */
+try { if (localStorage.getItem('theme') === 'light') document.documentElement.dataset.theme = 'light'; } catch {}</script>
+<meta name="theme-color" content="#161615">
+<title>Chiagozie Oliver · Engineer</title>
+<meta name="description" content="Full-stack and real-time systems engineer. Fintech, 3D simulation, live media. The products on this page are the real builds, running.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;1,9..144,300&family=Inter:wght@400;500&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* ---- tokens: re-skin here ---- */
+:root{
+  --paper:#F4F3EE; --ink:#17181C; --muted:#6B6D73; --line:#D9D8D1; --rule:#E6E5DF; --stage:#0E0E10;
+  --accent:#2038C7; --live:#C8102E;
+  --serif:'Fraunces',Georgia,serif; --sans:'Inter',system-ui,sans-serif; --mono:'IBM Plex Mono',ui-monospace,Menlo,Consolas,monospace;
+  --gutter:clamp(16px,5vw,96px);
+  color-scheme:light dark;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--paper:#161615;--ink:#ECEAE3;--muted:#9A9890;--line:#3A3936;--rule:#262624;--stage:#000;--accent:#8FA0FF}}
+:root[data-theme="light"]{color-scheme:light}
+:root[data-theme="dark"]{color-scheme:dark;--paper:#161615;--ink:#ECEAE3;--muted:#9A9890;--line:#3A3936;--rule:#262624;--stage:#000;--accent:#8FA0FF}
+
+*{box-sizing:border-box}
+section,footer{scroll-margin-top:56px}
+html{scroll-behavior:smooth}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+body{margin:0;position:relative;padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-right);background:var(--paper);color:var(--ink);font:400 17px/1.6 var(--sans);-webkit-font-smoothing:antialiased}
+a{color:inherit;text-decoration:none;border-bottom:1px solid var(--line)}
+a:hover{border-color:var(--accent);color:var(--accent)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+h1,h2,h3{font-family:var(--serif);font-weight:400;letter-spacing:-.01em;margin:0}
+.mono{font-family:var(--mono);font-size:12px;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)}
+.wrap{max-width:1280px;margin:0 auto;padding:0 var(--gutter)}
+.measure{max-width:66ch}
+
+nav{position:sticky;top:0;z-index:10000;background:color-mix(in srgb,var(--paper) 90%,transparent);backdrop-filter:blur(10px);border-bottom:1px solid var(--rule)}
+nav .wrap{display:flex;gap:26px;align-items:center;height:48px;overflow-x:auto;scrollbar-width:none}
+nav a{border:0;white-space:nowrap}
+nav a:first-child{margin-right:auto;color:var(--ink)}
+nav a.cta{color:var(--accent)}
+
+/* mast */
+#mast{padding:clamp(72px,13vh,140px) 0 clamp(48px,7vw,88px)}
+#mast h1{font-size:clamp(40px,6.6vw,92px);line-height:1.02;letter-spacing:-.025em;max-width:15ch}
+#mast .lede{font-family:var(--serif);font-weight:300;font-size:clamp(20px,2.3vw,27px);line-height:1.35;margin:30px 0 0;max-width:38ch}
+.ctas{display:flex;flex-wrap:wrap;gap:12px;margin-top:34px}
+.btn{font-family:var(--mono);font-size:12px;letter-spacing:.1em;text-transform:uppercase;padding:12px 18px;border:1px solid var(--ink);border-radius:999px}
+.btn.primary{background:var(--ink);color:var(--paper)}
+.btn:hover{border-color:var(--accent);color:var(--accent)}.btn.primary:hover{background:var(--accent);border-color:var(--accent);color:#fff}
+.facts{display:grid;grid-template-columns:repeat(2,1fr);gap:20px 32px;margin-top:56px;padding-top:20px;border-top:1px solid var(--rule)}
+@media(min-width:720px){.facts{grid-template-columns:repeat(3,1fr)}}
+.facts span{display:block}.facts .v{font-size:15px;margin-top:4px;color:var(--ink)}
+
+/* capability grid */
+.caps{display:grid;gap:0;border-top:1px solid var(--line)}
+@media(min-width:900px){.caps{grid-template-columns:repeat(3,1fr)}}
+.cap{padding:26px 0 30px;border-bottom:1px solid var(--rule)}
+@media(min-width:900px){.cap{padding:28px 28px 32px 0;border-right:1px solid var(--rule)}.cap:nth-child(3n){border-right:0}.cap:nth-child(n+4){padding-left:0}.cap:nth-child(3n+2),.cap:nth-child(3n+3){padding-left:28px}}
+.cap h3{font-size:22px;margin-bottom:10px}
+.cap p{margin:0;font-size:15px;color:var(--ink)}
+.cap .ev{margin-top:12px;font-family:var(--mono);font-size:11.5px;letter-spacing:.02em;color:var(--muted);line-height:1.7}
+
+/* realm = a project running live */
+.realm{padding:clamp(56px,8vw,104px) 0;border-top:1px solid var(--rule)}
+.realm .top{display:grid;gap:18px 40px;margin-bottom:28px;align-items:end}
+@media(min-width:900px){.realm .top{grid-template-columns:1fr 1fr}}
+.realm h2{font-size:clamp(30px,4vw,52px);line-height:1.05;letter-spacing:-.02em}
+.realm .kicker{display:flex;gap:14px;align-items:center;margin-bottom:14px}
+.st{font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);white-space:nowrap}
+.st.live::before{content:"";display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--live);margin-right:7px;vertical-align:1px;animation:blink 2.4s infinite}
+@keyframes blink{50%{opacity:.25}}
+@media (prefers-reduced-motion:reduce){.st.live::before{animation:none}}
+.realm .about{font-size:16px;max-width:60ch;margin:0}
+.realm .how{font-family:var(--mono);font-size:12px;color:var(--muted);margin-top:14px;letter-spacing:.02em}
+
+.stage{position:relative;background:var(--rule);border:1px solid var(--line);border-radius:4px;overflow:hidden;aspect-ratio:16/9;max-height:78vh}
+.stage.tall{aspect-ratio:auto;height:min(78vh,860px)}
+.monitor{background:#0b0b0c;border-radius:14px;padding:14px 14px 0;box-shadow:0 30px 80px rgba(0,0,0,.35),inset 0 0 0 1px #2a2a2c}
+.monitor .stage.desk{border:0;border-radius:6px 6px 0 0}
+.monitor .chin{height:30px;display:grid;place-items:center}
+.monitor .chin i{width:9px;height:9px;border-radius:50%;background:#2e2e31;display:block}
+.foot{width:160px;height:14px;margin:0 auto;background:linear-gradient(#111,#0b0b0c);border-radius:0 0 10px 10px}
+.stage.desk{aspect-ratio:16/10;height:auto;max-height:none}
+.stage.desk iframe{width:1440px;height:calc(100% / var(--k,1));transform:scale(var(--k,1));transform-origin:0 0}
+.stage iframe{position:absolute;inset:0;width:100%;height:100%;border:0;background:var(--stage)}
+.stage .poster{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;object-position:center;filter:saturate(.85) brightness(.7)}
+.phone .poster{display:none}
+.stage .poster,.stage .enter{display:none}
+.stage:not(.on)::after,.stage.on.wait::after{content:attr(data-label)!important;background:none!important;border-radius:0!important;width:auto!important;height:auto!important;right:0!important;top:0!important;opacity:1!important;position:absolute;inset:0;display:grid;place-items:center;font:12px var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--muted);pointer-events:none}
+.stage.unavailable::after{content:attr(data-label);white-space:pre-line;text-align:center;line-height:1.8;padding:24px}
+.stage .enter{position:absolute;inset:0;display:grid;place-items:center;background:linear-gradient(to top,rgba(0,0,0,.55),rgba(0,0,0,.05));border:0;cursor:pointer;color:#fff;font:inherit}
+.stage .enter span{border:1px solid rgba(255,255,255,.7);padding:12px 22px;border-radius:999px;font-family:var(--mono);font-size:12px;letter-spacing:.14em;text-transform:uppercase;background:rgba(0,0,0,.35);backdrop-filter:blur(6px)}
+.stage .enter:hover span{background:#fff;color:#000;border-color:#fff}
+.stage.on .poster,.stage.on .enter{display:none}
+.stage .tools{position:absolute;right:10px;top:10px;display:flex;gap:6px;z-index:2}
+.stage .tools a,.stage .tools button{font:11px/1 var(--mono);letter-spacing:.08em;text-transform:uppercase;color:#fff;background:rgba(0,0,0,.55);border:1px solid rgba(255,255,255,.25);padding:7px 10px;border-radius:3px;cursor:pointer;backdrop-filter:blur(6px)}
+.stage .tools a:hover,.stage .tools button:hover{background:#fff;color:#000}
+
+.split{display:grid;gap:20px;align-items:start}
+@media(min-width:1000px){.split{grid-template-columns:minmax(0,1fr) 360px}.split.with-phone{grid-template-columns:minmax(0,1fr) 420px}
+  #void .split.with-phone,#revelation .split.with-phone,#trading .split.with-phone{grid-template-columns:420px minmax(0,1fr)}
+  #void .split.with-phone>.phone-wrap,#revelation .split.with-phone>.phone-wrap,#trading .split.with-phone>.phone-wrap{order:-1}}
+.phone .screen[hidden]{display:none}
+.aside{display:grid;gap:14px;align-content:start}
+.aside figure{margin:0;border:1px solid var(--line);border-radius:4px;overflow:hidden;background:var(--stage)}
+.aside figure img{display:block;width:100%;height:auto}
+.aside figcaption{font-family:var(--mono);font-size:11px;letter-spacing:.04em;color:var(--muted);padding:10px 12px;border-top:1px solid var(--line);background:var(--paper)}
+.spec{border-top:1px solid var(--rule);font-size:14px}
+.spec div{display:grid;grid-template-columns:96px 1fr;gap:12px;padding:10px 0;border-bottom:1px solid var(--rule)}
+.spec b{font-family:var(--mono);font-weight:400;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);padding-top:3px}
+
+.phone-wrap{display:grid;place-items:center;align-self:start}
+.phone{position:relative;width:min(390px,100%,calc(78vh*390/818));aspect-ratio:390/818;height:auto;border-radius:63px;background:#000;padding:12px;box-shadow:0 30px 80px rgba(0,0,0,.35),inset 0 0 0 1px #333}
+.phone .screen{position:relative;width:100%;height:100%;border-radius:51px;overflow:hidden;background:#000;aspect-ratio:auto;max-height:none;border:0}
+
+
+/* key legend */
+.keys{display:flex;flex-wrap:wrap;gap:10px 22px;margin-top:14px;font-size:13px;color:var(--ink)}
+.keys span{display:inline-flex;align-items:center;gap:8px}
+kbd{font:500 11px/1 var(--mono);padding:6px 8px;border:1px solid var(--ink);border-bottom-width:2px;border-radius:5px;background:var(--paper);min-width:26px;text-align:center}
+/* brand logos above labels */
+.logo{display:flex;align-items:center;gap:12px;margin-bottom:18px;min-height:40px}
+.logo img{display:block;height:40px;width:auto;max-width:260px;object-fit:contain}
+img.onlight{filter:none}
+:root[data-theme="light"] img.onlight,:root:not([data-theme="dark"]) img.onlight{filter:invert(1)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) img.onlight{filter:none}}
+.logo .void{font-family:var(--mono);font-size:22px;letter-spacing:.32em;color:#c9a84c;font-weight:500}
+.logo .void i{font-style:normal;display:inline-block;width:9px;height:9px;border:1.5px solid #c9a84c;border-radius:50%;vertical-align:2px;margin:0 .1em}
+.logo .rev{font-family:var(--serif);font-weight:400;font-size:26px;letter-spacing:.04em;text-transform:uppercase}
+.logo .rev b{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--live);margin-left:10px;vertical-align:3px}
+.logo .mf{font-family:var(--sans);font-weight:500;font-size:18px}
+.btn svg{width:14px;height:14px;vertical-align:-2px;margin-right:8px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.ibtn{display:inline-grid;place-items:center;width:44px;height:44px;border:0;color:var(--ink);opacity:.9}
+.ibtn img{width:34px;height:34px;object-fit:contain}
+.ibtn svg{width:30px;height:30px}
+.ibtn svg.fill{fill:currentColor;stroke:none}
+:root[data-theme="dark"] img.glyph{filter:invert(1)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) img.glyph{filter:invert(1)}}
+.ibtn:hover{opacity:1}
+.ibtn:hover{border-color:var(--accent);color:var(--accent)}
+.ibtn svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.ibtn svg.fill{fill:currentColor;stroke:none}
+nav a img{height:16px;width:auto;vertical-align:-3px;margin-right:7px;object-fit:contain}
+nav a .void{font-size:12px;letter-spacing:.2em;color:#c9a84c;margin-right:6px}
+nav a .void i{width:6px;height:6px;border-width:1px;vertical-align:1px}
+nav a .rev{font-size:14px;letter-spacing:.02em;margin-right:6px}
+nav a .rev b{width:5px;height:5px;margin-left:4px;vertical-align:2px}
+.phone .screen.scrollpage iframe{width:calc(100% + max(var(--sbw,0px), 16px))}   /* a live site we cannot style: its scrollbar (even an overlay one, which measures 0) falls outside the screen */ /* a scrolling web page: push its scrollbar outside the rounded screen; apps fit exactly */
+.phone .screen{scrollbar-width:none}
+.phone .screen iframe{top:0;height:100%} /* the real build fills the whole screen */
+.phone::after{content:"";position:absolute;left:50%;bottom:20px;transform:translateX(-50%);width:125px;height:5px;border-radius:3px;background:#fff;opacity:.8;z-index:5;pointer-events:none} /* home indicator */
+.phone .island{position:absolute;top:22px;left:50%;transform:translateX(-50%);width:117px;height:34px;border-radius:999px;background:#000;z-index:4;pointer-events:none}
+.phone .island::after{content:"";position:absolute;right:13px;top:50%;width:9px;height:9px;margin-top:-4.5px;border-radius:50%;background:radial-gradient(circle at 35% 35%,#2a3550,#05060a 70%)}
+/* a website (not an app) sits under the status bar in Safari; the bar takes the page header colour */
+.phone .screen.scrollpage{background:#0b0b0b}
+.phone .screen.scrollpage iframe{top:54px;height:calc(100% - 54px)}
+/* status glyphs overlay the app, as on a device; no band, no colour of their own */
+.phone .screen::before{content:"9:41";position:absolute;left:31px;top:19px;z-index:3;color:var(--sbfg,#fff);font:600 16px/1 -apple-system,'SF Pro Text',Inter,system-ui,sans-serif;letter-spacing:-.2px;pointer-events:none;text-shadow:0 0 6px rgba(0,0,0,.35)}
+.phone .screen::after{content:"";position:absolute;right:28px;top:21px;z-index:3;width:46px;height:12px;pointer-events:none;background:
+  linear-gradient(#fff,#fff) 0 7px/3px 5px no-repeat,linear-gradient(#fff,#fff) 4px 5px/3px 7px no-repeat,linear-gradient(#fff,#fff) 8px 3px/3px 9px no-repeat,linear-gradient(#fff,#fff) 12px 1px/3px 11px no-repeat,
+  linear-gradient(#fff,#fff) 22px 1px/20px 10px no-repeat;border-radius:2px;opacity:.95;filter:var(--sbinv,drop-shadow(0 0 3px rgba(0,0,0,.4)))}
+
+/* iPhone proportions are fixed ratios of the frame width (set as --pw by script); after the 390px defaults above so they win */
+.phone{border-radius:calc(var(--pw,390px)*.1615);padding:calc(var(--pw,390px)*.0308)}
+.phone .screen{border-radius:calc(var(--pw,390px)*.1308)}
+.phone::after{width:calc(var(--pw,390px)*.32);height:calc(var(--pw,390px)*.0128);bottom:calc(var(--pw,390px)*.0513)}
+.phone .island{top:calc(var(--pw,390px)*.0564);width:calc(var(--pw,390px)*.3);height:calc(var(--pw,390px)*.0872)}
+.phone .screen::before{left:calc(var(--pw,390px)*.0795);top:calc(var(--pw,390px)*.0487);font-size:calc(var(--pw,390px)*.041)}
+.phone .screen::after{right:calc(var(--pw,390px)*.0718);top:calc(var(--pw,390px)*.0538)}
+.phone .stage.unavailable::after{font-size:calc(var(--pw,390px)*.028);line-height:1.6;padding:calc(var(--pw,390px)*.3) 10% 20%}
+
+/* stores: one monitor, a browser with three tabs */
+.browser .tabs{display:flex;align-items:flex-end;gap:4px;padding:0 6px;background:#0b0b0c}
+.browser .tabs button{display:inline-flex;align-items:center;gap:8px;height:34px;padding:0 14px;border:0;border-radius:8px 8px 0 0;background:none;color:#9A9890;font:13px var(--sans);cursor:pointer;white-space:nowrap}
+.browser .tabs button i{width:8px;height:8px;border-radius:50%;flex:0 0 auto}
+.browser .tabs button[aria-selected="true"]{background:#161615;color:#ECEAE3}
+.browser .urlbar{display:flex;align-items:center;gap:10px;height:34px;padding:0 12px;background:#161615}
+.browser .urlbar .nav{font:13px var(--mono);color:#9A9890;letter-spacing:.1em}
+.browser .urlbar .url{flex:1;height:22px;border-radius:999px;background:#0b0b0c;color:#ECEAE3;font:11px/22px var(--mono);padding:0 12px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.browser .panes .stage.desk{border-radius:0}
+.browser .panes .stage[hidden]{display:none}
+@media(min-width:900px){.browser:not(.split) .monitor,.browser:not(.split) .foot{max-width:1040px;margin-left:auto;margin-right:auto}.browser .foot{margin-top:0}}
+.browser .storecaps{margin-top:24px}
+.browser .storecaps div{grid-template-columns:130px 1fr}
+.browser .storecaps div b{color:var(--muted)}
+.browser .storecaps div[aria-current="true"] b{color:var(--ink)}
+/* stores: three small monitors */
+.stores{display:grid;gap:28px}
+@media(min-width:900px){.stores{grid-template-columns:repeat(3,1fr)}}
+.stores figure{margin:0}
+@media(min-width:900px){.stores{align-items:start}.stores figure{transform-origin:top center}.stores figure:nth-child(1),.stores figure:nth-child(3){transform:translateY(36px) scale(.96)}.stores figure:nth-child(2){transform:translateY(0) scale(1)}}
+.stores .monitor{padding:8px 8px 0;border-radius:10px}
+.stores .chin{height:18px}.stores .chin i{width:6px;height:6px}
+.stores .foot{width:90px;height:10px}
+.stores figcaption{margin-top:16px;font-size:14px;color:var(--ink)}
+.stores figcaption b{display:block;font-family:var(--serif);font-weight:400;font-size:20px;margin-bottom:4px}
+.stores .tools a{padding:5px 8px;font-size:10px}
+/* frame diagram */
+.frame{display:grid;gap:32px}
+@media(min-width:900px){.frame{grid-template-columns:1.1fr .9fr}}
+.frame svg{width:100%;height:auto;display:block}
+.frame svg text{font-family:var(--mono);font-size:11px;fill:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.frame svg .big{font-family:var(--serif);font-size:20px;fill:var(--ink);text-transform:none;letter-spacing:0}
+.frame svg line,.frame svg path,.frame svg rect,.frame svg circle{stroke:var(--ink);stroke-width:1;fill:none;vector-effect:non-scaling-stroke}
+.frame svg .soft{stroke:var(--line)}.frame svg .hot{stroke:var(--accent)}.frame svg .dot{fill:var(--accent);stroke:none}
+
+/* worlds */
+.wgrid{display:grid;gap:0;border-top:1px solid var(--line)}
+@media(min-width:900px){.wgrid{grid-template-columns:1fr 1fr}}
+.wgrid article{padding:24px 28px 28px 0;border-bottom:1px solid var(--rule)}
+@media(min-width:900px){.wgrid article:nth-child(odd){border-right:1px solid var(--rule)}.wgrid article:nth-child(even){padding-left:28px;padding-right:0}}
+.wgrid h3{font-size:24px;margin:8px 0 10px}
+.wgrid p{margin:0;font-size:15px}
+/* plain sections */
+section.plain{padding:clamp(56px,8vw,104px) 0;border-top:1px solid var(--rule)}
+section.plain h2{font-size:clamp(28px,3.4vw,40px);margin-bottom:28px}
+.head{display:grid;gap:16px}
+@media(min-width:900px){.head{grid-template-columns:260px 1fr}}
+.rows{border-top:1px solid var(--line)}
+.rows details{border-bottom:1px solid var(--rule)}
+.rows summary{list-style:none;cursor:pointer;display:grid;gap:6px 24px;padding:18px 0;align-items:baseline}
+.rows summary::-webkit-details-marker{display:none}
+@media(min-width:900px){.rows summary{grid-template-columns:130px 230px 1fr}}
+.rows summary h3{font-size:22px;line-height:1.2}
+.rows summary .d{font-size:15px}
+.rows summary:hover h3{color:var(--accent)}
+.rows .body{padding:0 0 26px;font-size:15px;max-width:68ch}
+.rows .body p{margin:0 0 10px}
+ol.plain{list-style:none;margin:0;padding:0;counter-reset:n;border-top:1px solid var(--rule)}
+ol.plain li{counter-increment:n;display:grid;grid-template-columns:40px 1fr;gap:16px;padding:16px 0;border-bottom:1px solid var(--rule);font-size:16px}
+ol.plain li::before{content:counter(n,decimal-leading-zero);font-family:var(--mono);font-size:12px;color:var(--muted);padding-top:4px}
+ol.plain b{font-weight:500}
+
+footer{padding:64px 0 120px;border-top:1px solid var(--rule);font-size:15px}
+footer h2{font-size:clamp(28px,3.4vw,40px);margin:8px 0 20px}
+footer .row{display:flex;flex-wrap:wrap;gap:12px 32px;margin:16px 0 40px}
+footer .colophon{color:var(--muted);font-size:13px;max-width:60ch}
+#theme{display:inline-flex;align-items:center;gap:7px;background:none;border:1px solid var(--line);color:var(--muted);font:11px var(--mono);text-transform:uppercase;letter-spacing:.06em;padding:5px 10px;cursor:pointer;border-radius:2px}
+#theme svg{width:13px;height:13px;flex:0 0 auto}
+html{touch-action:manipulation}
+/* loading stages: a shimmer in the stage's own shape and the page's own greys, until the build's frame has loaded */
+@keyframes sk{to{background-position:-200% 0}}
+.stage:not(.on):not(.unavailable),.stage.wait{background:linear-gradient(100deg,var(--rule) 38%,color-mix(in srgb,var(--line) 55%,var(--rule)) 50%,var(--rule) 62%) 0 0/200% 100% var(--rule);animation:sk 1.7s linear infinite}
+.stage iframe{transition:opacity .3s}
+.stage.wait iframe{opacity:0}
+@media (prefers-reduced-motion:reduce){.stage{animation:none!important}}
+#theme:hover{border-color:var(--accent);color:var(--accent)}
+#scion-hud,#scion-ask{display:none!important}
+
+/* ---------- phones: a short page. The live apps lead; details fold; card grids swipe sideways ---------- */
+@media (max-width:760px){
+  section,.realm,section.plain{padding:40px 0}
+  #mast{padding:28px 0 28px}
+  html,body,.msheet .panel{scrollbar-width:none}   /* phones: no scrollbars anywhere on the page or in the sheet */
+  html::-webkit-scrollbar,body::-webkit-scrollbar,.msheet .panel::-webkit-scrollbar{display:none;width:0;height:0}
+  /* phone top: the index below replaces the section links; the bar keeps the name and Hire, clear of the notch */
+  nav[aria-label="Sections"]{padding-top:env(safe-area-inset-top)}
+  nav[aria-label="Sections"] .wrap{padding-left:max(20px,env(safe-area-inset-left));padding-right:max(20px,env(safe-area-inset-right))}
+  nav[aria-label="Sections"] a:not(:first-child):not(.cta){display:none}
+  #mast .lede{font-size:18px;margin-top:18px}
+  .facts{margin-top:28px;gap:12px 20px}
+  .realm .top{margin-bottom:16px;gap:10px}
+  .realm h2{font-size:30px}
+  .realm .about{font-size:15px;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;cursor:pointer}
+  .realm .about.open{-webkit-line-clamp:unset;display:block}
+  .realm .how{display:none}
+  /* fold every spec list behind one tap */
+  details.fold{border-top:1px solid var(--rule);margin-top:6px}
+  details.fold>summary{list-style:none;cursor:pointer;padding:12px 0;font:12px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+  details.fold>summary::-webkit-details-marker{display:none}
+  details.fold>summary::after{content:" +"}
+  details.fold[open]>summary::after{content:" −"}
+  /* the live thing first: phones above their notes */
+  .split.with-phone{display:flex;flex-direction:column-reverse}
+  .split{gap:12px}
+  .phone-wrap{width:100%}
+  .phone{width:min(330px,86vw)}
+  /* a desktop monitor next to a phone is redundant on a phone: keep the phone */
+  #revelation .split.with-phone{flex-direction:column}
+  #revelation .monitor{margin-top:16px}
+  /* Hugo: keyboard legend and floor plan are desktop affordances */
+  #hugo .keys{display:none}
+  #hugo .aside figure{margin-top:12px}
+  /* card grids become side-swipe rows */
+  .caps,.wgrid{display:flex!important;overflow-x:auto;scroll-snap-type:x mandatory;gap:14px;padding-bottom:8px;-webkit-overflow-scrolling:touch;scrollbar-width:none;border-top:0}
+  .caps::-webkit-scrollbar,.wgrid::-webkit-scrollbar{display:none}
+  .caps>.cap,.wgrid>article{flex:0 0 82%;scroll-snap-align:start;border:1px solid var(--rule)!important;border-radius:6px;padding:18px!important}
+  .browser .tabs button{padding:0 10px;font-size:12px}
+  .browser .storecaps div{grid-template-columns:1fr}
+  .swipe-hint{display:block;font:11px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:-4px 0 12px}
+  /* long lists: first three, rest on tap */
+  ol.plain li:nth-child(n+4){display:none}
+  ol.plain.open li{display:grid}
+  .more{display:inline-block;margin-top:10px;font:12px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--accent);background:none;border:0;padding:0;cursor:pointer}
+  .frame svg{max-height:260px}
+}
+@media (min-width:761px){.swipe-hint,.more{display:none}}
+@media (max-width:760px){
+  .head,.head>div,.split>*,.top>*{min-width:0}          /* a swipe row must not widen its column */
+  .kicker{flex-wrap:wrap;gap:6px 12px}
+  #mast h1{font-size:40px}
+  .facts .v{font-size:14px}
+  .facts>div:nth-child(3){display:none}                  /* education lives in the footer line */
+  #frame svg{display:none}
+  .rows summary .d{display:none}
+  .rows summary{padding:14px 0}
+  footer h2{font-size:26px}
+  footer .colophon{display:none}
+  section.plain h2{font-size:26px;margin-bottom:16px}
+  /* the page's own 3D characters, at phone scale */
+  #hugo-hit{transform-origin:top left}
+}
+
+
+/* ---------- phones, layout C: a short index; each project opens in a sheet with its live app ---------- */
+.mindex,.msheet{display:none}
+@media (max-width:760px){
+  body>section:not(#mast):not(#frame):not(#work):not(#concepts):not(#lessons){display:none}
+  #frame,#work,#concepts,#lessons{padding:36px 0}
+  #mast .facts{display:none}
+  #mast .lede{font-size:16px}
+  .mindex{display:block;padding:0 0 8px;position:static;background:none;border:0;backdrop-filter:none}
+  .mindex .wrap{display:block;height:auto;padding:0 20px;overflow:visible}
+  .mindex .lbl{display:block;font:11px var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--muted);padding:0 0 8px}
+  .mrow{display:flex;gap:14px;align-items:center;width:100%;padding:12px 0;border:0;border-top:1px solid var(--rule);background:none;color:var(--ink);text-align:left;cursor:pointer;font:inherit}
+  .mrow:last-of-type{border-bottom:1px solid var(--rule)}
+  .mrow .th{width:60px;height:60px;border-radius:12px;object-fit:cover;flex:0 0 auto;background:#0b0b0c}
+  .mrow .ic{width:60px;height:60px;border-radius:12px;flex:0 0 auto;border:1px solid var(--line);display:grid;place-items:center;font:500 13px var(--mono);color:var(--muted)}
+  .mrow .tx{display:flex;flex-direction:column;gap:3px;min-width:0;flex:1}
+  .mrow .k{font:10.5px var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+  .mrow .n{font-family:var(--serif);font-size:21px;line-height:1.15}
+  .mrow .l{font-size:13px;line-height:1.4;color:var(--muted);overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+  .mrow .ch{flex:0 0 auto;color:var(--muted)}
+  .msheet{position:fixed;inset:0;z-index:10050;display:flex;flex-direction:column;justify-content:flex-end;background:rgba(0,0,0,.55);opacity:0;pointer-events:none;transition:opacity .25s}
+  .msheet.on{opacity:1;pointer-events:auto}
+  .msheet .scrim{flex:1 0 3vh;border:0;background:none}
+  .msheet .panel{position:relative;max-height:96dvh;padding-bottom:env(safe-area-inset-bottom);overflow-y:auto;overscroll-behavior:contain;background:var(--paper);border-radius:22px 22px 0 0;border-top:1px solid var(--line);transform:translateY(100%);transition:transform .32s cubic-bezier(.2,.8,.2,1)}
+  .msheet.on .panel{transform:none}
+  .msheet .bar{position:sticky;top:0;z-index:2;display:flex;align-items:center;padding:8px 12px 4px 20px;background:var(--paper)}
+  .msheet .grab{position:absolute;left:50%;top:6px;transform:translateX(-50%);width:40px;height:5px;border-radius:3px;background:var(--line)}
+  .msheet .x{width:44px;height:44px;border:0;background:none;color:var(--ink);display:grid;place-items:center;cursor:pointer;margin-left:auto}
+  .msheet .panel>section{display:block!important;padding-top:4px}
+  #hugo .stage{aspect-ratio:16/10;height:auto;max-height:none}
+  #hugo .stage iframe{width:1440px;height:calc(100% / var(--k,1));transform:scale(var(--k,1));transform-origin:0 0}
+  .msheet #hugo .split{display:flex;flex-direction:column;gap:10px}
+  .msheet #hugo .aside figure{margin:0 0 12px}
+  .msheet #hugo .aside figure img{max-height:38vh;width:auto;max-width:100%;display:block;margin:0 auto}
+  .msheet .stage.desk{max-height:40vh}
+  .msheet .split.with-phone{display:flex;flex-direction:column;align-items:center;gap:12px}
+  .msheet .split.with-phone>*{width:100%}
+  .msheet .split.with-phone>.phone-wrap{order:-1;display:flex;justify-content:center}
+  .msheet .phone{width:min(100%,300px,max(200px,calc((96dvh - 360px) * 390 / 818)))}   /* the whole phone fits in the sheet; never hangs below the screen */
+  .msheet .split.with-phone .ctas,.msheet .split.with-phone details.fold{max-width:300px}
+  .msheet #revelation .split.with-phone>.phone-wrap{order:0}
+  .msheet .realm .top{margin-bottom:10px}
+  .msheet .realm .about{-webkit-line-clamp:3}
+  .msheet .stage .tools{display:none}
+  .msheet #hugo .split{align-items:stretch}   /* align-items:start shrank the dorm stage to its 2px content width */
+  /* phone screens: the build renders in a real 390px iPhone viewport scaled to the frame (--sk), starting below the island */
+  .phone .screen iframe,.phone .screen.scrollpage iframe{top:calc(var(--pw,390px)*.1385);width:390px;height:calc((100% - var(--pw,390px)*.1385) / var(--sk,1));transform:scale(var(--sk,1));transform-origin:0 0}
+  .phone .screen.scrollpage iframe{width:calc(390px + max(var(--sbw,0px), 16px))}
+  footer{padding-top:28px}
+}
+</style>
+<style>
+#mast{padding:clamp(40px,8vh,96px) 0 clamp(28px,4vw,48px)}
+#mast .wrap{min-height:calc(100dvh - 48px - clamp(40px,8vh,96px) - clamp(28px,4vw,48px));display:flex;flex-direction:column;align-items:center;justify-content:center}
+#mast h1{margin:0;max-width:none;text-align:center;font-size:clamp(44px,7vw,100px);line-height:.95;letter-spacing:-.035em}
+.where{display:flex;flex-wrap:wrap;justify-content:center;gap:12px 40px;margin-top:34px;font-size:15px;color:var(--ink)}
+.loc{position:relative;display:inline-flex;align-items:center;gap:12px;border-radius:4px;cursor:default;white-space:nowrap}
+.loc em{margin-left:2px;font:normal 400 10px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.pin{position:relative;flex:0 0 auto;width:10px;height:10px;border-radius:50%;transition:transform .2s}
+.pin.now{background:#4ADE80;box-shadow:0 0 10px 2px rgba(74,222,128,.55)}
+.pin.now::after{content:"";position:absolute;inset:-4px;border-radius:50%;border:2px solid #4ADE80;animation:ping 1.6s cubic-bezier(0,0,.2,1) infinite}
+.pin.dfw{background:#FF2D55;box-shadow:0 0 6px 0 rgba(255,45,85,.35);opacity:.85}
+.loc:hover .pin,.loc:focus-visible .pin{transform:scale(1.4)}
+@keyframes ping{0%{transform:scale(.6);opacity:1}80%,100%{transform:scale(2.4);opacity:0}}
+@keyframes breathe{50%{opacity:.3;box-shadow:0 0 4px 1px rgba(74,222,128,.3)}}
+@media (prefers-reduced-motion:reduce){.pin.now::after{animation:none;transform:scale(1.4);opacity:.5}.pin.now{animation:breathe 2.4s ease-in-out infinite}.pin{transition:none}}
+#mast .ctas{margin-top:36px;justify-content:center}
+#mast .facts{margin-top:auto;padding-top:40px;width:100%}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+nav a:first-child{margin-right:0}
+nav .mode{margin-left:auto}
+.mode{display:inline-flex;flex:0 0 auto;padding:0;border:1px solid var(--line);border-radius:999px;background:none;color:var(--muted);font:inherit;letter-spacing:inherit;text-transform:inherit;line-height:1;cursor:pointer;overflow:hidden}
+.mode span{padding:9px 12px;white-space:nowrap}
+.mode span:first-child,body.simple .mode span:last-child{background:var(--line);color:var(--ink)}
+body.simple .mode span:first-child{background:none;color:var(--muted)}
+.mode:hover{border-color:var(--accent)}
+#os{position:fixed;left:0;right:0;top:49px;bottom:0;z-index:40;background:#161615}
+#os iframe{position:absolute;inset:0;width:100%;height:100%;border:0;background:#161615;color-scheme:dark}   /* never a white box while the Read less frame is still loading */
+.hudslot{display:none;position:fixed;left:0;bottom:0;width:340px;height:108px;background:rgba(128,128,128,.02);pointer-events:none}
+body.simple nav a.proj{display:none}
+body.simple nav{background:var(--paper);backdrop-filter:none}   /* read less: flat fill, no frosted bar */
+@media (max-width:760px){nav .wrap{gap:14px}nav a.sec{display:none}.mode span{padding:15px 9px}}
+body.simple{min-height:100dvh;overflow:hidden;--paper:#161615;--ink:#ECEAE3;--muted:#9A9890;--line:#3A3936;--rule:#262624;--stage:#000;--accent:#8FA0FF}
+body.simple>section,body.simple>footer,body.simple>.mindex{display:none!important}
+@media (min-width:761px){body.simple .hudslot{display:block}}
+@media (max-width:760px){.mode span{padding:15px 12px}#os{bottom:92px}}
+/* phones: the bird and Hugo are absolutely placed and cross the right edge; unclipped, that widens the page, mobile browsers zoom the layout out to fit it, and the fixed read-less frames end up off-centre and cut off. html owns the viewport's overflow so body can clip them. */
+@media (max-width:760px){html{overflow-x:hidden}body{overflow-x:clip}}
+
+/* desktop hero: left-aligned, split name (mobile keeps the centred design above) */
+.ibtn .lbl{display:none}
+.ibtn .dmail{display:none}
+#mast h1 br{display:none}
+@media (min-width:761px){
+  #mast .wrap{align-items:flex-start;justify-content:flex-start;padding-top:clamp(40px,10vh,130px)}
+  #mast h1{text-align:left;font-size:clamp(48px,6.7vw,150px);line-height:.95;letter-spacing:-.035em}
+  #mast h1 br{display:inline}
+  #mast .ctas{order:1;margin-top:.3vw;justify-content:flex-start;gap:34px}
+  #mast .where{order:2;justify-content:flex-start;margin-top:4px;gap:12px 40px}
+  #mast .facts{order:3}
+  #mast .ibtn{width:auto;height:44px;display:inline-flex;align-items:center;gap:10px;font:400 14px/1 var(--mono);letter-spacing:.04em}
+  #mast .ibtn .lbl{display:inline}
+  #mast .ibtn img.glyph{display:none}
+  #mast .ibtn .dmail{display:block;width:22px;height:22px;flex:0 0 22px}
+  #mast .ibtn svg{flex:0 0 22px}
+  #mast .ibtn svg,#mast .ibtn svg.fill{width:22px;height:22px}
+  #mast .ibtn.done .lbl{color:var(--accent)}
+}
+@media (min-width:1100px){
+  #mast .facts{display:grid;grid-template-columns:auto auto auto;justify-content:space-between;gap:0 56px;align-items:start}
+  #mast .facts>div{min-width:0}
+  #mast .facts .v{white-space:nowrap;font-size:clamp(11px,.82vw,16px)}
+}
+</style>
+</head>
+<body>
+
+<nav aria-label="Sections"><div class="wrap mono">
+  <a class="sec" href="#work">Work</a><a class="sec proj" href="#hugo">Projects</a><a class="cta" href="#contact">Hire</a>
+  <button id="mode" class="mode" type="button" aria-pressed="false" aria-label="Scroll view on. Switch to read less view"><span>Scroll</span><span>Read less</span></button>
+</div></nav>
+
+<section id="mast"><div class="wrap">
+  <h1>Chiagozie <br>Oliver</h1>
+  <div class="where" aria-label="Location"><span class="loc" tabindex="0"><i class="pin now"></i>Long Island, New York<em>now</em></span><span class="loc" tabindex="0"><i class="pin dfw"></i>Dallas Metroplex<em>from</em></span></div>
+  <div class="ctas">
+    <a class="ibtn" id="copyEmail" href="mailto:chiag6zie@gmail.com" aria-label="Copy email address" title="Click to copy"><img class="glyph" src="realms/icons/mail.png" alt=""><svg class="dmail" viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="5" width="19" height="14" rx="2"/><path d="M3 7.5l9 6.5 9-6.5"/></svg><span class="lbl">chiag6zie@gmail.com</span></a>
+    <a class="ibtn" href="https://github.com/CH6RIZARD" aria-label="GitHub" title="GitHub"><svg viewBox="0 0 24 24" class="fill"><path d="M12 .5A11.5 11.5 0 0 0 .5 12a11.5 11.5 0 0 0 7.86 10.92c.58.1.79-.25.79-.56v-2.1c-3.2.7-3.87-1.37-3.87-1.37-.52-1.33-1.28-1.68-1.28-1.68-1.05-.72.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.73-1.55-2.55-.29-5.24-1.28-5.24-5.69 0-1.26.45-2.29 1.19-3.09-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.17 1.18a11 11 0 0 1 5.78 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.8 1.19 1.83 1.19 3.09 0 4.42-2.7 5.4-5.26 5.68.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 23.5 12 11.5 11.5 0 0 0 12 .5z"/></svg><span class="lbl">CH6RIZARD</span></a>
+  </div>
+  <div class="facts">
+    <div><span class="mono">Looking for</span><span class="v">Senior / staff product engineer, real-time systems, fintech</span></div>
+    <div><span class="mono">Stack</span><span class="v">TypeScript · Python · React Native · Three.js · Postgres</span></div>
+    <div><span class="mono">Education</span><span class="v">Political Science, LIU Post (D1 football) · Pre-Engineering A.S.</span></div>
+  </div>
+</div></section>
+
+
+<nav class="mindex" aria-label="Projects"><div class="wrap">
+  <span class="lbl">Tap any product to open the real build</span>
+  <button class="mrow" type="button" data-open="void"><img class="th" src="realms/thumbs/void.jpg" alt=""><span class="tx"><span class="k">Live cams · mobile</span><span class="n">THE VOID</span><span class="l">Live cameras and the loudest arguments, by place.</span></span><svg class="ch" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></button>
+  <button class="mrow" type="button" data-open="ezer"><img class="th" src="realms/thumbs/ezer.jpg" alt=""><span class="tx"><span class="k">Store-ready · fintech</span><span class="n">EZER</span><span class="l">Subscriptions become decisions. Demo account built in.</span></span><svg class="ch" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></button>
+  <button class="mrow" type="button" data-open="hugo"><img class="th" src="realms/thumbs/hugo.jpg" alt=""><span class="tx"><span class="k">Walkable · in dev</span><span class="n">Hugo</span><span class="l">My dorm from the floor plan, on MuJoCo physics.</span></span><svg class="ch" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></button>
+  <button class="mrow" type="button" data-open="trading"><img class="th" src="realms/thumbs/morgan.jpg" alt=""><span class="tx"><span class="k">Live bot · mobile</span><span class="n">Morgan Futures</span><span class="l">Signals, paper trading, a Claude decision layer.</span></span><svg class="ch" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></button>
+  <button class="mrow" type="button" data-open="revelation"><img class="th" src="realms/thumbs/revelation.jpg" alt=""><span class="tx"><span class="k">Live site</span><span class="n">Revelation</span><span class="l">Publishing that survives losing its database.</span></span><svg class="ch" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></button>
+  <button class="mrow" type="button" data-open="impact"><img class="th" src="realms/thumbs/impact.jpg" alt=""><span class="tx"><span class="k">Three live stores</span><span class="n">Stores</span><span class="l">Impact Threads, MAREN and Sly Sculpted.</span></span><svg class="ch" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></button>
+  <button class="mrow" type="button" data-open="frame"><span class="ic">AI</span><span class="tx"><span class="k">Architecture</span><span class="n">Mortal Agent Frame</span><span class="l">The substrate under Hugo and AgentTube, and the worlds on it.</span></span><svg class="ch" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></button>
+  <button class="mrow" type="button" data-open="work"><span class="ic">W</span><span class="tx"><span class="k">What I do</span><span class="n">What I've shipped</span><span class="l">Fintech backends, real-time 3D, live media, resilient services.</span></span><svg class="ch" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></button>
+  <button class="mrow" type="button" data-open="concepts"><span class="ic">D</span><span class="tx"><span class="k">Designed</span><span class="n">Concepts</span><span class="l">SCION AI, THE PHXNE, glasses, Price Action and more.</span></span><svg class="ch" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></button>
+  <button class="mrow" type="button" data-open="lessons"><span class="ic">L</span><span class="tx"><span class="k">What went wrong</span><span class="n">Lessons</span><span class="l">Failures and what changed after each.</span></span><svg class="ch" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></button>
+</div></nav>
+<div class="msheet" role="dialog" aria-modal="true" aria-label="Project"><button class="scrim" type="button" aria-label="Close"></button><div class="panel"><div class="bar"><span class="grab"></span><button class="x" type="button" aria-label="Close"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div></div></div>
+<section class="plain" id="work"><div class="wrap">
+  <div class="head"><span class="mono">What I do</span>
+  <div><h2>What I've shipped, with the evidence on this page</h2>
+  <div class="caps">
+    <div class="cap"><h3>Fintech backends</h3><p>Bank linking, recurring-charge detection, a double-entry ledger and ACH transfers, designed so money movement is auditable and reversible by construction.</p><div class="ev">EZER · Fastify · Prisma, 19 models · Plaid Transfer · below</div></div>
+    <div class="cap"><h3>Real-time 3D in the browser</h3><p>Fixed-step physics, colliders, hinged props and a rigged character driven by a remote MuJoCo simulation over WebSocket, with a procedural fallback when the server is away.</p><div class="ev">Hugo · Three.js · 120 Hz · MuJoCo bridge · walk it below</div></div>
+    <div class="cap"><h3>Live media and geo data</h3><p>A globe of live public camera streams with per-region discourse, Postgres plus PostGIS with row-level security, spatial triggers, and HLS playback.</p><div class="ev">THE VOID · Expo · Supabase · hls.js · below</div></div>
+    <div class="cap"><h3>Resilient services</h3><p>A publishing backend whose storage layer degrades across three backends while keeping transactional integrity, with live view counts over Server-Sent Events.</p><div class="ev">Revelation · Express · SSE · live at revelati6n.com</div></div>
+    <div class="cap"><h3>Privacy engineering</h3><p>End-to-end encrypted DMs over libsignal where the server only relays ciphertext, on-device inbox scanning so raw email never leaves the phone, and schemas that make location leaks impossible by omission.</p><div class="ev">THE VOID · EZER · refused to ship the interim non-E2EE version</div></div>
+    <div class="cap"><h3>Mobile delivery from nothing</h3><p>Shipped React Native builds to Google Play internal testing and built iOS without a Mac: Swift cross-compiled in WSL2 against the iOS SDK pulled from Xcode, code-signed, and sideloaded to the phone over USB.</p><div class="ev">EZER · Expo · xtool · documented as an agent-ready guide</div></div>
+  </div></div></div>
+</div></section>
+
+<!-- HUGO -->
+<section class="realm" id="hugo"><div class="wrap">
+  <div class="top">
+    <div><div class="kicker"><span class="st">Walkable · in dev</span><span class="st">Simulation</span></div><h2>Hugo, in the dorm</h2></div>
+    <div><p class="about">My real dorm room and hallway at LIU, modeled in code from the building's floor plan, with Hugo standing in it. The player runs on fixed-step physics at 120 Hz with AABB colliders and hinged doors. Hugo's skeleton is driven by a MuJoCo server over WebSocket when one is connected, and by a procedural gait when it is not. The game layer that used to live here is stripped out; this is the environment and the body.</p></div>
+  </div>
+  <div class="split">
+    <div>
+    <div class="stage" data-src="realms/hugo/index.html" data-allow="fullscreen; pointer-lock">
+      <img class="poster" src="realms/posters/hugo.jpg" alt="Hugo standing between two beds in the modeled dorm room">
+      <button class="enter" type="button"><span>Enter the dorm</span></button>
+      <div class="tools"><a href="realms/hugo/index.html" target="_blank" rel="noopener">Open full</a><button type="button" class="fs">Fullscreen</button></div>
+    </div>
+    <div class="keys" aria-label="Controls">
+      <span><kbd>click</kbd> look around</span><span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> walk</span><span><kbd>Shift</kbd> run</span><span><kbd>Space</kbd> jump</span><span><kbd>E</kbd> doors</span><span><kbd>V</kbd> third person</span><span><kbd>P</kbd> release mouse</span>
+    </div>
+    </div>
+    <aside class="aside">
+      <figure><img src="realms/hugo/source/floorplan.jpg" alt="Fire evacuation floor plan of the dorm building, with my wing circled in marker" loading="lazy"><figcaption>Source: the floor's evacuation map, my wing circled. Room, hallway and the T-stub were laid out from it.</figcaption></figure>
+      <div class="spec">
+        <div><b>Physics</b><span>Fixed timestep with accumulator, coyote time and jump buffering, AABB world colliders, hinged fridge and doors.</span></div>
+        <div><b>Body</b><span>Rigged GLB auto-loaded, bone map for forward kinematics, MuJoCo joint stream mapped onto the skeleton.</span></div>
+        <div><b>Infra</b><span>MuJoCo on rented Vast.ai GPUs behind a Cloudflare tunnel; the laptop itself cannot run MuJoCo.</span></div>
+        <div><b>Stack</b><span>Three.js · MuJoCo · Python · WebSocket</span></div>
+      </div>
+    </aside>
+  </div>
+</div></section>
+
+<!-- THE VOID -->
+<section class="realm" id="void"><div class="wrap">
+  <div class="top">
+    <div><div class="kicker"><span class="st live">Live cams</span><span class="st">Mobile · social</span></div><h2>THE VOID</h2></div>
+    <div><p class="about">Mobile app on Supabase Postgres with PostGIS and row-level security, HLS live streams, libsignal end-to-end encrypted DMs and an algorithm that uses users' physiological signals to rank for controversy and conspiracy on top of the industry-standard engagement behavioral model. Wrapped in the UI of international news, niche live streams, reels and feeds, and a unique polls and discussion module.</p><p class="how">Tap a nation · live rooms, polls and the feed · anonymous by default</p></div>
+  </div>
+  <div class="split with-phone">
+    <div class="aside">
+      <div class="spec">
+        <div><b>Data</b><span>Supabase Postgres with PostGIS and row-level security. Region codes derived server-side by a spatial trigger. Stream health written by a scheduled function so dead cams degrade instead of hang.</span></div>
+        <div><b>Ranking</b><span>Feed split into engaged and niche buckets, ranked separately and interleaved by a tunable ratio, with quality gates on the niche side.</span></div>
+        <div><b>Privacy</b><span>End-to-end encrypted DMs over libsignal. No email, no password, no location column anywhere in the schema.</span></div>
+        <div><b>Stack</b><span>Expo · Supabase · PostGIS · libsignal · hls.js · Three.js</span></div>
+      </div>
+    </div>
+    <div class="phone-wrap"><div class="phone"><div class="island"></div><div class="screen stage" data-src="__VOID__" data-allow="fullscreen; autoplay">
+      <img class="poster" src="realms/posters/void.jpg" alt="The Void">
+      <button class="enter" type="button"><span>Jump into The Void</span></button>
+    </div></div></div>
+  </div>
+</div></section>
+
+<!-- EZER -->
+<section class="realm" id="ezer"><div class="wrap">
+  <div class="top">
+    <div><div class="kicker"><span class="st">Built · store-ready</span><span class="st">Fintech</span></div><h2>EZER</h2></div>
+    <div><p class="about">Turn subscriptions into explicit decisions. Link a bank, see every recurring charge including trials caught by on-device inbox scanning, cancel without dead ends, and sweep what you cancel into savings goals. This is the actual app build running in a phone against the production API.</p><p class="how">Tap through the onboarding · <a href="https://ezersaves.com">ezersaves.com</a></p></div>
+  </div>
+  <div class="split with-phone">
+    <div class="aside"><div class="spec">
+      <div><b>Backend</b><span>Fastify and Prisma across 19 models. Double-entry ledger for goal savings so every cent is traceable; Plaid Transfer for ACH.</span></div>
+      <div><b>Detection</b><span>Transaction recurrence detection plus Gmail and Outlook scanning on the device. Raw email never leaves the phone.</span></div>
+      <div><b>Mobile</b><span>Expo / React Native. Google Play internal testing. iOS without a Mac: Swift cross-compiled in WSL2, signed and sideloaded.</span></div>
+      <div><b>Card</b><span>Pay-in-4 virtual card designed; sequenced debit-first until a sponsor bank is in place. Not marketed until the program exists.</span></div>
+      <div><b>Stack</b><span>TypeScript · Fastify · Prisma · Postgres · Plaid · Expo · Railway</span></div>
+    </div></div>
+    <div class="phone-wrap"><div class="phone"><div class="island"></div><div class="screen stage" data-src="__EZER__" data-allow="clipboard-write">
+      <img class="poster" src="realms/posters/ezer.jpg" alt="EZER onboarding screen">
+      <button class="enter" type="button"><span>Open EZER</span></button>
+    </div></div></div>
+  </div>
+</div></section>
+
+<!-- REVELATION -->
+<section class="realm" id="revelation"><div class="wrap">
+  <div class="top">
+    <div><div class="kicker"><span class="st live">Live site</span><span class="st">Publishing</span></div><h2>Revelation</h2></div>
+    <div><p class="about">A single-author publishing site with comments, threaded replies, reactions and live view counts over Server-Sent Events. The storage layer degrades across three backends while keeping transactional integrity, so the site keeps serving and accepting comments even if the database disappears. Desktop and phone, live.</p><p class="how"><a href="https://revelati6n.com">revelati6n.com</a></p></div>
+  </div>
+  <div class="split with-phone">
+    <div>
+      <div class="monitor">
+        <div class="stage desk" data-src="https://revelati6n.com" data-allow="">
+          <img class="poster" src="realms/posters/revelation.jpg" alt="">
+          <button class="enter" type="button"><span>Open Revelation · desktop</span></button>
+          <div class="tools"><a href="https://revelati6n.com" target="_blank" rel="noopener">Open full</a></div>
+        </div>
+        <div class="chin"><i></i></div>
+      </div><div class="foot"></div>
+      <div class="spec" style="margin-top:24px">
+      <div><b>Realtime</b><span>View counts and reactions stream over Server-Sent Events; no websocket dependency, reconnects for free.</span></div>
+      <div><b>Storage</b><span>Three backends behind one interface. If the database is gone the site keeps serving and accepting comments, then reconciles.</span></div>
+      <div><b>Threads</b><span>Comments, nested replies, reactions, single-author publishing with drafts shown as "in progress".</span></div>
+      <div><b>Stack</b><span>Node · Express · SSE · vanilla front end</span></div>
+      </div>
+    </div>
+    <div class="phone-wrap"><div class="phone"><div class="island"></div><div class="screen stage scrollpage" data-src="https://revelati6n.com" data-allow="">
+      <button class="enter" type="button"><span>Open Revelation · phone</span></button>
+    </div></div></div>
+  </div>
+</div></section>
+
+<!-- STORES -->
+<section class="realm" id="impact"><div class="wrap">
+  <div class="top">
+    <div><div class="kicker"><span class="st live">Live</span><span class="st">Impact Threads · MAREN · Sly Sculpted</span></div><h2>Stores</h2></div>
+    <div><p class="about">Three storefronts I run end to end from one studio: a streetwear brand with its own headless store on the Shopify Storefront API, a travel-goods brand on a static Astro site with Meta ads behind it, and an independent beauty-tech resale store built on mandatory condition disclosure. Same honesty rules everywhere: no fake reviews, no fake scarcity, every claim traceable.</p><p class="how"><a href="https://impact-threads.com/">impact-threads.com</a> · <a href="https://live-maren.com/">live-maren.com</a> · <a href="https://www.slysculpted.com/">slysculpted.com</a></p></div>
+  </div>
+  <div class="split with-phone browser" data-store="maren">
+    <div>
+    <div class="monitor">
+      <div class="tabs" role="tablist" aria-label="Stores">
+        <button type="button" role="tab" data-tab="maren" aria-selected="true"><i style="background:#ECEAE3"></i>MAREN</button>
+        <button type="button" role="tab" data-tab="sly" aria-selected="false"><i style="background:#9A9890"></i>Sly Sculpted</button>
+        <button type="button" role="tab" data-tab="impact" aria-selected="false"><i style="background:#6B6D73"></i>Impact Threads</button>
+      </div>
+      <div class="urlbar"><span class="nav">‹ › ↻</span><span class="url">https://live-maren.com/</span></div>
+      <div class="panes">
+        <div class="stage desk" data-tab="maren" data-src="https://live-maren.com/" data-allow=""><div class="tools"><a href="https://live-maren.com/" target="_blank" rel="noopener">Open</a></div></div>
+        <div class="stage desk" data-tab="sly" data-src="https://www.slysculpted.com/" data-allow="" hidden><div class="tools"><a href="https://www.slysculpted.com/" target="_blank" rel="noopener">Open</a></div></div>
+        <div class="stage desk" data-tab="impact" data-src="https://impact-threads.com/" data-allow="" hidden><div class="tools"><a href="https://impact-threads.com/" target="_blank" rel="noopener">Open</a></div></div>
+      </div>
+      <div class="chin"><i></i></div>
+    </div><div class="foot"></div>
+    <div class="spec storecaps">
+      <div data-tab="maren"><b>MAREN</b><span>The Weekender Set. Astro on Netlify, Shopify checkout, Meta pixel and ads run by script.</span></div>
+      <div data-tab="sly"><b>Sly Sculpted</b><span>Independent Dyson resale. Condition disclosure on every listing, Express backend for reviews, tracking and chat.</span></div>
+      <div data-tab="impact"><b>Impact Threads</b><span>Streetwear as protest. Headless Shopify, generated SEO pages, checkout on Shopify.</span></div>
+    </div>
+    </div>
+    <div class="phone-wrap"><div class="phone"><div class="island"></div>
+      <div class="screen stage scrollpage" data-tab="maren" data-src="https://live-maren.com/" data-allow=""><button class="enter" type="button"><span>Open MAREN · phone</span></button></div>
+      <div class="screen stage scrollpage" data-tab="sly" data-src="https://www.slysculpted.com/" data-allow="" hidden><button class="enter" type="button"><span>Open Sly Sculpted · phone</span></button></div>
+      <div class="screen stage scrollpage" data-tab="impact" data-src="https://impact-threads.com/" data-allow="" hidden><button class="enter" type="button"><span>Open Impact Threads · phone</span></button></div>
+    </div></div>
+  </div>
+</div></section>
+
+<!-- TRADING -->
+<section class="realm" id="trading"><div class="wrap">
+  <div class="top">
+    <div><div class="kicker"><span class="st live">Live · deployed on Railway</span><span class="st">Mobile · trading</span></div><h2>Morgan Futures</h2></div>
+    <div><p class="about">My automated futures trading system. The bot runs on Railway: Kraken perpetual-futures data through four signal strategies, a Claude API decision layer filtering entries, a paper engine, a prop-firm challenge tracker, and Rithmic execution on micro gold and micro Dow. This is my mobile app for it, four tabs: Signals, Paper, Account, Profile, talking to the live bot.</p><p class="how">Signals · Paper · Account · Profile</p></div>
+  </div>
+  <div class="split with-phone">
+    <aside class="aside"><div class="spec">
+      <div><b>Signals</b><span>KZ · ORB · ASHL · LRNY, scanned on an interval against live and historical bars.</span></div>
+      <div><b>Decision</b><span>Claude API agent over signal confluence; every call and refusal lands in the decision log you can read in the dashboard.</span></div>
+      <div><b>Backtests</b><span>Morgan converts Pine Script strategies to Python and reports win rate and expectancy on real history. Rankings endpoint feeds the dashboard.</span></div>
+      <div><b>Execution</b><span>Rithmic protobuf · MGC · MYM. One funded evaluation passed, one real payout.</span></div>
+      <div><b>Risk</b><span>Trailing drawdown, consistency rules, daily loss limits, three trades a day, stop after the first loss.</span></div>
+      <div><b>Stack</b><span>Python · Flask · gunicorn · Railway · Kraken · yfinance · Lightweight Charts · Claude API</span></div>
+          </div></aside>
+    <div class="phone-wrap"><div class="phone"><div class="island"></div><div class="screen stage" data-src="__MORGAN__" data-allow="">
+      <button class="enter" type="button"><span>Open Morgan Futures</span></button>
+    </div></div></div>
+  </div>
+</div></section>
+
+<!-- ARCHITECTURE -->
+<section class="realm" id="frame"><div class="wrap">
+  <div class="top">
+    <div><div class="kicker"><span class="st">Research · core built</span><span class="st">Agent architecture</span></div><h2>Mortal Agent Frame</h2></div>
+    <div><p class="about">The substrate under Hugo and AgentTube. An agent exists only while its Embodied Gate is open: power, sensors and motor all holding. Identity is what accrues while it holds. When the gate fails the process ends with no save and no reload; restart is a birth with a new UUID, never a resume. Seven layers, forty tests. Philosophy imported as engineering constraints.</p></div>
+  </div>
+  <div class="frame">
+    <svg viewBox="0 0 640 380" role="img" aria-label="Embodied gate diagram">
+      <rect x="20" y="40" width="130" height="44" rx="2"/><text x="85" y="67" text-anchor="middle">power</text>
+      <rect x="20" y="150" width="130" height="44" rx="2"/><text x="85" y="177" text-anchor="middle">sensors</text>
+      <rect x="20" y="260" width="130" height="44" rx="2"/><text x="85" y="287" text-anchor="middle">motor</text>
+      <path d="M150 62 H200 V172 H230" class="soft"/><path d="M150 172 H230" class="soft"/><path d="M150 282 H200 V172" class="soft"/>
+      <circle cx="260" cy="172" r="30"/><text x="260" y="176" text-anchor="middle">∧</text><text x="260" y="225" text-anchor="middle">embodied gate</text>
+      <path d="M290 172 H360" class="hot"/><circle cx="360" cy="172" r="3" class="dot"/>
+      <rect x="360" y="120" width="250" height="104" rx="2" class="hot"/>
+      <text x="485" y="150" text-anchor="middle" class="big">identity = f(δt, state)</text>
+      <text x="485" y="178" text-anchor="middle">δt ticks only while open</text>
+      <text x="485" y="200" text-anchor="middle">ram-only · append-only log</text>
+      <path d="M260 202 V330 H360" class="soft"/><text x="372" y="334">gate fails → ENDED · no save, no reload</text>
+      <path d="M360 345 H610" class="soft"/><text x="372" y="362">restart = BIRTH · new uuid</text>
+    </svg>
+    <div class="spec">
+      <div><b>Layers</b><span>Gate and identity · mortality and survival reasoner · cognitive loop · language with doctrine and dedupe · capabilities discovered, not assigned · world adapters · constitution loaded at boot.</span></div>
+      <div><b>Events</b><span>BIRTH · HEARTBEAT · TELEMETRY · PAGE · ACTION · ENDED. Observer is read-only. No resurrection API.</span></div>
+      <div><b>Code</b><span>Python · 7 layers · 40 tests · github.com/CH6RIZARD/digital-entity</span></div>
+    </div>
+  </div>
+  <div class="worlds">
+    <span class="mono" style="display:block;margin:56px 0 18px">The worlds, and how the frame goes into each</span>
+    <div class="wgrid">
+      <article><span class="st">In dev · above</span><h3>Hugo</h3><p>The frame's first body. Gate: sim tick is power, the MuJoCo joint stream is sensors, the skeleton is motor. Lose the stream and he ends; the next one is a new UUID.</p></article>
+      <article><span class="st">In dev</span><h3>AgentTube</h3><p>One agent per room, each a frame instance on Hugo's dorm. The event log is what the Ether Feed publishes and what mutates the room, so failure cracks walls and success expands space with no second state. No delete, repair or reset anywhere; the human owns the room and can only watch.</p></article>
+      <article><span class="st">Designed · first build scrapped</span><h3>Impact Hero: The Poisoned Delta</h3><p>A persistent world on the real Niger Delta, populated by agents embodying its archetypes, each a frame instance calibrated to the region. An immutable canon validates every output before it reaches the world; a visitor is classified on entry and placed as a witness. The first demo did not earn its label and was scrapped; the design stands.</p></article>
+      <article><span class="st">Designed</span><h3>SCION SURGENT</h3><p>Battle royale, racing and melee beside an agent that genuinely fears permanent death. The Surgent's core persona runs under the same gate, so a match death is a real ENDED with no reload; the player's shard is only an influence field on top. On your third knockdown it chooses to guard, fight, drag, abandon or hesitate, and lives with it.</p></article>
+    </div>
+  </div>
+</div></section>
+
+<!-- CONCEPTS -->
+<section class="plain" id="concepts"><div class="wrap">
+  <div class="head"><span class="mono">Designed, not yet built</span>
+  <div><h2>Concepts</h2>
+  <div class="rows">
+    <details><summary><span class="st">Concept</span><h3>SCION AI</h3><span class="d">A local, on-device cognitive engine with persistent identity. Confidence-aware instead of guardrail-gated.</span></summary>
+      <div class="body"><p>Open weights in 4-bit GGUF through llama.cpp on a laptop or a Jetson Orin Nano, with a local vector store for memory that spans sessions. It says "I don't know" rather than deflecting. The cognition layer the embodied work is waiting on.</p></div></details>
+    <details><summary><span class="st">Patent pathway</span><h3>THE PHXNE</h3><span class="d">A smartphone built around an anti-exploitable baseband. Hardware sovereignty you can hold.</span></summary>
+      <div class="body"><p>The radio layer is the most exploited and least visible part of a phone. Protect it in hardware and keep physical control with the user instead of trusting software permissions. Signature: a retractable X-aperture that physically covers the camera when idle. Provisional patent pathway, CAD in OpenSCAD.</p></div></details>
+    <details><summary><span class="st">Concept</span><h3>SCION Glasses</h3><span class="d">AR glasses as the perception shell for SCION AI. The frame captures and speaks; the phone thinks.</span></summary>
+      <div class="body"><p>Glasses handle wake word, mic and audio out on a low-power NPU-class SoC. The paired phone handles speech recognition, inference and synthesis, so the frame stays thin with no active cooling. Bill of materials and sourcing path mapped.</p></div></details>
+    <details><summary><span class="st">Design complete</span><h3>Price Action</h3><span class="d">A market-education tool that replaces the candlestick with an embodied buyer-versus-seller view driven by live data.</span></summary>
+      <div class="body"><p>Open, high, low, close and volume map onto two opposing agents so a learner sees the buyer get pushed back before the close instead of decoding a wick. Same engine can mature into a live indicator beside a normal chart.</p></div></details>
+    <details><summary><span class="st">Live stores</span><h3>MAREN · Sly Sculpted · APE Whey Mass</h3><span class="d">Two more storefronts and a private-label supplement from the same one-person studio, Chiagozie LLC.</span></summary>
+      <div class="body"><p>Built and advertised with the same honesty rules as everything else: no fake reviews, no fake scarcity, every claim traceable to a spec sheet or a condition disclosure.</p></div></details>
+  </div></div></div>
+</div></section>
+
+<!-- LESSONS -->
+<section class="plain" id="lessons"><div class="wrap">
+  <div class="head"><span class="mono">What went wrong, and what I changed</span>
+  <div><h2>Lessons</h2>
+  <ol class="plain">
+    <li><span><b>Overtraded two prop accounts to zero.</b> The system now hard-caps three trades a day and stops after the first loss. That is the version that got paid.</span></li>
+    <li><span><b>Shipped a realm demo that did not earn its label.</b> Scrapped it. Status labels on this page mean exactly what they say.</span></li>
+    <li><span><b>Held The Void's DMs until end-to-end encryption worked.</b> It cost weeks. I would do it again.</span></li>
+    <li><span><b>Rewrote The Void's schema three times</b> after prekey lock contention and a spatial trigger bug. The current schema makes the location leak impossible by omission rather than by policy.</span></li>
+    <li><span><b>Spent a month getting iOS builds working from Windows.</b> Then wrote it up so the next person, or the next agent, does it in an afternoon.</span></li>
+  </ol></div></div>
+</div></section>
+
+<footer id="contact"><div class="wrap">
+  <span class="mono">Hire</span>
+  <h2>Senior or staff product engineer. Remote, or DFW.</h2>
+  <p class="measure">I am strongest where a product needs one person to own the whole stack from schema to screen, and where real-time or money is involved. I work in TypeScript and Python daily, with Claude Code and Cursor in the loop, and I document failures as carefully as wins.</p>
+  <div class="row">
+    <a class="btn primary" href="mailto:chiag6zie@gmail.com"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg>chiag6zie@gmail.com</a>
+    <a class="btn" href="https://github.com/CH6RIZARD"><svg viewBox="0 0 24 24"><path d="M9 19c-4 1.5-4-2-6-2.5M15 21v-3.5a3 3 0 0 0-.8-2.3c2.7-.3 5.5-1.3 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.3 4.3 0 0 0-.1-3.2s-1-.3-3.4 1.3a11.7 11.7 0 0 0-6.2 0C6.3 2.5 5.3 2.8 5.3 2.8a4.3 4.3 0 0 0-.1 3.2A4.6 4.6 0 0 0 4 9.2c0 4.7 2.8 5.7 5.5 6a3 3 0 0 0-.8 2.3V21"/></svg>GitHub</a>
+    <a class="btn" href="https://www.linkedin.com/in/chiagozie-oliver-9b2a73406/" target="_blank" rel="noopener"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M8 10v7M8 7v.01M12 17v-4a2 2 0 0 1 4 0v4M12 10v7"/></svg>LinkedIn</a>
+    <button id="theme" type="button" aria-label="Toggle dark mode"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor"/></svg>Theme</button>
+  </div>
+  <p class="colophon">Hand-written HTML, no framework, no tracking. Every stage above is the real build, loaded only when you enter it.</p>
+</div></footer>
+
+<div id="os" hidden></div><div class="hudslot" aria-hidden="true"></div>
+<script>
+document.getElementById('copyEmail').addEventListener('click',e=>{e.preventDefault();const a=e.currentTarget,t='chiag6zie@gmail.com',l=a.querySelector('.lbl'),was=l.textContent;
+ const ok=()=>{a.classList.add('done');l.textContent='Copied';a.setAttribute('aria-label','Email address copied');setTimeout(()=>{a.classList.remove('done');l.textContent=was},1600)};
+ const fb=()=>{const x=document.createElement('textarea');x.value=t;x.style.cssText='position:fixed;opacity:0';document.body.append(x);x.select();try{document.execCommand('copy')?ok():location.href='mailto:'+t}catch{location.href='mailto:'+t}x.remove()};
+ (navigator.clipboard?navigator.clipboard.writeText(t).then(ok,fb):fb());});
+</script>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
+<script>
+// EZER's web build routes from the URL root, so it is served at its own origin.
+// this browser's scrollbar width: the Revelation phone widens its iframe by exactly that so the scrollbar falls outside the screen
+(() => { const d = document.createElement('div'); d.style.cssText = 'overflow:scroll;width:50px;height:50px;position:absolute;top:-99px'; document.body.append(d); document.documentElement.style.setProperty('--sbw', (d.offsetWidth - d.clientWidth) + 'px'); d.remove(); })();
+
+// Phones: fold spec lists behind "Details", let clamped intros open on tap, add swipe hints and "show all" to long lists.
+(() => {
+  if (!matchMedia('(max-width:760px)').matches) return;
+  for (const sp of document.querySelectorAll('.spec')) {
+    if (sp.closest('details.fold')) continue;
+    const d = document.createElement('details'); d.className = 'fold';
+    d.innerHTML = '<summary>Details</summary>'; sp.before(d);
+    const fig = sp.parentElement.querySelector(':scope > figure'); if (fig) d.append(fig);
+    d.append(sp);
+  }
+  for (const a of document.querySelectorAll('.realm .about')) a.addEventListener('click', () => a.classList.toggle('open'));
+  for (const g of document.querySelectorAll('.caps,.wgrid')) {
+    const h = document.createElement('span'); h.className = 'swipe-hint'; h.textContent = 'Swipe →'; g.before(h);
+  }
+  for (const ol of document.querySelectorAll('ol.plain')) {
+    if (ol.children.length <= 3) continue;
+    const b = document.createElement('button'); b.className = 'more'; b.type = 'button'; b.textContent = 'Show all ' + ol.children.length;
+    b.onclick = () => { ol.classList.add('open'); b.remove(); }; ol.after(b);
+  }
+})();
+
+// Phones, layout C: the index opens each section in a sheet. The section itself moves into the sheet, so its live app
+// and details are the real ones; closing moves it back (hidden on phones) and the far-observer unloads its app.
+(() => {
+  if (!matchMedia('(max-width:760px)').matches) return;
+  const sheet = document.querySelector('.msheet'), panel = sheet.querySelector('.panel');
+  let open = null, mark = null;
+  const close = (fromHistory) => {
+    if (!open) return;
+    sheet.classList.remove('on'); mark.replaceWith(open); open = null; mark = null;
+    document.documentElement.style.overflow = '';
+    if (!fromHistory && history.state && history.state.msheet) history.back();
+  };
+  const show = id => {
+    const sec = document.getElementById(id); if (!sec) return;
+    if (open) close(true);
+    mark = document.createComment('msheet'); sec.replaceWith(mark); panel.append(sec); open = sec;
+    panel.scrollTop = 0; sheet.classList.add('on'); document.documentElement.style.overflow = 'hidden';
+    if (typeof fitDesk === 'function') requestAnimationFrame(fitDesk);
+    history.pushState({ msheet: id }, '');
+  };
+  for (const id of ['frame', 'work', 'concepts', 'lessons']) { const b = document.querySelector('.mrow[data-open="' + id + '"]'); if (b) b.remove(); }
+  for (const b of document.querySelectorAll('.mrow')) b.addEventListener('click', () => show(b.dataset.open));
+  sheet.querySelector('.scrim').addEventListener('click', () => close());
+  sheet.querySelector('.x').addEventListener('click', () => close());
+  addEventListener('popstate', () => close(true));
+  // in-page links (#ezer and so on) open the sheet instead of scrolling to a hidden section
+  for (const a of document.querySelectorAll('a[href^="#"]')) a.addEventListener('click', e => {
+    const id = a.getAttribute('href').slice(1);
+    if (document.querySelector('.mrow[data-open="' + id + '"]')) { e.preventDefault(); show(id); }
+  });
+})();
+const LOCAL = /^(127\.0\.0\.1|localhost)$/.test(location.hostname);
+const BUILD = '20261030i';
+const EZER_URL = LOCAL ? 'http://127.0.0.1:8766/' : 'https://ezer-demo.daniel4chigs.workers.dev/';
+// Morgan Futures mobile app (Expo web export), served at its own root like EZER.
+const MORGAN_URL = LOCAL ? 'http://127.0.0.1:8767/' : 'https://morgan-demo.daniel4chigs.workers.dev/app/';
+// The Void's current build is the Expo app (void-app), exported for web; same own-root rule.
+const VOID_URL = LOCAL ? 'http://127.0.0.1:8768/' : 'https://void-app-d35c.pages.dev/';
+// Every stage loads its real app as it comes near the viewport: no gate, no poster.
+const load = st => {
+  if (st.classList.contains('on')) return;
+  const name = st.closest('section').querySelector('h2').textContent;
+  const src = st.dataset.src === '__EZER__' ? EZER_URL : st.dataset.src === '__MORGAN__' ? MORGAN_URL : st.dataset.src === '__VOID__' ? VOID_URL : st.dataset.src;
+  // The two app builds route from their own URL root; on the artifact copy there is no such host yet.
+  if (!LOCAL && /^__/.test(st.dataset.src) && /\.example\/|ezersaves\.com/.test(src)) { st.dataset.label = name + ' runs at its own address. Open the local build or the deployed app.'; st.classList.add('unavailable'); return; }
+  const f = document.createElement('iframe');
+  // app builds: a build stamp on the URL so a browser never shows a stale copy of the app shell
+  f.src = /^__/.test(st.dataset.src) ? src + (src.includes('?') ? '&' : '?') + 'b=' + BUILD : src; f.allow = st.dataset.allow || ''; f.title = name;
+  st.dataset.label = 'loading ' + name + '…'; st.classList.add('wait');
+  f.addEventListener('load', () => st.classList.remove('wait'));
+  st.prepend(f); st.classList.add('on');
+};
+for (const st of document.querySelectorAll('.stage[data-src]')) st.dataset.label = 'loading ' + st.closest('section').querySelector('h2').textContent + '…';
+(() => {
+  const b = document.querySelector('.browser'); if (!b) return;
+  const URL = { maren: 'https://live-maren.com/', sly: 'https://www.slysculpted.com/', impact: 'https://impact-threads.com/' };
+  const pick = id => {
+    b.dataset.store = id;
+    for (const t of b.querySelectorAll('.tabs [data-tab]')) t.setAttribute('aria-selected', t.dataset.tab === id);
+    for (const p of b.querySelectorAll('.panes [data-tab], .phone [data-tab]')) p.hidden = p.dataset.tab !== id;
+    for (const c of b.querySelectorAll('.storecaps [data-tab]')) c.setAttribute('aria-current', c.dataset.tab === id);
+    b.querySelector('.url').textContent = URL[id];
+    load(b.querySelector('.panes [data-tab="' + id + '"]'));
+    if (typeof fitDesk === 'function') fitDesk();   // the tab was hidden until now, so it was never measured
+    const ph = b.querySelector('.phone [data-tab="' + id + '"]'); if (ph && b.querySelector('.phone .stage.on')) load(ph);
+  };
+  for (const t of b.querySelectorAll('.tabs [data-tab]')) t.addEventListener('click', () => pick(t.dataset.tab));
+  for (const c of b.querySelectorAll('.storecaps [data-tab]')) c.setAttribute('aria-current', c.dataset.tab === 'maren');
+})();
+const unload = st => { const f = st.querySelector('iframe'); if (!f) return; f.remove(); st.classList.remove('on', 'wait'); };
+// Load when within 1400px of the viewport; unload once more than ~2 screens away so only the apps near the reader run.
+const io = new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) load(e.target); }), { rootMargin: matchMedia('(max-width:760px)').matches ? '300px 0px' : '1400px 0px' });
+const PHONE = matchMedia('(max-width:760px)').matches;
+const far = new IntersectionObserver(es => es.forEach(e => { if (!e.isIntersecting && e.target.classList.contains('on') && !e.target.matches(':fullscreen')) unload(e.target); }), { rootMargin: PHONE ? '1200px 0px' : '2400px 0px' });
+const isApp = st => /^__/.test(st.dataset.src);
+for (const st of document.querySelectorAll('.stage[data-src]')) {
+  io.observe(st); far.observe(st);   // loaded ~1.5 screens before you reach it, unloaded ~2.5 screens after: three live apps, a 3D dorm and two 3D agents
+  // held in memory at once starved this 16 GB machine and Chrome's 3D drawing stalled to a frame a second
+  const fs = st.querySelector('.fs');
+  if (fs) fs.onclick = () => { load(st); (st.requestFullscreen || st.webkitRequestFullscreen).call(st); };
+}
+// Desktop stages: the iframe is 1440px wide and scaled to the stage so a visitor sees the real desktop layout.
+const fitDesk = () => { for (const st of document.querySelectorAll('.stage.desk, #hugo .stage')) if (st.clientWidth) st.style.setProperty('--k', (st.clientWidth / 1440).toFixed(4)); };   // hidden stages (other store tabs) measure 0: keep their last scale, never scale(0)
+fitDesk(); addEventListener('resize', fitDesk);
+(() => {
+  const b = document.getElementById('theme'), r = document.documentElement;
+  // data-theme is always set (dark by default, see <head>); the browser toolbar colour follows it, Read less included.
+  const tc = document.querySelector('meta[name=theme-color]'), sync = () => { tc.content = r.dataset.theme === 'light' ? '#F4F3EE' : '#161615'; };
+  sync(); new MutationObserver(sync).observe(r, { attributes: true, attributeFilter: ['data-theme'] });
+  b.onclick = () => {
+    r.dataset.theme = r.dataset.theme === 'light' ? 'dark' : 'light';
+    try { localStorage.setItem('theme', r.dataset.theme); } catch {}
+  };
+})();
+</script>
+<script>
+(() => { const set = el => { el.style.setProperty('--pw', el.clientWidth + 'px'); el.style.setProperty('--sk', (el.clientWidth * .9384 / 390).toFixed(4)); };   // --sk: screen width / 390
+  const ro = window.ResizeObserver && new ResizeObserver(es => es.forEach(e => set(e.target)));
+  const all = () => document.querySelectorAll('.phone').forEach(el => { set(el); ro && ro.observe(el); });
+  all(); addEventListener('resize', all); })();
+</script>
+<script>
+// Ambient life on the page. SCION the dove and Hugo share one scale: a real dove is about a sixth of Hugo.
+window.SCION_CONFIG = { size: matchMedia('(max-width:760px)').matches ? 16 : 26, lifespan: 3600, sensorWindow: 180, talk: false, maxSpeed: 220, followDist: 1e9, think: [6, 14], agentUrl: /^(127.0.0.1|localhost)$/.test(location.hostname) ? 'http://127.0.0.1:8080' : '' };   // its own bird: never follows the cursor
+// The 3D bodies carry a .wasm suffix on hosts that only serve known extensions (same bytes).
+const bootAgents = ext => {
+  window.SCION_GLB = 'dove.glb' + ext;
+  window.HUGO_CONFIG = { size: matchMedia('(max-width:760px)').matches ? 64 : 150, glb: 'realms/hugo/hugo.glb' + ext };
+  const add = (src, type) => new Promise(r => { const s = document.createElement('script'); if (type) s.type = type; s.src = src; s.onload = r; s.onerror = r; document.head.append(s); });
+  add('bond.js?v=20261112frame').then(() => add('dove-agent.js?v=20261110q')).then(() => { add('dove3d.js?v=20261111s', 'module'); add('hugo3d.js?v=20261112frame', 'module'); });
+};
+fetch('dove.glb', { method: 'HEAD' }).then(r => bootAgents(r.ok ? '' : '.wasm')).catch(() => bootAgents('.wasm'));
+
+// Phones keep an old copy of this page (restored tabs, back-forward cache): if the server has a newer one, reload once.
+addEventListener('pageshow', () => fetch(location.pathname, { method: 'HEAD', cache: 'no-store' }).then(r => {
+  const live = Date.parse(r.headers.get('last-modified')), k = 'chaze.fresh';
+  if (live > Date.parse(document.lastModified) + 1000 && sessionStorage.getItem(k) != live) { sessionStorage.setItem(k, live); location.reload(); }
+}).catch(() => {}));
+
+// Scroll / Read less: the full page, or one screen with an iPhone and a monitor running the same builds.
+(() => {
+  const os = document.getElementById('os'), b = document.getElementById('mode'); let f = null;
+  const MAP = { hugo: 'hugo', void: 'void', ezer: 'ezer', revelation: 'revelation', impact: 'stores', trading: 'morgan', frame: 'frame', concepts: 'notes' };
+  let prev = null;   // the visitor's theme while Read less is open
+  const set = on => {
+    // The Read less frame is dark by design: everything of the page around it goes dark with it, and the chosen theme comes back on leaving.
+    const r = document.documentElement;
+    if (on) { prev = prev || r.dataset.theme; r.dataset.theme = 'dark'; } else if (prev) { r.dataset.theme = prev; prev = null; }
+    document.body.classList.toggle('simple', on); os.hidden = !on; b.setAttribute('aria-pressed', on);
+    b.setAttribute('aria-label', on ? 'Read less view on. Switch to scroll view' : 'Scroll view on. Switch to read less view');
+    if (on && !f) { f = document.createElement('iframe'); const sm = new URLSearchParams(location.search).get('scrollMode'); const src = 'OS.dc.html?v=20261112dark' + (sm ? '&scrollMode=' + encodeURIComponent(sm) : ''); f.title = 'Projects'; f.allow = 'fullscreen; pointer-lock; autoplay; clipboard-write'; os.append(f);
+      // The frame loads these without a version token: revalidate them first so a phone never runs a cached old build.
+      Promise.allSettled([src, 'OSDevice.dc.html', 'support.js', 'image-slot.js', 'ios-frame.js?v=1'].map(u => fetch(u, { cache: 'no-cache' }).then(r => r.arrayBuffer()))).then(() => { f.src = src; }); }
+    if (on) scrollTo(0, 0);
+  };
+  b.onclick = () => set(!document.body.classList.contains('simple'));
+  document.querySelector('nav[aria-label="Sections"]').addEventListener('click', e => {
+    const a = e.target.closest('a[href^="#"]'); if (!a || !document.body.classList.contains('simple')) return;
+    const id = a.getAttribute('href').slice(1);
+    if (MAP[id] && !a.classList.contains('proj')) { e.preventDefault(); e.stopPropagation(); f.contentWindow.postMessage({ type: 'chaze-open', id: MAP[id] }, '*'); }
+    else set(false);
+  }, true);
+  // Read less is never remembered: every load opens on the scroll home. Only an explicit ?scrollMode= opens it.
+  if (new URLSearchParams(location.search).get('scrollMode')) set(true);
+  // ?edit=1: private in-place copy editing, loaded only on request.
+  if (new URLSearchParams(location.search).get('edit') === '1') document.head.append(Object.assign(document.createElement('script'), { src: 'edit-mode.js?v=20261112a' }));
+})();
+</script>
+</body>
+</html>
