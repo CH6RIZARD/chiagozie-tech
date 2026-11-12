@@ -286,7 +286,7 @@ class Component extends DCLogic {
   onScrollFrame = () => {
     this.scrollRaf = 0;
     const g = this.grid(); if (!g || !this.narrow()) return;
-    const gr = g.getBoundingClientRect();
+    const G = g.getBoundingClientRect(), fb = this.fb(), gr = { top: G.top, bottom: G.bottom - fb, height: G.height - fb };
     if (this.state.expLocked) this.setState({ expLocked: false }); /* founder ask: the button stays pinned above the Hugo strip, it never rides up with the page */
     // scroll direction decides which device is "up": the one holding most of the viewport
     const mode = this.mode();
@@ -331,6 +331,7 @@ class Component extends DCLogic {
     });
   }
   chipAnim() { const q = typeof location !== 'undefined' && new URLSearchParams(location.search).get('chipAnim'); return q || this.props.chipAnim || 'stagger'; }
+  fb() { return this.narrow() && typeof location !== 'undefined' ? +new URLSearchParams(location.search).get('fb') || 0 : 0; } // px the parent frame reaches below the layout height (phones): only shows more of the monitor, lays out and animates as before
   mode() { const q = typeof location !== 'undefined' && new URLSearchParams(location.search).get('scrollMode'); return q || this.props.scrollMode || 'parallax'; }
   // back to the Home screen with nothing open, scrolled to the phone; the parent shows the frame again only after this has painted
   goHomeScreen() {
@@ -370,7 +371,7 @@ class Component extends DCLogic {
       return st ? { ...base, ...st } : { ...base, ...ease, transform: on ? 'none' : 'scale(.9)', opacity: on ? 1 : .5 };
     };
     const home = k => () => this.setState(st => ({ [k]: null, focus: st.focus === st[k] ? null : st.focus, drawer: false }));
-    const vw = typeof innerWidth === 'number' ? innerWidth : 390, vh = typeof innerHeight === 'number' ? innerHeight : 844;
+    const vw = typeof innerWidth === 'number' ? innerWidth : 390, vh = (typeof innerHeight === 'number' ? innerHeight : 844) - this.fb();
     const PW = mob ? Math.min(vw - 12, Math.round((vh - 100) * 446 / 918)) : 0, phBar = mob && !s.ph ? 0 : 38; // 38 = the device's Home-screen bar; on phones it only takes room once an app is open
     const cq = (n, W) => (n / W * 100).toFixed(3) + 'cqw', fit = bar => ({ position: 'absolute', inset: '2px 2px ' + (bar + 2) + 'px', containerType: 'size', display: 'flex', alignItems: 'center', justifyContent: 'center' });
     const SPOTS = [[1200, 76], [980, 92], [760, 70], [540, 98], [320, 80], [1190, 318], [900, 300], [640, 326], [1050, 540], [380, 320]]; // same spots as OSDevice's desktop icons
@@ -394,7 +395,7 @@ class Component extends DCLogic {
       lpInner: { position: 'absolute', left: 0, top: 0, width: 874, height: 402, transform: 'scale(' + lpK + ')', transformOrigin: '0 0', color: '#ECEAE3' },
       lmHolder: { width: OW, height: Math.round(OW * 980 / 1468), flex: '0 0 auto' },
       isDesk: true, isMob: false, showMore: mob,
-      grid: mob ? { flex: 1, minHeight: 0, overflowY: 'auto', display: 'grid', gridTemplateColumns: 'minmax(0,1fr)', gridAutoRows: 'max-content', alignContent: 'start', gap: 10, padding: '0 6px 40vh' }
+      grid: mob ? { flex: 1, minHeight: 0, overflowY: 'auto', display: 'grid', gridTemplateColumns: 'minmax(0,1fr)', gridAutoRows: 'max-content', alignContent: 'start', gap: 10, padding: '0 6px calc(40vh + ' + Math.round(this.fb() * .6) + 'px)' }
         : { flex: 1, minHeight: 0, display: 'grid', gridTemplateColumns: s.wide ? 'minmax(0,1fr)' : 'minmax(0,3fr) minmax(0,9fr)', gridTemplateRows: 'calc(100% - 92px) auto auto', gap: '0 24px', padding: '14px 24px 10px', overflowY: 'auto' },
       canWide: !mob, isNarrow: mob, showExpandMo: mob && !s.moreOpen && !s.expLocked, showExpandFlow: mob && !s.moreOpen, expRef: this.expRef,
       expFlowStyle: { gridColumn: '1 / -1', order: 3, height: 40, marginTop: 6, background: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, border: 0, cursor: 'pointer', color: '#ECEAE3', font: "500 11px/1 'IBM Plex Mono',monospace", letterSpacing: '.1em', textTransform: 'uppercase', whiteSpace: 'nowrap', visibility: s.expLocked ? 'visible' : 'hidden' }, phWide: s.wide === 'ph', moWide: s.wide === 'mo',
