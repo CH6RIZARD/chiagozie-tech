@@ -865,6 +865,12 @@ const bootAgents = ext => {
 };
 fetch('dove.glb', { method: 'HEAD' }).then(r => bootAgents(r.ok ? '' : '.wasm')).catch(() => bootAgents('.wasm'));
 
+// Phones keep an old copy of this page (restored tabs, back-forward cache): if the server has a newer one, reload once.
+addEventListener('pageshow', () => fetch(location.pathname, { method: 'HEAD', cache: 'no-store' }).then(r => {
+  const live = Date.parse(r.headers.get('last-modified')), k = 'chaze.fresh';
+  if (live > Date.parse(document.lastModified) + 1000 && sessionStorage.getItem(k) != live) { sessionStorage.setItem(k, live); location.reload(); }
+}).catch(() => {}));
+
 // Scroll / Read less: the full page, or one screen with an iPhone and a monitor running the same builds.
 (() => {
   const os = document.getElementById('os'), b = document.getElementById('mode'); let f = null;
@@ -872,7 +878,9 @@ fetch('dove.glb', { method: 'HEAD' }).then(r => bootAgents(r.ok ? '' : '.wasm'))
   const set = on => {
     document.body.classList.toggle('simple', on); os.hidden = !on; b.setAttribute('aria-pressed', on);
     b.setAttribute('aria-label', on ? 'Read less view on. Switch to scroll view' : 'Scroll view on. Switch to read less view');
-    if (on && !f) { f = document.createElement('iframe'); const sm = new URLSearchParams(location.search).get('scrollMode'); f.src = 'OS.dc.html?v=20261112cd3' + (sm ? '&scrollMode=' + encodeURIComponent(sm) : ''); f.title = 'Projects'; f.allow = 'fullscreen; pointer-lock; autoplay; clipboard-write'; os.append(f); }
+    if (on && !f) { f = document.createElement('iframe'); const sm = new URLSearchParams(location.search).get('scrollMode'); const src = 'OS.dc.html?v=20261112cd3' + (sm ? '&scrollMode=' + encodeURIComponent(sm) : ''); f.title = 'Projects'; f.allow = 'fullscreen; pointer-lock; autoplay; clipboard-write'; os.append(f);
+      // The frame loads these without a version token: revalidate them first so a phone never runs a cached old build.
+      Promise.allSettled([src, 'OSDevice.dc.html', 'support.js', 'image-slot.js', 'ios-frame.js?v=1'].map(u => fetch(u, { cache: 'no-cache' }).then(r => r.arrayBuffer()))).then(() => { f.src = src; }); }
     if (on) scrollTo(0, 0);
     try { localStorage.setItem('chaze.mode', on ? 'simple' : 'scroll'); } catch {}
   };
