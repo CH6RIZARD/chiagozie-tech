@@ -887,7 +887,7 @@ addEventListener('pageshow', () => fetch(location.pathname, { method: 'HEAD', ca
     if (on) { prev = prev || r.dataset.theme; r.dataset.theme = 'dark'; } else if (prev) { r.dataset.theme = prev; prev = null; }
     document.body.classList.toggle('simple', on); os.hidden = !on; b.setAttribute('aria-pressed', on);
     b.setAttribute('aria-label', on ? 'Read less view on. Switch to scroll view' : 'Scroll view on. Switch to read less view');
-    if (on && !f) { f = document.createElement('iframe'); const sm = new URLSearchParams(location.search).get('scrollMode'); const src = 'OS.dc.html?v=20261112ti' + (sm ? '&scrollMode=' + encodeURIComponent(sm) : ''); f.title = 'Projects'; f.allow = 'fullscreen; pointer-lock; autoplay; clipboard-write';
+    if (on && !f) { f = document.createElement('iframe'); const sm = new URLSearchParams(location.search).get('scrollMode'); const src = 'OS.dc.html?v=20261112fd' + (sm ? '&scrollMode=' + encodeURIComponent(sm) : ''); f.title = 'Projects'; f.allow = 'fullscreen; pointer-lock; autoplay; clipboard-write';
       // invisible until the frame's own dark page exists (it posts chaze-homed from its <head>): its blank first document never paints white
       f.style.visibility = 'hidden'; f.onload = () => { if (f.getAttribute('src')) show(); }; os.append(f);
       // The frame loads these without a version token: revalidate them first so a phone never runs a cached old build.
