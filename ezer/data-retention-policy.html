@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>EZER — Data Retention and Disposal Policy</title>
+<style>
+  @page { size: letter; margin: 22mm 20mm; }
+  body{font:11pt/1.55 Georgia,"Times New Roman",serif;color:#14141a;max-width:44rem;margin:0 auto;padding:1rem}
+  h1{font-size:19pt;margin:0 0 .2rem;letter-spacing:-.01em}
+  h2{font-size:12pt;margin:1.7rem 0 .5rem;padding-bottom:.25rem;border-bottom:1px solid #d5d5de}
+  .meta{font-size:9.5pt;color:#5a5a6a;margin:0 0 1.8rem;line-height:1.7}
+  table{border-collapse:collapse;width:100%;margin:.8rem 0 1.1rem;font-size:9.5pt}
+  th{text-align:left;padding:.4rem .5rem .4rem 0;border-bottom:1.5px solid #14141a;font-size:8.5pt;text-transform:uppercase;letter-spacing:.08em}
+  td{text-align:left;padding:.45rem .5rem .45rem 0;border-bottom:1px solid #e6e6ee;vertical-align:top}
+  ul{padding-left:1.1rem;margin:.4rem 0 1rem}
+  li{margin:.25rem 0}
+  code{font:10pt ui-monospace,Menlo,Consolas,monospace;background:#f2f2f7;padding:.05em .3em;border-radius:2px}
+  .sig{margin-top:2.2rem;padding-top:1rem;border-top:1px solid #d5d5de;font-size:9.5pt;color:#5a5a6a;line-height:1.9}
+</style>
+</head>
+<body>
+
+<h1>Data Retention and Disposal Policy</h1>
+<p class="meta">
+  <strong>EZER</strong> &nbsp;·&nbsp; 7308 Forest Bend Drive, Parker, Texas<br>
+  Version 1.0 &nbsp;·&nbsp; Effective 7 September 2026 &nbsp;·&nbsp; Next scheduled review 7 September 2027<br>
+  Owner: Founder / Data Protection contact &nbsp;·&nbsp; daniel4chigs@gmail.com
+</p>
+
+<h2>1. Purpose and scope</h2>
+<p>This policy governs how long EZER retains personal data, how that data is disposed of, and who is accountable for both. It covers all personal data processed by the EZER mobile application and its backend API, including data obtained from Plaid Inc. and from user-authorised email mailboxes. It applies to production databases, backups, object storage, and application logs.</p>
+
+<h2>2. Governing principle</h2>
+<p>EZER retains personal data only for as long as it is needed for the purpose it was collected for, or for as long as a legal, tax, or accounting obligation requires. Data that no longer meets either test is deleted. Retention periods are set out in section 3 and are not extended without a documented reason.</p>
+
+<h2>3. Retention schedule</h2>
+<table>
+  <tr><th>Data</th><th>Retention</th><th>Trigger for disposal</th></tr>
+  <tr><td>Account record (email, name, password hash)</td><td>Life of account</td><td>User-initiated deletion</td></tr>
+  <tr><td>Consent record (timestamp, policy version)</td><td>Life of account + 3 years</td><td>Evidentiary retention, then purge</td></tr>
+  <tr><td>Plaid access tokens</td><td>Until the connection is removed</td><td>Disconnect or account deletion; revoked upstream first</td></tr>
+  <tr><td>Bank transactions and balances</td><td>Life of account</td><td>Account deletion; cascade</td></tr>
+  <tr><td>Email-derived subscription data</td><td>Life of account</td><td>Mailbox disconnect or account deletion</td></tr>
+  <tr><td>Raw email message bodies</td><td>Not retained</td><td>Parsed on the user's device and discarded after the scan; never transmitted to or stored on EZER servers. Only extracted subscription fields are stored</td></tr>
+  <tr><td>Mailbox OAuth tokens</td><td>Not retained server-side</td><td>Held only on the user's device; revoked by Settings › Inbox › Disconnect</td></tr>
+  <tr><td>Savings goals, transfers, ledger entries</td><td>7 years</td><td>Financial recordkeeping obligation</td></tr>
+  <tr><td>Application and error logs</td><td>30 days</td><td>Automatic rotation</td></tr>
+  <tr><td>Encrypted database backups</td><td>30 days</td><td>Automatic rotation</td></tr>
+</table>
+<p>Where a record is subject to both a deletion request and a statutory retention obligation — principally the seven-year financial records above — the record is retained for the statutory term but is disassociated from the deleted user's identifiers.</p>
+
+<h2>4. Disposal procedure</h2>
+<p>Deletion is executed by the application, not by manual database access. A user requests deletion in the app, which calls <code>DELETE /account</code>. That endpoint:</p>
+<ul>
+  <li>Revokes every Plaid Item upstream via <code>/item/remove</code> <em>before</em> local records are destroyed, so no connection is left live and unaddressable;</li>
+  <li>Deletes the user record, which cascades through every user-owned table — authentication accounts, OAuth tokens, Plaid items, funding sources, transactions, subscriptions, savings goals, transfers, and ledger entries — by foreign-key constraint rather than by an application-maintained list that can drift;</li>
+  <li>Logs the outcome, including any Plaid item that could not be revoked, for manual follow-up.</li>
+</ul>
+<p>Deletion from the primary database is immediate. Encrypted backups containing the record are purged on the 30-day rotation described above, after which no copy remains. Personal data is never disposed of by transfer to a third party.</p>
+
+<h2>5. Data subject rights</h2>
+<p>Users may exercise the following at any time from within the application, without contacting support:</p>
+<ul>
+  <li><strong>Access / portability</strong> — <code>GET /account/export</code> returns the user's data as JSON. Credential material is excluded.</li>
+  <li><strong>Erasure</strong> — <code>DELETE /account</code>, as described above.</li>
+  <li><strong>Withdrawal of consent</strong> — disconnecting a bank or mailbox halts collection from that source.</li>
+</ul>
+<p>Requests received by email are actioned within 30 days, consistent with GDPR Article 12(3) and the CCPA/CPRA. EZER does not charge for these requests and does not discriminate against users who make them.</p>
+
+<h2>6. Consent</h2>
+<p>Users must affirmatively accept the Terms of Service and Privacy Policy before an account is created. Acceptance is recorded durably against the user record as a timestamp and a policy version identifier, so it can be evidenced per user and per document version. This applies to both email registration and social sign-in. Consent for access to bank data is captured separately by Plaid Link at the moment of connection; consent for mailbox access is captured by the provider's own OAuth consent screen and is optional.</p>
+
+<h2>7. Security of data at rest</h2>
+<ul>
+  <li>Passwords are stored only as bcrypt hashes and are not recoverable.</li>
+  <li>Plaid access tokens are encrypted at rest under a key held separately from the database and supplied by environment configuration; the API refuses to start in production if that key is absent.</li>
+  <li>All data is encrypted in transit over TLS.</li>
+  <li>Production access is restricted to the policy owner and is logged.</li>
+</ul>
+
+<h2>8. Accountability and review</h2>
+<p>The policy owner named above is accountable for enforcement. This policy is reviewed at least annually, and additionally whenever EZER adds a data category, a sub-processor, or a jurisdiction. Each review records the date, the reviewer, and any change. Version 1.0 is the initial issue; the next scheduled review is 7 September 2027.</p>
+
+<h2>9. Sub-processors</h2>
+<table>
+  <tr><th>Sub-processor</th><th>Purpose</th><th>Data</th></tr>
+  <tr><td>Plaid Inc.</td><td>Bank connectivity</td><td>Financial account and transaction data</td></tr>
+  <tr><td>Supabase</td><td>Managed Postgres</td><td>All stored personal data</td></tr>
+  <tr><td>Railway</td><td>API hosting</td><td>Data in transit and in memory; logs</td></tr>
+  <tr><td>RevenueCat, Apple, Google</td><td>Subscription billing</td><td>Purchase status; no financial account data</td></tr>
+</table>
+<p>Sub-processors are bound by their own data protection terms. Adding one triggers a review of this policy under section 8.</p>
+
+<p class="sig">
+  <strong>EZER</strong><br>
+  7308 Forest Bend Drive, Parker, Texas<br>
+  daniel4chigs@gmail.com
+</p>
+
+</body>
+</html>

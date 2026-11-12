@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Impact Threads — Four prints, two editions</title>
+<meta name="description" content="Four prints, two editions. Back print tees $28.99, new long sleeves $38.99, chest graphics only from $24.99. Free US shipping on 2+ pieces.">
+<meta name="theme-color" content="#000000">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{--gold:#C4A57B;--grey:#8A8A8A;--line:#1A1A1A;--line2:#2A2A2A;--dim:#4A4A4A;--paper:#fff;--ink:#0A0A0A}
+*{box-sizing:border-box}
+html,body{margin:0;background:#000;color:#fff;font-family:'Inter',system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+body{overflow-x:hidden}
+button{font-family:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer}
+a{color:inherit;text-decoration:none}
+img{display:block}
+.hide{display:none!important}
+.noscroll{overflow:hidden}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+@keyframes drop{from{opacity:0;transform:translateY(-12px)}to{opacity:1;transform:none}}
+.page{padding:32px 20px 64px;max-width:640px;margin:0 auto}.d-page{padding-top:112px}
+.page h1{margin:0 0 20px;font:400 56px/.9 'Bebas Neue',sans-serif}
+.page h2{margin:36px 0 12px;font:400 30px/1 'Bebas Neue',sans-serif;letter-spacing:.04em}
+.note{font:400 14px/1.6 'Inter',sans-serif;color:var(--grey);margin:16px 0 0}
+.tbl{width:100%;border-collapse:collapse;font:400 14px/1.4 'Inter',sans-serif}.tbl th{text-align:left;font:500 10px/1 'Inter',sans-serif;letter-spacing:.16em;text-transform:uppercase;color:var(--gold);padding:0 0 12px}.tbl td{padding:12px 0;border-top:1px solid var(--line)}.tbl td:first-child{font:400 22px/1 'Bebas Neue',sans-serif}
+.cform{display:flex;flex-direction:column;gap:16px}.cform label{display:flex;flex-direction:column;gap:6px;font:500 10px/1 'Inter',sans-serif;letter-spacing:.16em;text-transform:uppercase;color:var(--grey)}.cform input,.cform textarea{background:#000;border:1px solid var(--line2);color:#fff;padding:14px;font:400 15px/1.4 'Inter',sans-serif;border-radius:0}.cform input:focus,.cform textarea:focus{outline:0;border-color:var(--gold)}.hp{display:none}
+.menu{display:flex;flex-direction:column;padding:8px 20px 32px}.menu a{padding:18px 0;border-bottom:1px solid var(--line);font:400 34px/1 'Bebas Neue',sans-serif;letter-spacing:.04em}.d-cart .menu{padding:8px 32px 32px}
+.m-ov{position:fixed;inset:0;z-index:9;background:rgba(0,0,0,.6)}
+.m-menu{position:fixed;top:56px;left:0;right:0;z-index:10;background:#0A0A0A;border-bottom:1px solid var(--gold);animation:fadeIn .2s ease}
+.m-menu-hd{display:flex;justify-content:space-between;align-items:center;padding:14px 20px 0}.m-menu-hd span{font:400 22px/1 'Bebas Neue',sans-serif;letter-spacing:.1em;color:var(--gold)}.m-menu-hd button{font:400 11px/1 'Inter',sans-serif;letter-spacing:.12em;color:var(--grey)}
+.m-menu .menu a{font-size:26px;padding:14px 0}.m-menu .menu a:last-child{border-bottom:0}
+
+/* ---------- shared controls ---------- */
+.sizes{display:flex;gap:8px;flex-wrap:wrap}
+.size{min-width:52px;height:52px;padding:0 8px;background:#000;border:1px solid var(--line2);font:400 20px/1 'Bebas Neue',sans-serif}
+.size.on{border-color:var(--gold);color:var(--gold)}
+.colors{display:flex;gap:8px}
+.color{display:flex;align-items:center;gap:10px;height:44px;padding:0 14px;background:#000;border:1px solid var(--line2);color:var(--grey);font:400 11px/1 'Inter',sans-serif;letter-spacing:.1em;text-transform:uppercase}
+.color.on{border-color:var(--gold);color:var(--gold)}
+.color i{display:block;width:12px;height:12px;border:1px solid var(--line2)}
+.qty{display:inline-flex;border:1px solid var(--line2)}
+.qty button{width:40px;height:44px;background:#000;font:400 18px/1 'Inter',sans-serif}
+.qty span{width:32px;display:flex;align-items:center;justify-content:center;font:500 14px/1 'Inter',sans-serif}
+.qty.sm button{width:32px;height:32px;background:transparent;font-size:16px}
+.qty.sm span{width:28px;font-size:12px}
+.add{display:flex;align-items:center;justify-content:space-between;padding:0 20px;height:56px;background:var(--gold);color:#000;font:400 18px/1 'Bebas Neue',sans-serif;letter-spacing:.16em;width:100%}
+.gold-btn{display:flex;align-items:center;justify-content:center;height:56px;background:var(--gold);color:#000;font:400 18px/1 'Bebas Neue',sans-serif;letter-spacing:.18em}
+.ghost-btn{height:52px;padding:0 28px;border:1px solid var(--gold);color:var(--gold);font:400 17px/1 'Bebas Neue',sans-serif;letter-spacing:.16em}
+.ulink{font:400 11px/1 'Inter',sans-serif;color:var(--grey);text-decoration:underline;text-underline-offset:3px}
+.thumbs{display:flex;gap:8px}
+.thumb{width:60px;height:75px;border:1px solid var(--line);background:#fff;overflow:hidden}
+.thumb.on{border-color:var(--gold)}
+.thumb img{width:100%;height:100%;object-fit:cover}
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:50;background:var(--gold);color:#000;padding:12px 18px;font:400 15px/1 'Bebas Neue',sans-serif;letter-spacing:.12em;animation:fadeIn .2s}
+.kick{font:500 10px/1 'Inter',sans-serif;letter-spacing:.2em;text-transform:uppercase;color:rgba(255,255,255,.6)}
+
+/* ---------- header ---------- */
+.m-hdr{position:sticky;top:0;z-index:12;display:grid;grid-template-columns:48px 1fr 48px;align-items:center;height:56px;padding:0 12px;background:#000}
+.m-burger{display:flex;flex-direction:column;gap:5px;width:20px}
+.m-burger span{display:block;height:1px;background:#fff}
+.m-burger span+span{width:12px}
+.m-x{font:300 28px/1 'Inter',sans-serif;text-align:left}
+.m-back{text-align:left;white-space:nowrap;font:400 11px/1 'Inter',sans-serif;letter-spacing:.1em}
+.m-logo{display:flex;flex-direction:column;align-items:center;justify-self:center}.m-logo img{height:46px;width:auto}
+.caret{display:block;width:8px;height:8px;border-right:1px solid var(--gold);border-bottom:1px solid var(--gold);transform:rotate(45deg);margin-top:-6px;transition:transform .2s}
+.open .caret{transform:rotate(-135deg);margin-top:0}
+/* nudge: pulse the dropdown trigger until the visitor opens it once */
+@keyframes nudge{0%,100%{transform:scale(1);filter:none}50%{transform:scale(1.07);filter:drop-shadow(0 0 6px rgba(196,165,123,.7))}}
+@keyframes nudgeCaret{0%,100%{transform:rotate(45deg) translate(0,0)}50%{transform:rotate(45deg) translate(2px,2px)}}
+.nudge .m-logo,.nudge .d-hdr .c{animation:nudge 1.8s ease-in-out infinite}
+.nudge .caret{animation:nudgeCaret 1.8s ease-in-out infinite}
+.nudge .d-hdr .l{animation:nudge 1.8s ease-in-out infinite;color:var(--gold)}
+@media (prefers-reduced-motion:reduce){.nudge .m-logo,.nudge .d-hdr .c,.nudge .caret,.nudge .d-hdr .l{animation:none}}
+.cart-ico{position:relative;justify-self:end;width:24px;height:24px}
+.cart-ico b{position:absolute;left:3px;right:3px;top:7px;bottom:1px;border:1px solid #fff}
+.cart-ico i{position:absolute;left:7px;right:7px;top:1px;height:9px;border:1px solid #fff;border-bottom:0}
+.cart-ico em{position:absolute;top:-6px;right:-8px;min-width:16px;height:16px;padding:0 4px;background:var(--gold);color:#000;font:600 10px/16px 'Inter',sans-serif;font-style:normal;text-align:center}
+.ship{height:34px;display:flex;align-items:center;justify-content:center;border-top:1px solid var(--line);font:500 10px/1 'Inter',sans-serif;letter-spacing:.22em;text-transform:uppercase;color:var(--grey)}
+
+/* ---------- collage dropdown ---------- */
+.sh-ov{position:fixed;inset:0;z-index:10;background:rgba(0,0,0,.55)}
+.sheet{position:fixed;top:56px;left:0;right:0;bottom:0;z-index:11;overflow-y:auto;overflow-x:hidden;background:var(--paper);color:var(--ink);animation:drop .25s ease;-webkit-overflow-scrolling:touch}
+.sh-top{display:flex;justify-content:space-between;align-items:center;padding:18px 24px 16px;border-bottom:1px solid #e6e6e6;font:500 10px/1 'Inter',sans-serif;letter-spacing:.2em;text-transform:uppercase;color:#777}
+.sh-top button{font:600 10px/1 'Inter',sans-serif;letter-spacing:.2em;color:var(--ink)}
+.grp-hd{display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:26px 24px 6px}
+.grp-hd h3{margin:0;font:400 26px/1 'Bebas Neue',sans-serif;letter-spacing:.04em}.grp-hd h3 b{font-weight:400;color:#9a7b4f}
+.grp-hd span{font:500 13px/1 'Inter',sans-serif;white-space:nowrap}
+.grp-sub{padding:0 24px;font:400 11px/1.4 'Inter',sans-serif;color:#777}
+.clg{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-start;padding:4px 14px 8px}
+.pc{position:relative;display:block;width:var(--w,52%);margin-top:var(--mt,0);margin-left:var(--ml,0);transform:rotate(var(--r,0deg));z-index:var(--z,1);transition:transform .25s}
+.pc:hover{transform:rotate(0) scale(1.03);z-index:5}
+.pc img{width:100%;height:auto;mix-blend-mode:multiply}
+.pc .lb{display:block;width:max-content;max-width:100%;margin:-4px auto 0;padding:1px 5px;background:rgba(255,255,255,.88);font:500 11px/1.3 'Inter',sans-serif;color:var(--ink);text-align:center;white-space:nowrap}
+.pc .lb i{font-style:normal;color:#777}
+.rack{display:flex;padding:10px 14px 0;align-items:flex-start}
+.rack .pc{--w:27%}
+.rack .pc+.pc{margin-left:-2.6%}
+.rack .lb{font-size:9.5px;white-space:normal;line-height:1.25}
+.rack-n{padding:14px 24px 0;font:400 18px/1 'Bebas Neue',sans-serif;letter-spacing:.06em}
+.sh-ft{margin-top:28px;padding:20px 24px 32px;border-top:1px solid #e6e6e6;font:400 11px/1.6 'Inter',sans-serif;color:#777}
+
+/* ---------- home ---------- */
+.hero{position:relative;display:block;height:calc(100svh - 90px);min-height:520px;max-height:760px;overflow:hidden;background:#0A0A0A}
+.hero img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:50% 30%}
+.hero:after{content:"";position:absolute;inset:auto 0 0 0;height:55%;background:linear-gradient(180deg,rgba(0,0,0,0),rgba(0,0,0,.92));pointer-events:none}
+.hero-txt{position:absolute;z-index:1;left:20px;right:20px;bottom:24px;display:flex;flex-direction:column;gap:10px}
+.hero h1,.hero h2{margin:0;font:400 54px/.88 'Bebas Neue',sans-serif;text-wrap:pretty}
+.hero-row{display:flex;justify-content:space-between;align-items:center;margin-top:8px}
+.hero-row b{font:500 20px/1 'Inter',sans-serif;color:var(--gold);font-weight:500}
+.hero-row span{height:48px;padding:0 30px;display:flex;align-items:center;background:var(--gold);color:#000;font:400 18px/1 'Bebas Neue',sans-serif;letter-spacing:.2em}
+.shop{background:var(--paper);color:var(--ink);padding-bottom:28px}
+.shop,.shop .grp-hd{scroll-margin-top:56px}
+.shop .grp-hd{border-top:1px solid #e6e6e6;margin:0 20px;padding:24px 0 8px}
+.shop .grp-hd:first-child{border-top:0}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:4px 10px;padding:6px 14px 10px}
+.card{display:block}
+.card img{width:100%;aspect-ratio:1;object-fit:contain;mix-blend-mode:multiply}
+.card b{display:block;margin-top:2px;font:500 12px/1.3 'Inter',sans-serif}
+.card small{display:block;font:400 11px/1.4 'Inter',sans-serif;color:#777}
+.foot{border-top:1px solid var(--line);padding:24px 20px 40px;display:flex;flex-direction:column;gap:18px;font:400 11px/1.6 'Inter',sans-serif;letter-spacing:.06em;color:var(--grey)}
+.foot nav{display:flex;flex-wrap:wrap;gap:12px 18px;text-transform:uppercase}
+.foot span{color:var(--dim)}
+
+/* ---------- product (ad landing) ---------- */
+.m-hero{position:relative;height:620px;overflow:hidden;background:#0A0A0A}
+.m-track{position:absolute;inset:0;display:flex;overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:none;-webkit-overflow-scrolling:touch}.m-track::-webkit-scrollbar{display:none}
+.m-track img{flex:none;width:100%;height:100%;object-fit:cover;object-position:50% 15%;scroll-snap-align:start;background:#fff}
+.m-track img.co{object-fit:contain}
+.m-hero:after{content:"";position:absolute;inset:auto 0 0 0;height:45%;background:linear-gradient(180deg,rgba(0,0,0,0),#000);pointer-events:none}
+.m-hero-txt{position:absolute;z-index:1;left:20px;right:20px;bottom:20px;display:flex;flex-direction:column;gap:10px;pointer-events:none}
+.m-hero h1{margin:0;font:400 56px/.88 'Bebas Neue',sans-serif;text-wrap:pretty}
+.m-hero p{margin:0;font:400 13px/1.5 'Inter',sans-serif;color:var(--grey)}
+.m-thumbs{padding:16px 20px 0}
+.m-buy{padding:28px 20px 48px;display:flex;flex-direction:column;gap:22px}
+.m-row{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.m-price{font:500 22px/1 'Inter',sans-serif;color:var(--gold)}
+.m-cart{position:fixed;inset:0;z-index:20;background:#000;display:flex;flex-direction:column;animation:fadeIn .25s ease}
+.m-cart-hd{display:flex;align-items:flex-end;justify-content:space-between;padding:24px 20px 16px;border-bottom:1px solid var(--gold)}
+.m-cart-hd h2{margin:0;font:400 72px/.8 'Bebas Neue',sans-serif}
+.m-cart-hd button{padding-bottom:6px;font:400 11px/1 'Inter',sans-serif;letter-spacing:.12em;color:var(--grey)}
+.m-cart-list{flex:1;overflow:auto;padding:0 20px}
+.m-item{display:grid;grid-template-columns:120px 1fr;gap:16px;padding:20px 0;border-bottom:1px solid var(--line)}
+.m-item>img{width:120px;height:150px;object-fit:contain;background:#fff;border:1px solid var(--line)}
+.m-item>div{display:flex;flex-direction:column;justify-content:space-between}
+.m-item h3{margin:6px 0 0;font:400 26px/.92 'Bebas Neue',sans-serif;text-wrap:pretty}
+.m-item .v{margin-top:8px;font:400 10px/1.4 'Inter',sans-serif;letter-spacing:.1em;color:var(--grey);text-transform:uppercase}
+.m-item .r{display:flex;justify-content:space-between;align-items:center}
+.m-item .t{font:500 13px/1 'Inter',sans-serif;color:var(--gold)}
+.m-cart-ft{padding:20px 20px 32px;border-top:1px solid var(--line);display:flex;flex-direction:column;gap:14px}
+.m-cart-ft .s{display:flex;justify-content:space-between;align-items:baseline}
+.m-cart-ft .s span{font:500 10px/1 'Inter',sans-serif;letter-spacing:.16em;text-transform:uppercase;color:var(--grey)}
+.m-cart-ft .s b{font:500 20px/1 'Inter',sans-serif;color:var(--gold)}
+.m-cart-ft small{text-align:center;font:400 11px/1 'Inter',sans-serif;color:var(--grey)}
+.m-empty{flex:1;display:flex;flex-direction:column;justify-content:center;align-items:flex-start;padding:0 20px;gap:24px}
+.m-empty h3{margin:0;font:400 44px/.95 'Bebas Neue',sans-serif}
+
+/* ---------- DESKTOP ---------- */
+#desk{display:none}
+@media (min-width:900px){
+  #mob{display:none}
+  #desk{display:block}
+  .d-hdr{position:fixed;top:0;left:0;right:0;z-index:12;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;height:72px;padding:0 48px;background:#000}
+  .d-hdr .l{justify-self:start;font:400 11px/1 'Inter',sans-serif;letter-spacing:.12em}
+  .d-hdr .c{display:flex;flex-direction:column;align-items:center}.d-hdr .c img{height:56px;width:auto}
+  .d-hdr .r{justify-self:end;font:400 11px/1 'Inter',sans-serif;letter-spacing:.12em}
+  .d-hdr .r b{color:var(--gold);font-weight:400}
+  .d-sp{height:72px}
+  .sheet{top:72px;bottom:auto;max-height:calc(100vh - 72px)}
+  .sh-cols{display:grid;grid-template-columns:1fr 1fr 1.25fr;gap:24px;padding:0 24px}
+  .sh-top{padding:18px 48px 16px}
+  .sh-cols .grp-hd{padding:24px 10px 6px}.sh-cols .grp-sub{padding:0 10px}.sh-cols .clg,.sh-cols .rack{padding-left:0;padding-right:0}.sh-cols .rack-n{padding-left:10px}
+  .sh-ft{padding:20px 48px 28px}
+  .hero{height:calc(100vh - 106px);max-height:none}
+  .hero img{object-position:50% 25%}
+  .hero-txt{left:48px;right:48px;bottom:40px;flex-direction:row;align-items:flex-end;justify-content:space-between;gap:32px}
+  .hero-txt>div{display:flex;flex-direction:column;gap:12px}
+  .hero h1,.hero h2{font-size:clamp(64px,7vw,104px)}
+  .hero-row{gap:28px;margin:0}
+  .hero-row b{font-size:24px}
+  .hero-row span{height:56px;padding:0 44px}
+  .shop{padding:12px 0 48px}
+  .shop,.shop .grp-hd{scroll-margin-top:72px}
+  .shop>*{max-width:1240px;margin-left:auto;margin-right:auto}
+  .shop .grp-hd{margin:0 auto;padding:40px 24px 12px}
+  .grid{grid-template-columns:repeat(4,1fr);gap:16px 24px;padding:8px 24px 16px}
+  .grid.g7{grid-template-columns:repeat(4,1fr)}
+  .card b{font-size:13px}
+  .foot{flex-direction:row;justify-content:space-between;padding:32px 48px}
+  .d-prod{display:grid;grid-template-columns:auto minmax(0,560px);justify-content:center;gap:56px;padding:120px 48px 96px;align-items:start}
+  .d-gal{display:flex;gap:16px;align-items:flex-start}
+  .d-main{position:relative;width:520px;height:650px;overflow:hidden;border:1px solid var(--line);background:#fff}
+  .d-main img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:50% 10%}
+  .d-main img.co{object-fit:contain}
+  .d-gal .thumbs{flex-direction:column;gap:12px}
+  .d-gal .thumb{width:88px;height:110px}
+  .d-info{display:flex;flex-direction:column;gap:14px;padding-top:12px}
+  .d-info .kick{color:var(--grey)}
+  .d-info h1{margin:0;font:400 80px/.86 'Bebas Neue',sans-serif;text-wrap:pretty}
+  .d-info p{margin:0;font:400 15px/1.6 'Inter',sans-serif;color:var(--grey)}
+  .d-info .p{font:500 26px/1 'Inter',sans-serif;color:var(--gold);margin-top:4px}
+  .d-buy{display:flex;flex-direction:column;gap:20px;border-top:1px solid var(--line);padding-top:28px;margin-top:12px}
+  .d-buy .size{min-width:56px;height:56px;font-size:22px}
+  .d-buy .color{height:56px;padding:0 16px}
+  .d-buy .add{height:60px;padding:0 24px;font-size:19px}
+  .d-ov{position:fixed;inset:0;z-index:20;background:rgba(0,0,0,.7)}
+  .d-cart{position:fixed;top:80px;left:50%;transform:translateX(-50%);width:720px;max-width:calc(100vw - 48px);max-height:calc(100vh - 120px);z-index:21;background:#0A0A0A;border:1px solid var(--gold);display:flex;flex-direction:column;animation:fadeIn .25s ease}
+  .d-cart-hd{display:flex;align-items:center;justify-content:space-between;height:72px;padding:0 32px;border-bottom:1px solid var(--line);flex:none}
+  .d-cart-hd h2{margin:0;font:400 26px/1 'Bebas Neue',sans-serif;letter-spacing:.1em}
+  .d-cart-hd h2 b{color:var(--gold);font-weight:400}
+  .d-cart-hd button{font:300 30px/1 'Inter',sans-serif}
+  .d-cart-list{overflow:auto;padding:0 32px}
+  .d-item{display:grid;grid-template-columns:80px 1fr auto;gap:20px;align-items:center;padding:20px 0;border-bottom:1px solid var(--line)}
+  .d-item>img{width:80px;aspect-ratio:4/5;object-fit:contain;background:#fff;border:1px solid var(--line)}
+  .d-item h3{margin:0;font:400 24px/.95 'Bebas Neue',sans-serif}
+  .d-item .v{margin-top:6px;font:400 11px/1 'Inter',sans-serif;letter-spacing:.1em;color:var(--grey);text-transform:uppercase}
+  .d-item .r{margin-top:12px;display:flex;align-items:center;gap:16px}
+  .d-item .t{font:500 15px/1 'Inter',sans-serif;color:var(--gold)}
+  .d-cart-ft{padding:24px 32px 32px;display:flex;align-items:center;justify-content:space-between;gap:32px;border-top:1px solid var(--line);flex:none}
+  .d-cart-ft small{display:block;font:500 10px/1 'Inter',sans-serif;letter-spacing:.16em;text-transform:uppercase;color:var(--grey)}
+  .d-cart-ft b{display:block;margin-top:8px;font:500 24px/1 'Inter',sans-serif;color:var(--gold)}
+  .d-cart-ft em{display:block;margin-top:8px;font:400 11px/1 'Inter',sans-serif;color:var(--grey);font-style:normal}
+  .d-cart-ft .gold-btn{height:60px;padding:0 64px;font-size:19px}
+  .d-empty{padding:56px 32px 64px;display:flex;flex-direction:column;align-items:flex-start;gap:28px}
+  .d-empty h3{margin:0;font:400 48px/.95 'Bebas Neue',sans-serif}
+  .d-menu{width:420px}
+}
+@media (min-width:900px) and (max-width:1200px){
+  .d-prod{grid-template-columns:1fr;justify-items:center}
+  .d-gal{flex-direction:column-reverse;align-items:center}
+  .d-gal .thumbs{flex-direction:row}
+  .d-main{width:min(520px,100%)}
+  .sh-cols{grid-template-columns:1fr 1fr}.sh-cols>div:last-child{grid-column:1/-1}
+}
+</style>
+<script>
+!function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,document,'script','https://connect.facebook.net/en_US/fbevents.js');
+fbq('init','2925018871025865');fbq('track','PageView');
+!function (w, d, t) {
+  w.TiktokAnalyticsObject=t;var ttq=w[t]=w[t]||[];ttq.methods=["page","track","identify","instances","debug","on","off","once","ready","alias","group","enableCookie","disableCookie","holdConsent","revokeConsent","grantConsent"],ttq.setAndDefer=function(t,e){t[e]=function(){t.push([e].concat(Array.prototype.slice.call(arguments,0)))}};for(var i=0;i<ttq.methods.length;i++)ttq.setAndDefer(ttq,ttq.methods[i]);ttq.instance=function(t){for(
+var e=ttq._i[t]||[],n=0;n<ttq.methods.length;n++)ttq.setAndDefer(e,ttq.methods[n]);return e},ttq.load=function(e,n){var r="https://analytics.tiktok.com/i18n/pixel/events.js",o=n&&n.partner;ttq._i=ttq._i||{},ttq._i[e]=[],ttq._i[e]._u=r,ttq._t=ttq._t||{},ttq._t[e]=+new Date,ttq._o=ttq._o||{},ttq._o[e]=n||{};n=document.createElement("script")
+;n.type="text/javascript",n.async=!0,n.src=r+"?sdkid="+e+"&lib="+t;e=document.getElementsByTagName("script")[0];e.parentNode.insertBefore(n,e)};
+  ttq.load('DBFQLJ3C77U4SEFNNHH0');
+  ttq.page();
+}(window, document, 'ttq');
+</script>
+</head>
+<body>
+<form name="contact" netlify netlify-honeypot="bot-field" hidden><input name="name"><input name="email"><textarea name="message"></textarea><input name="bot-field"></form>
+<div id="mob"></div>
+<div id="desk"></div>
+<script>
+(function(){
+var SHOP='https://shop.impact-threads.com',IG='https://www.instagram.com/threads.talk.us';
+// generated from shop.impact-threads.com/products.json by gen_cat.py; first four are the back-print tees (old cart index + ad ids)
+var CAT=/*CAT*/[{"id":"drones","d":"drones","name":"Beware Killer Drones","tag":"three kids, a kite string, a drone.","kind":"tee","ed":"back","handle":"impact-graphic-t-shirt-meteor-skateboy-urban-streetwear","price":28.99,"shot":"img/models/drones.webp","sc":"Black","img":{"White":["//cdn.shopify.com/s/files/1/0965/0343/1532/files/16053969199500680933_2048.jpg?width=900","//cdn.shopify.com/s/files/1/0965/0343/1532/files/4791688861148625256_2048.jpg?width=900"],"Black":["//cdn.shopify.com/s/files/1/0965/0343/1532/files/819641458718016538_2048.jpg?width=900","//cdn.shopify.com/s/files/1/0965/0343/1532/files/5811921445210018533_2048.jpg?width=900"]},"sizes":["S","M","L","XL","2XL"],"v":{"White/S":["53809696309612",28.99],"Black/S":["53809696342380",28.99],"White/M":["53809696375148",28.99],"Black/M":["53809696407916",28.99],"White/L":["53809696440684",28.99],"Black/L":["53809696473452",28.99],"White/XL":["67808775733612",28.99],"Black/XL":["67808775766380",28.99],"White/2XL":["67808775799148",30.99],"Black/2XL":["67808775831916",29.99]}},{"id":"bibi","d":"bibi","name":"BIBI x NYC","tag":"a suit the size of the skyline.","kind":"tee","ed":"back","handle":"impact-city-skyline-t-shirt-graphic-urban-skate-vibe","price":28.99,"shot":"img/models/bibi.webp","sc":"White","img":{"White":["//cdn.shopify.com/s/files/1/0965/0343/1532/files/3168403881456617089_2048.jpg?width=900","//cdn.shopify.com/s/files/1/0965/0343/1532/files/2002672548241433914_2048.jpg?width=900"],"Black":["//cdn.shopify.com/s/files/1/0965/0343/1532/files/14691177832436159436_2048.jpg?width=900","//cdn.shopify.com/s/files/1/0965/0343/1532/files/14516861015280529593_2048.jpg?width=900"]},"sizes":["S","M","L","XL","2XL"],"v":{"White/S":["53808952967532",28.99],"Black/S":["53808953000300",28.99],"White/M":["53808953033068",28.99],"Black/M":["53808953065836",28.99],"White/L":["53808953098604",28.99],"Black/L":["53808953131372",28.99],"White/XL":["67808771998060",28.99],"Black/XL":["67808772030828",28.99],"White/2XL":["67808772063596",30.99],"Black/2XL":["67808772096364",29.99]}},{"id":"ice","d":"ice","name":"ICE x NYC","tag":"masked men and a statue face down.","kind":"tee","ed":"back","handle":"impact-graphic-tee-bold-script-logo-t-shirt-impact","price":28.99,"shot":"img/models/ice.webp","sc":"Black","img":{"White":["//cdn.shopify.com/s/files/1/0965/0343/1532/files/9283853256243406146_2048.jpg?width=900","//cdn.shopify.com/s/files/1/0965/0343/1532/files/8107498340792718823_2048.jpg?width=900"],"Black":["//cdn.shopify.com/s/files/1/0965/0343/1532/files/4515958121543529383_2048.jpg?width=900","//cdn.shopify.com/s/files/1/0965/0343/1532/files/7463090283996646879_2048.jpg?width=900"]},"sizes":["S","M","L","XL","2XL"],"v":{"White/S":["53819382956396",28.99],"Black/S":["53819382989164",28.99],"White/M":["53819383021932",28.99],"Black/M":["53819383054700",28.99],"White/L":["53819383087468",28.99],"Black/L":["53819383120236",28.99],"White/XL":["67808773931372",28.99],"Black/XL":["67808773964140",28.99],"White/2XL":["67808773996908",30.99],"Black/2XL":["67808774029676",29.99]}},{"id":"delta","d":"delta","name":"Niger Delta Oil Pirates","tag":"armed men at the water’s edge.","kind":"tee","ed":"back","handle":"copy-of-unisex-softstyle-t-shirt","price":28.99,"shot":"img/models/delta.webp","sc":"Black","img":{"White":["//cdn.shopify.com/s/files/1/0965/0343/1532/files/9468050888954735052_2048.jpg?width=900","//cdn.shopify.com/s/files/1/0965/0343/1532/files/9478883298211943642_2048.jpg?width=900"],"Black":["//cdn.shopify.com/s/files/1/0965/0343/1532/files/3641136634444063036_2048.jpg?width=900","//cdn.shopify.com/s/files/1/0965/0343/1532/files/18347562433608338371_2048.jpg?width=900"]},"sizes":["S","M","L","XL","2XL"],"v":{"Black/S":["67808897597804",28.99],"Black/M":["67808897630572",28.99],"White/L":["67808897663340",28.99],"Black/L":["67808897696108",28.99],"Black/XL":["67808897728876",28.99],"Black/2XL":["67808897761644",29.99]}},{"id":"lsdrones","d":"drones","name":"Beware Killer Drones","tag":"three kids, a kite string, a drone.","kind":"ls","ed":"back","handle":"beware-killer-drones-impact-long-sleeve","price":38.99,"shot":"img/models/ls-drones.webp","sc":"Black","img":{"White":["//cdn.shopify.com/s/files/1/0965/0343/1532/files/5866406178463754780_2048.jpg?width=900","//cdn.shopify.com/s/files/1/0965/0343/1532/files/18416926038640167844_2048.jpg?width=900"],"Black":["//cdn.shopify.com/s/files/1/0965/0343/1532/files/2366691707470964028_2048.jpg?width=900","//cdn.shopify.com/s/files/1/0965/0343/1532/files/10183818884068500810_2048.jpg?width=900"]},"sizes":["S","M","L","XL","2XL","3XL"],"v":{"White/S":["67977780658540",38.99],"Black/S":["67977780691308",38.99],"White/M":["67977780724076",38.99],"Black/M":["67977780756844",38.99],"White/L":["67977780789612",38.99],"Black/L":["67977780822380",38.99],"White/XL":["67977780855148",38.99],"Black/XL":["67977780887916",38.99],"White/2XL":["67977780920684",38.99],"Black/2XL":["67977780953452",38.99],"White/3XL":["67977780986220",38.99],"Black/3XL":["67977781018988",38.99]}},{"id":"lsbibi","d":"bibi","name":"BIBI x NYC","tag":"a suit the size of the skyline.","kind":"ls","ed":"back","handle":"bibi-x-nyc-impact-long-sleeve","price":38.99,"shot":"img/models/ls-bibi.webp","sc":"White","img":{"White":["//cdn.shopify.com/s/files/1/0965/0343/1532/files/6947866148425466207_2048.jpg?width=900","//cdn.shopify.com/s/files/1/0965/0343/1532/files/18166448061339763095_2048.jpg?width=900"],"Black":["//cdn.shopify.com/s/files/1/0965/0343/1532/files/18106088143326882422_2048.jpg?width=900","//cdn.shopify.com/s/files/1/0965/0343/1532/files/8145156941097102629_2048.jpg?width=900"]},"sizes":["S","M","L","XL","2XL","3XL"],"v":{"White/S":["67977340780908",38.99],"Black/S":["67977340813676",38.99],"White/M":["67977340846444",38.99],"Black/M":["67977340879212",38.99],"White/L":["67977340911980",38.99],"Black/L":["67977340944748",38.99],"White/XL":["67977340977516",38.99],"Black/XL":["67977341010284",38.99],"White/2XL":["67977341043052",38.99],"Black/2XL":["67977341075820",38.99],"White/3XL":["67977341108588",38.99],"Black/3XL":["67977341141356",38.99]}},{"id":"lsice","d":"ice","name":"ICE x NYC","tag":"masked men and a statue face down.","kind":"ls","ed":"back","handle":"ice-x-nyc-impact-long-sleeve","price":38.99,"shot":"img/models/ls-ice.webp","sc":"Black","img":{"White":["//cdn.shopify.com/s/files/1/0965/0343/1532/files/11367406413799581043_2048.jpg?width=900","//cdn.shopify.com/s/files/1/0965/0343/1532/files/7207142420275940412_2048.jpg?width=900"],"Black":["//cdn.shopify.com/s/files/1/0965/0343/1532/files/13947300032315275075_2048.jpg?width=900","//cdn.shopify.com/s/files/1/0965/0343/1532/files/10841801524721935916_2048.jpg?width=900"]},"sizes":["S","M","L","XL","2XL","3XL"],"v":{"White/S":["67977104294252",38.99],"Black/S":["67977104327020",38.99],"White/M":["67977104359788",38.99],"Black/M":["67977104392556",38.99],"White/L":["67977104425324",38.99],"Black/L":["67977104458092",38.99],"White/XL":["67977104490860",38.99],"Black/XL":["67977104523628",38.99],"White/2XL":["67977104556396",38.99],"Black/2XL":["67977104589164",38.99],"White/3XL":["67977104621932",38.99],"Black/3XL":["67977104654700",38.99]}},{"id":"lsdelta","d":"delta","name":"Niger Delta Oil Pirates","tag":"armed men at the water’s edge.","kind":"ls","ed":"back","handle":"niger-delta-oil-pirates-impact-long-sleeve","price":38.99,"shot":"img/models/ls-delta.webp","sc":"White","img":{"White":["//cdn.shopify.com/s/files/1/0965/0343/1532/files/13789886815351042131_2048.jpg?width=900","//cdn.shopify.com/s/files/1/0965/0343/1532/files/11603831896908663617_2048.jpg?width=900"],"Black":["//cdn.shopify.com/s/files/1/0965/0343/1532/files/14388360019944934973_2048.jpg?width=900","//cdn.shopify.com/s/files/1/0965/0343/1532/files/2131488330774636157_2048.jpg?width=900"]},"sizes":["S","M","L","XL","2XL","3XL"],"v":{"White/S":["67976816132460",38.99],"Black/S":["67976816165228",38.99],"White/M":["67976816197996",38.99],"Black/M":["67976816230764",38.99],"White/L":["67976816263532",38.99],"Black/L":["67976816296300",38.99],"White/XL":["67976816329068",38.99],"Black/XL":["67976816361836",38.99],"White/2XL":["67976816394604",38.99],"Black/2XL":["67976816427372",38.99],"White/3XL":["67976816460140",38.99],"Black/3XL":["67976816492908",38.99]}},{"id":"cmdrones","d":"drones","name":"Beware Killer Drones","tag":"the same small mark on the chest. clean back.","kind":"tee","ed":"chest","handle":"beware-killer-drones-impact-tee-front-logo-only","price":24.99,"shot":"img/models/cm-drones.webp","sc":"White","img":{"White":["//cdn.shopify.com/s/files/1/0965/0343/1532/files/7061700641974982798_2048.jpg?width=900","//cdn.shopify.com/s/files/1/0965/0343/1532/files/14754430848797712804_2048.jpg?width=900"],"Black":["//cdn.shopify.com/s/files/1/0965/0343/1532/files/16064831187043388625_2048.jpg?width=900","//cdn.shopify.com/s/files/1/0965/0343/1532/files/17328288734524085146_2048.jpg?width=900"]},"sizes":["S","M","L","XL","2XL"],"v":{"White/S":["67978782114156",24.99],"Black/S":["67978782146924",24.99],"White/M":["67978782179692",24.99],"Black/M":["67978782212460",24.99],"White/L":["67978782245228",24.99],"Black/L":["67978782277996",24.99],"White/XL":["67978782310764",24.99],"Black/XL":["67978782343532",24.99],"White/2XL":["67978782376300",24.99],"Black/2XL":["67978782409068",24.99]}},{"id":"cmbibi","d":"bibi","name":"BIBI x NYC","tag":"the same small mark on the chest. clean back.","kind":"tee","ed":"chest","handle":"bibi-x-nyc-impact-tee-front-logo-only","price":24.99,"shot":"img/models/cm-bibi.webp","sc":"Black","img":{"White":["//cdn.shopify.com/s/files/1/0965/0343/1532/files/14289317262695512305_2048.jpg?width=900","//cdn.shopify.com/s/files/1/0965/0343/1532/files/16191719000904950646_2048.jpg?width=900"],"Black":["//cdn.shopify.com/s/files/1/0965/0343/1532/files/15158730298194896816_2048.jpg?width=900","//cdn.shopify.com/s/files/1/0965/0343/1532/files/5424765782839125861_2048.jpg?width=900"]},"sizes":["S","M","L","XL","2XL"],"v":{"White/S":["67982319649132",24.99],"Black/S":["67982319681900",24.99],"White/M":["67982319714668",24.99],"Black/M":["67982319747436",24.99],"White/L":["67982319780204",24.99],"Black/L":["67982319812972",24.99],"White/XL":["67982319845740",24.99],"Black/XL":["67982319878508",24.99],"White/2XL":["67982319911276",24.99],"Black/2XL":["67982319944044",24.99]}},{"id":"cmice","d":"ice","name":"ICE x NYC","tag":"the same small mark on the chest. clean back.","kind":"tee","ed":"chest","handle":"ice-x-nyc-impact-tee-front-logo-only","price":24.99,"shot":"img/models/cm-ice.webp","sc":"White","img":{"White":["//cdn.shopify.com/s/files/1/0965/0343/1532/files/1514117217431524798_2048.jpg?width=900","//cdn.shopify.com/s/files/1/0965/0343/1532/files/610653162230754852_2048.jpg?width=900"],"Black":["//cdn.shopify.com/s/files/1/0965/0343/1532/files/11774803841950026991_2048.jpg?width=900","//cdn.shopify.com/s/files/1/0965/0343/1532/files/17817193933930457513_2048.jpg?width=900"]},"sizes":["S","M","L","XL","2XL"],"v":{"White/S":["67979312824684",24.99],"Black/S":["67979312857452",24.99],"White/M":["67979312890220",24.99],"Black/M":["67979312922988",24.99],"White/L":["67979312955756",24.99],"Black/L":["67979312988524",24.99],"White/XL":["67979313021292",24.99],"Black/XL":["67979313054060",24.99],"White/2XL":["67979313086828",24.99],"Black/2XL":["67979313119596",24.99]}},{"id":"cmdelta","d":"delta","name":"Niger Delta Oil Pirates","tag":"the same small mark on the chest. clean back.","kind":"tee","ed":"chest","handle":"niger-delta-oil-pirates-impact-tee-front-logo-only","price":24.99,"shot":"img/models/cm-delta.webp","sc":"Black","img":{"White":["//cdn.shopify.com/s/files/1/0965/0343/1532/files/14607586868473686943_2048.jpg?width=900","//cdn.shopify.com/s/files/1/0965/0343/1532/files/14328131565085711807_2048.jpg?width=900"],"Black":["//cdn.shopify.com/s/files/1/0965/0343/1532/files/3707795858331451412_2048.jpg?width=900","//cdn.shopify.com/s/files/1/0965/0343/1532/files/5444514357417106396_2048.jpg?width=900"]},"sizes":["S","M","L","XL","2XL"],"v":{"White/S":["67978874552684",24.99],"Black/S":["67978874585452",24.99],"White/M":["67978874618220",24.99],"Black/M":["67978874650988",24.99],"White/L":["67978874683756",24.99],"Black/L":["67978874716524",24.99],"White/XL":["67978874749292",24.99],"Black/XL":["67978874782060",24.99],"White/2XL":["67978874814828",24.99],"Black/2XL":["67978874847596",24.99]}},{"id":"cmldrones","d":"drones","name":"Beware Killer Drones","tag":"the same small mark on the chest. clean back.","kind":"ls","ed":"chest","handle":"beware-killer-drones-impact-logo-long-sleeve","price":34.99,"shot":"img/models/cml-drones.webp","sc":"White","img":{"White":["//cdn.shopify.com/s/files/1/0965/0343/1532/files/11602330002482336565_2048.jpg?width=900","//cdn.shopify.com/s/files/1/0965/0343/1532/files/1779521585004624513_2048.jpg?width=900"],"Black":["//cdn.shopify.com/s/files/1/0965/0343/1532/files/551641494541644102_2048.jpg?width=900","//cdn.shopify.com/s/files/1/0965/0343/1532/files/16269432153357724795_2048.jpg?width=900"]},"sizes":["S","M","L","XL","2XL","3XL"],"v":{"White/S":["67978588488044",34.99],"Black/S":["67978588520812",34.99],"White/M":["67978588553580",34.99],"Black/M":["67978588586348",34.99],"White/L":["67978588619116",34.99],"Black/L":["67978588651884",34.99],"White/XL":["67978588684652",34.99],"Black/XL":["67978588717420",34.99],"White/2XL":["67978588750188",34.99],"Black/2XL":["67978588782956",34.99],"White/3XL":["67978588815724",34.99],"Black/3XL":["67978588848492",34.99]}},{"id":"cmlbibi","d":"bibi","name":"BIBI x NYC","tag":"the same small mark on the chest. clean back.","kind":"ls","ed":"chest","handle":"bibi-x-nyc-impact-long-sleeve-front-logo-only","price":34.99,"shot":"img/models/cml-bibi.webp","sc":"Black","img":{"White":["//cdn.shopify.com/s/files/1/0965/0343/1532/files/12187057584684118972_2048.jpg?width=900","//cdn.shopify.com/s/files/1/0965/0343/1532/files/7633219195569135616_2048.jpg?width=900"],"Black":["//cdn.shopify.com/s/files/1/0965/0343/1532/files/16771183453193275552_2048.jpg?width=900","//cdn.shopify.com/s/files/1/0965/0343/1532/files/8015691064238660408_2048.jpg?width=900"]},"sizes":["S","M","L","XL","2XL","3XL"],"v":{"White/S":["67978627154284",34.99],"Black/S":["67978627187052",34.99],"White/M":["67978627219820",34.99],"Black/M":["67978627252588",34.99],"White/L":["67978627285356",34.99],"Black/L":["67978627318124",34.99],"White/XL":["67978627350892",34.99],"Black/XL":["67978627383660",34.99],"White/2XL":["67978627416428",34.99],"Black/2XL":["67978627449196",34.99],"White/3XL":["67978627481964",34.99],"Black/3XL":["67978627514732",34.99]}},{"id":"cmlice","d":"ice","name":"ICE x NYC","tag":"the same small mark on the chest. clean back.","kind":"ls","ed":"chest","handle":"ice-x-nyc-impact-long-sleeve-front-logo-only","price":34.99,"shot":"img/models/cml-ice.webp","sc":"White","img":{"White":["//cdn.shopify.com/s/files/1/0965/0343/1532/files/6697213170170401376_2048.jpg?width=900","//cdn.shopify.com/s/files/1/0965/0343/1532/files/5402469262546269212_2048.jpg?width=900"],"Black":["//cdn.shopify.com/s/files/1/0965/0343/1532/files/1574232183216290563_2048.jpg?width=900","//cdn.shopify.com/s/files/1/0965/0343/1532/files/11494503408209976281_2048.jpg?width=900"]},"sizes":["S","M","L","XL","2XL","3XL"],"v":{"White/S":["67978674667884",34.99],"Black/S":["67978674700652",34.99],"White/M":["67978674733420",34.99],"Black/M":["67978674766188",34.99],"White/L":["67978674798956",34.99],"Black/L":["67978674831724",34.99],"White/XL":["67978674864492",34.99],"Black/XL":["67978674897260",34.99],"White/2XL":["67978674930028",34.99],"Black/2XL":["67978674962796",34.99],"White/3XL":["67978674995564",34.99],"Black/3XL":["67978675028332",34.99]}},{"id":"cmldelta","d":"delta","name":"Niger Delta Oil Pirates","tag":"the same small mark on the chest. clean back.","kind":"ls","ed":"chest","handle":"niger-delta-oil-pirates-impact-logo-long-sleeve","price":34.99,"shot":"img/models/cml-delta.webp","sc":"Black","img":{"White":["//cdn.shopify.com/s/files/1/0965/0343/1532/files/4029243590031864916_2048.jpg?width=900","//cdn.shopify.com/s/files/1/0965/0343/1532/files/8495276149377931741_2048.jpg?width=900"],"Black":["//cdn.shopify.com/s/files/1/0965/0343/1532/files/8102778775409216826_2048.jpg?width=900","//cdn.shopify.com/s/files/1/0965/0343/1532/files/2237903917494553128_2048.jpg?width=900"]},"sizes":["S","M","L","XL","2XL","3XL"],"v":{"White/S":["67978494574956",34.99],"Black/S":["67978494607724",34.99],"White/M":["67978494640492",34.99],"Black/M":["67978494673260",34.99],"White/L":["67978494706028",34.99],"Black/L":["67978494738796",34.99],"White/XL":["67978494771564",34.99],"Black/XL":["67978494804332",34.99],"White/2XL":["67978494837100",34.99],"Black/2XL":["67978494869868",34.99],"White/3XL":["67978494902636",34.99],"Black/3XL":["67978494935404",34.99]}}]/*END*/;
+var BY={};CAT.forEach(function(c,i){c.i=i;BY[c.id]=c;c.url=SHOP+'/products/'+c.handle});
+var LS=CAT.filter(function(c){return c.kind==='ls'&&c.ed==='back'}),TEES=CAT.filter(function(c){return c.kind==='tee'&&c.ed==='back'}),CM=CAT.filter(function(c){return c.ed==='chest'});
+var CMFROM=Math.min.apply(null,CM.map(function(c){return c.price}));
+function money(n){return '$'+n.toFixed(2)}
+function esc(s){return String(s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
+function garment(c){return c.kind==='ls'?'long sleeve':'tee'}
+function edition(c){return c.ed==='back'?'back print':'chest graphics only'}
+function vv(c,color,size){return c.v[color+'/'+size]}
+function vprice(c,color,size){var x=vv(c,color,size);return x?x[1]:c.price}
+
+var S={pi:0,size:'M',color:'White',qty:1,slide:0,cart:[]};
+try{S.cart=JSON.parse(localStorage.getItem('it_cart')||'[]').filter(function(x){return CAT[x.pi]&&vv(CAT[x.pi],x.color,x.size)})}catch(e){}
+function save(){try{localStorage.setItem('it_cart',JSON.stringify(S.cart))}catch(e){}}
+function count(){return S.cart.reduce(function(a,x){return a+x.qty},0)}
+function subtotal(){return S.cart.reduce(function(a,x){return a+vprice(CAT[x.pi],x.color,x.size)*x.qty},0)}
+function checkoutUrl(){return SHOP+'/cart/'+S.cart.map(function(x){return vv(CAT[x.pi],x.color,x.size)[0]+':'+x.qty}).join(',')}
+function route(){var h=location.hash;var m=h.match(/^#\/product\/(\w+)(?:\/(White|Black))?/);if(m)return {view:'product',p:BY[m[1]]||CAT[0],color:m[2]};if(/^#\/(contact|privacy|size)$/.test(h))return {view:'page',page:h.slice(2)};return {view:'home',cart:h==='#/cart',menu:h==='#/menu',sheet:h==='#/shop'}}
+function go(h){location.hash=h}
+function px(ev,c,color,size,qty){var x=vv(c,color,size),val=+(vprice(c,color,size)*(qty||1)).toFixed(2);if(window.fbq)fbq('track',ev,{content_type:'product',content_ids:x?[x[0]]:[],content_name:c.name+' '+garment(c),value:val,currency:'USD'});
+ if(window.ttq)ttq.track(ev,{contents:[{content_id:String(x?x[0]:''),content_type:'product',content_name:c.name+' '+garment(c),quantity:qty||1}],value:val,currency:'USD'})}
+function toast(t){var e=document.createElement('div');e.className='toast';e.textContent=t;document.body.appendChild(e);setTimeout(function(){e.remove()},1400)}
+
+/* ---- shared fragments ---- */
+function cut(c,color,side){return c.img[color][side]}
+function hero(c,tag,lead){var t=lead?'h1':'h2';return '<a class="hero" href="#/product/'+c.id+'/'+c.sc+'"><img src="'+c.shot+'" alt="'+esc(c.name+' '+garment(c))+'"'+(lead?'':' loading="lazy"')+'><div class="hero-txt"><div><span class="kick">'+tag+'</span><'+t+'>'+esc(c.name)+'</'+t+'></div><div class="hero-row"><b>'+money(c.price)+'</b><span>Shop</span></div></div></a>'}
+function sizesFor(p){return p.sizes.map(function(l){var ok=vv(p,S.color,l);return '<button class="size'+(S.size===l?' on':'')+'" data-size="'+l+'"'+(ok?'':' style="opacity:.35"')+'>'+l+'</button>'}).join('')}
+function buyBlock(p){
+ var price=vprice(p,S.color,S.size);
+ var colors=['White','Black'].filter(function(l){return p.sizes.some(function(s){return vv(p,l,s)})}).map(function(l){return '<button class="color'+(S.color===l?' on':'')+'" data-color="'+l+'"><i style="background:'+(l==='White'?'#EDEDED':'#111')+'"></i>'+l+'</button>'}).join('');
+ var q='<div class="qty"><button data-q="-1" aria-label="Less">−</button><span>'+S.qty+'</span><button data-q="1" aria-label="More">+</button></div>';
+ return '<div class="m-row"><div class="colors">'+colors+'</div>'+q+'</div><div class="sizes">'+sizesFor(p)+'</div>'+
+  '<button class="add" data-add><span>Add to cart</span><span>'+money(price*S.qty)+'</span></button><a class="ulink" href="#/size">Size guide</a>';
+}
+function gallery(p){return [p.shot,cut(p,S.color,0),cut(p,S.color,1)]}
+function gimg(src,i,alt){return '<img src="'+src+'" alt="'+esc(alt)+'"'+(i?' class="co" loading="lazy"':'')+'>'}
+function thumbs(p){return '<div class="thumbs">'+gallery(p).map(function(s,i){return '<button class="thumb'+(S.slide===i?' on':'')+'" data-slide="'+i+'"><img src="'+s+'" alt="" style="object-fit:'+(i?'contain':'cover')+'"></button>'}).join('')+'</div>'}
+function cartItems(cls){
+ return S.cart.map(function(x){var c=CAT[x.pi],t=money(vprice(c,x.color,x.size)*x.qty);
+  var qty='<div class="qty sm"><button data-cq="-1" data-key="'+x.key+'">−</button><span>'+x.qty+'</span><button data-cq="1" data-key="'+x.key+'">+</button></div>';
+  var rm='<button class="ulink" data-rm="'+x.key+'">Remove</button>',v=garment(c)+' · '+edition(c)+'<br>'+x.color+' · '+x.size;
+  if(cls==='d')return '<div class="d-item"><img src="'+cut(c,x.color,c.ed==='back'?1:0)+'" alt=""><div><h3>'+esc(c.name)+'</h3><div class="v">'+v+'</div><div class="r">'+qty+rm+'</div></div><div class="t">'+t+'</div></div>';
+  return '<div class="m-item"><img src="'+cut(c,x.color,c.ed==='back'?1:0)+'" alt=""><div><div><h3>'+esc(c.name)+'</h3><div class="v">'+v+'</div></div><div class="r">'+qty+'<div class="t">'+t+'</div></div>'+rm+'</div></div>';
+ }).join('');
+}
+function shipNote(n){return n>1?'Free US shipping applied':'Add 1 more piece: free US shipping'}
+
+/* ---- collage dropdown: product cut-outs only, two model shots in the long-sleeve band ---- */
+var TILT=['-3deg','2.5deg','1.5deg','-2deg'];
+function piece(c,color,side,i,lb,rack){var st=rack?'--r:'+(i%2?'1.5deg':'-1.5deg'):'--r:'+TILT[i%4]+';--mt:'+(i>1?'-34px':'0')+';--ml:'+(i%2?'-4%':'0')+';--z:'+((i<2?3:1)+i%2);return '<a class="pc" href="#/product/'+c.id+'/'+color+'" style="'+st+'"><img src="'+cut(c,color,side)+'" alt="'+esc(c.name+' '+garment(c)+' '+color)+'" loading="lazy"><span class="lb">'+lb+'</span></a>'}
+function sheet(){
+ var lsP=LS.map(function(c,i){return piece(c,c.sc,1,i,esc(c.name.toLowerCase())+' · '+money(c.price))}).join('');
+ var teeP=TEES.map(function(c,i){var col=c.sc;return piece(c,col,1,i,esc(c.name.toLowerCase())+' · '+money(vprice(c,col,'M')))}).join('');
+ var rows=['drones','bibi','ice','delta'].map(function(d){var its=CM.filter(function(c){return c.d===d});if(!its.length)return '';
+  var ps=[];its.forEach(function(c){['Black','White'].forEach(function(col){if(vv(c,col,'M'))ps.push(piece(c,col,0,ps.length,garment(c)+' · '+col.toLowerCase()+'<br>'+money(c.price),1))})});
+  return '<div class="rack-n">'+esc(its[0].name)+'</div><div class="rack">'+ps.join('')+'</div>'}).join('');
+ return '<div class="sh-ov" data-back></div><div class="sheet" role="dialog" aria-label="Shop"><div class="sh-top"><span>Four prints · two editions</span><button data-back>Close</button></div><div class="sh-cols">'+
+  '<div><div class="grp-hd"><h3><b>New</b> · Long sleeves</h3><span>'+money(LS[0].price)+'</span></div><div class="clg">'+lsP+'</div></div>'+
+  '<div><div class="grp-hd"><h3>Back print tees</h3><span>'+money(TEES[0].price)+'</span></div><div class="clg">'+teeP+'</div></div>'+
+  '<div><div class="grp-hd"><h3>Chest graphics only</h3><span>from '+money(CMFROM)+'</span></div><div class="grp-sub">the same mark on the chest, clean back.</div>'+rows+'</div>'+
+  '</div><div class="sh-ft">Free US shipping on 2+ pieces · international flat $10 · printed to order</div></div>';
+}
+
+/* ---- home: cut-out grid first by group, second model shot ---- */
+function card(c,color,side,sub){return '<a class="card" href="#/product/'+c.id+'/'+color+'"><img src="'+cut(c,color,side)+'" alt="'+esc(c.name+' '+garment(c))+'" loading="lazy"><b>'+esc(c.name)+'</b><small>'+sub+'</small></a>'}
+function home(){
+ var b=BY.cmldelta||CAT[3];
+ var h='<div class="ship">Free US shipping on 2+ pieces</div>';
+ h+='<section class="shop" id="g-all"><div class="grp-hd" id="g-ls"><h3><b>New</b> · Long sleeves</h3><span>'+money(LS[0].price)+'</span></div><div class="grid">'+LS.map(function(c){return card(c,c.sc,1,'back print · '+money(c.price))}).join('')+'</div>';
+ h+='<div class="grp-hd" id="g-tees"><h3>Back print tees</h3><span>'+money(TEES[0].price)+'</span></div><div class="grid">'+TEES.map(function(c){var col=c.sc;return card(c,col,1,'back print · '+money(c.price))}).join('')+'</div>';
+ h+='<div class="grp-hd" id="g-chest"><h3>Chest graphics only</h3><span>from '+money(CMFROM)+'</span></div><div class="grid">'+CM.map(function(c){return card(c,c.sc,0,garment(c)+' · '+money(c.price))}).join('')+'</div></section>';
+ h+=hero(b,'Long sleeve · chest graphics only · '+b.sc.toLowerCase(),0);
+ h+='<footer class="foot"><span>Free US shipping on 2+ pieces · international flat $10 · printed to order.</span><nav>'+LINKS+'</nav><span>© 2026 Impact Threads</span></footer>';
+ return h;
+}
+var LINKS='<a href="#/size">Size guide</a><a href="#/privacy">Privacy</a><a href="#/contact">Contact</a><a href="'+SHOP+'/account">Account</a><a href="'+IG+'" target="_blank" rel="noopener">Instagram</a>';
+var MENU='<nav class="menu"><a href="#/shop">Shop all</a><a href="#/">Home</a><a href="#/cart">Cart</a><a href="#/size">Size guide</a><a href="#/contact">Contact</a><a href="#/privacy">Privacy</a><a href="'+SHOP+'/account">Account</a><a href="'+IG+'" target="_blank" rel="noopener">Instagram</a></nav>';
+var TEE_T='<table class="tbl"><tr><th>Size</th><th>Chest</th><th>Length</th></tr><tr><td>S</td><td>18 in / 46 cm</td><td>28 in / 71 cm</td></tr><tr><td>M</td><td>20 in / 51 cm</td><td>29 in / 74 cm</td></tr><tr><td>L</td><td>22 in / 56 cm</td><td>30 in / 76 cm</td></tr><tr><td>XL</td><td>24 in / 61 cm</td><td>31 in / 79 cm</td></tr><tr><td>2XL</td><td>26 in / 66 cm</td><td>32 in / 81 cm</td></tr></table>';
+var LS_T='<table class="tbl"><tr><th>Size</th><th>Chest</th><th>Length</th><th>Sleeve</th></tr>'+[['S',18,27.5,31.75],['M',20,28.75,33.5],['L',22,29.75,35.25],['XL',24,30.75,36.75],['2XL',26,32,38.25],['3XL',28,33,40]].map(function(r){return '<tr><td>'+r[0]+'</td><td>'+r[1]+' in</td><td>'+r[2]+' in</td><td>'+r[3]+' in</td></tr>'}).join('')+'</table>';
+function pageHtml(n){
+ if(n==='size')return '<h1>Size guide</h1><h2>Tees</h2>'+TEE_T+'<h2>Long sleeves</h2>'+LS_T+'<p class="note">Unisex fit, measured flat. Chest is armpit to armpit; length is shoulder seam to hem. Between sizes? Size up.</p>';
+ if(n==='privacy')return '<h1>Privacy</h1><p class="note">This site uses the Meta Pixel and TikTok Pixel to measure visits, add-to-carts and checkouts from our ads. Your cart is stored only in your browser. Orders, payment and account details are handled by our checkout provider, Shopify, under its own privacy terms. Messages sent through the contact form are used only to reply to you.</p>';
+ return '<h1>Contact</h1><form class="cform" name="contact" method="POST" data-cf><input type="hidden" name="form-name" value="contact"><p class="hp"><label>Leave empty <input name="bot-field"></label></p><label>Name<input name="name" required autocomplete="name"></label><label>Email<input type="email" name="email" required autocomplete="email"></label><label>Message<textarea name="message" rows="6" required></textarea></label><button class="add" type="submit"><span>Send</span><span>→</span></button><p class="note" data-cf-msg></p></form>';
+}
+function logo(open){return '<button class="'+(open?'m-logo open':'m-logo')+'" data-go="'+(open?'#/':'#/shop')+'" aria-label="Shop"><img src="img/impact.webp" alt="Impact"><i class="caret"></i></button>'}
+
+/* ---- MOBILE ---- */
+function renderMob(r){
+ var n=count(),h='',left=r.sheet?'<button class="m-x" data-back aria-label="Close">×</button>':r.view==='home'?'<button class="m-burger" data-go="#/menu" aria-label="Menu"><span></span><span></span></button>':'<button class="m-back" data-back>← BACK</button>';
+ h+='<header class="m-hdr">'+left+logo(r.sheet)+'<button class="cart-ico" data-go="#/cart" aria-label="Cart"><b></b><i></i>'+(n?'<em>'+n+'</em>':'')+'</button></header>';
+ if(r.view==='home')h+=home();
+ else if(r.view==='page')h+='<section class="page">'+pageHtml(r.page)+'</section>';
+ else{var p=r.p;
+  h+='<div class="m-hero"><div class="m-track" data-track>'+gallery(p).map(function(s,i){return gimg(s,i,p.name)}).join('')+'</div><div class="m-hero-txt"><span class="kick">'+garment(p)+' · '+edition(p)+'</span><h1>'+esc(p.name)+'</h1><p>'+esc(p.tag)+'</p></div></div>';
+  h+='<div class="m-thumbs">'+thumbs(p)+'</div><div class="m-buy"><div class="m-row"><span class="m-price">'+money(vprice(p,S.color,S.size))+'</span><span class="kick">'+garment(p)+' · '+S.color+'</span></div>'+buyBlock(p)+'</div>';
+ }
+ if(r.sheet)h+=sheet();
+ if(r.menu)h+='<div class="m-ov" data-back></div><div class="m-menu"><div class="m-menu-hd"><span>Menu</span><button data-back>CLOSE ×</button></div>'+MENU+'</div>';
+ if(r.cart){
+  h+='<div class="m-cart"><div class="m-cart-hd"><h2>Cart</h2><button data-back>CLOSE ×</button></div>';
+  if(n)h+='<div class="m-cart-list">'+cartItems('m')+'</div><div class="m-cart-ft"><div class="s"><span>Subtotal · '+n+' item'+(n>1?'s':'')+'</span><b>'+money(subtotal())+'</b></div><a class="gold-btn" href="'+checkoutUrl()+'">Checkout</a><small>'+shipNote(n)+'</small></div>';
+  else h+='<div class="m-empty"><h3>Nothing here yet.</h3><button class="ghost-btn" data-go="#/shop">Shop the drop</button></div>';
+  h+='</div>';
+ }
+ return h;
+}
+/* ---- DESKTOP ---- */
+function renderDesk(r){
+ var n=count(),h='';
+ h+='<header class="d-hdr"><button class="l" data-go="'+(r.sheet?'#/':'#/shop')+'">'+(r.sheet?'CLOSE ^':'SHOP ⌄')+'</button><button class="c'+(r.sheet?' open':'')+'" data-go="'+(r.sheet?'#/':'#/shop')+'" aria-label="Shop"><img src="img/impact.webp" alt="Impact"><i class="caret"></i></button><button class="r" data-go="#/cart">CART <b>('+n+')</b></button></header><div class="d-sp"></div>';
+ if(r.view==='home')h+=home();
+ else if(r.view==='page')h+='<section class="page d-page">'+pageHtml(r.page)+'</section>';
+ else{var p=r.p,g=gallery(p);
+  h+='<section class="d-prod"><div class="d-gal">'+thumbs(p)+'<div class="d-main">'+gimg(g[S.slide],S.slide,p.name)+'</div></div>';
+  h+='<div class="d-info"><span class="kick">'+(p.kind==='ls'?'new · ':'')+garment(p)+' · '+edition(p)+'</span><h1>'+esc(p.name)+'</h1><p>'+esc(p.tag)+'</p><div class="p">'+money(vprice(p,S.color,S.size))+'</div><div class="d-buy">'+buyBlock(p)+'<span class="ulink" style="text-decoration:none">Free US shipping on 2+ pieces · international flat $10 · printed to order.</span></div></div></section>';
+  h+='<footer class="foot"><span>© 2026 Impact Threads</span><nav>'+LINKS+'</nav></footer>';
+ }
+ if(r.sheet)h+=sheet();
+ if(r.menu)h+='<div class="d-ov" data-back></div><div class="d-cart d-menu"><div class="d-cart-hd"><h2>Menu</h2><button data-back aria-label="Close">×</button></div>'+MENU+'</div>';
+ if(r.cart){
+  h+='<div class="d-ov" data-back></div><div class="d-cart"><div class="d-cart-hd"><h2>Cart <b>('+n+')</b></h2><button data-back aria-label="Close">×</button></div>';
+  if(n)h+='<div class="d-cart-list">'+cartItems('d')+'</div><div class="d-cart-ft"><div><small>Subtotal</small><b>'+money(subtotal())+'</b><em>'+shipNote(n)+'</em></div><a class="gold-btn" href="'+checkoutUrl()+'">Checkout</a></div>';
+  else h+='<div class="d-empty"><h3>Nothing here yet.</h3><button class="ghost-btn" data-go="#/shop">Shop the drop</button></div>';
+  h+='</div>';
+ }
+ return h;
+}
+
+var mq=matchMedia('(min-width:900px)'),prevView=null,lastPx=-1;
+function render(){
+ var r=route();
+ if(r.view==='product'){
+  if(r.view!==prevView||lastPx!==r.p.i){S.pi=r.p.i;S.color=r.color||r.p.sc;if(!vv(r.p,S.color,S.size))S.size=vv(r.p,S.color,'M')?'M':r.p.sizes.filter(function(s){return vv(r.p,S.color,s)})[0]||S.size;lastPx=S.pi;S.slide=0;px('ViewContent',r.p,S.color,S.size)}
+ }else lastPx=-1;
+ if(r.view!==prevView){S.slide=0;S.qty=1;prevView=r.view;if(!r.cart&&!r.sheet)scrollTo(0,0)}
+ var host=mq.matches?document.getElementById('desk'):document.getElementById('mob');
+ host.innerHTML=mq.matches?renderDesk(r):renderMob(r);
+ var tr=document.querySelector('[data-track]');if(tr&&S.slide)tr.scrollLeft=S.slide*tr.clientWidth;
+ document.body.classList.toggle('noscroll',!!(r.cart||r.menu||r.sheet));
+ var seen=1;try{if(r.sheet)localStorage.setItem('it_dd','1');seen=localStorage.getItem('it_dd')}catch(e){}
+ document.body.classList.toggle('nudge',!seen);
+}
+mq.addEventListener?mq.addEventListener('change',render):mq.addListener(render);
+addEventListener('hashchange',render);
+document.addEventListener('click',function(e){var a=e.target.closest('a[href*="/cart/"]');if(!a)return;var n=count(),val=+subtotal().toFixed(2),ids=S.cart.map(function(x){return vv(CAT[x.pi],x.color,x.size)[0]});
+ if(window.fbq)fbq('track','InitiateCheckout',{content_type:'product',content_ids:ids,num_items:n,value:val,currency:'USD'});
+ if(window.ttq)ttq.track('InitiateCheckout',{contents:S.cart.map(function(x){return{content_id:String(vv(CAT[x.pi],x.color,x.size)[0]),content_type:'product',content_name:CAT[x.pi].name,quantity:x.qty}}),value:val,currency:'USD'})});
+function markThumb(i){document.querySelectorAll('.thumb').forEach(function(b,k){b.classList.toggle('on',k===i)})}
+function showSlide(i,fromThumb){markThumb(i);var tr=document.querySelector('[data-track]');if(tr){if(fromThumb)tr.scrollTo({left:i*tr.clientWidth,behavior:'smooth'});return}var m=document.querySelector('.d-main');if(m)m.innerHTML=gimg(gallery(CAT[S.pi])[i],i,CAT[S.pi].name)}
+document.addEventListener('scroll',function(e){var tr=e.target;if(!(tr instanceof Element)||!tr.hasAttribute('data-track'))return;var i=Math.round(tr.scrollLeft/tr.clientWidth);if(i!==S.slide){S.slide=i;markThumb(i)}},true);
+document.addEventListener('submit',function(e){var f=e.target.closest('[data-cf]');if(!f)return;e.preventDefault();var m=f.querySelector('[data-cf-msg]'),b=f.querySelector('button');b.disabled=true;m.textContent='Sending…';
+ fetch('/',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams(new FormData(f)).toString()}).then(function(r){if(!r.ok)throw 0;f.reset();m.textContent='Sent. We will get back to you.'}).catch(function(){m.textContent='Could not send. Try again in a moment.'}).then(function(){b.disabled=false});});
+
+document.addEventListener('click',function(e){
+ var t=e.target.closest('[data-go],[data-back],[data-size],[data-color],[data-q],[data-add],[data-slide],[data-cq],[data-rm]');
+ if(!t)return;
+ var d=t.dataset,p=CAT[S.pi];
+ if(d.go!==undefined){e.preventDefault();go(d.go);return}
+ if(d.back!==undefined){e.preventDefault();history.length>1?history.back():go('#/');return}
+ if(d.size){S.size=d.size}
+ else if(d.color){S.color=d.color}
+ else if(d.q){S.qty=Math.max(1,S.qty+ +d.q)}
+ else if(d.slide!==undefined){S.slide=+d.slide;showSlide(S.slide,true);return}
+ else if(d.add!==undefined){
+  if(!vv(p,S.color,S.size)){toast(S.color+' '+S.size+' is sold out');return}
+  px('AddToCart',p,S.color,S.size,S.qty);
+  var key=S.pi+'|'+S.size+'|'+S.color,ex=S.cart.filter(function(x){return x.key===key})[0];
+  if(ex)ex.qty+=S.qty;else S.cart.push({key:key,pi:S.pi,size:S.size,color:S.color,qty:S.qty});
+  save();toast('Added · '+p.name+' · '+S.color+' '+S.size);go('#/cart');return;
+ }
+ else if(d.cq){S.cart.forEach(function(x){if(x.key===d.key)x.qty=Math.max(1,x.qty+ +d.cq)});save()}
+ else if(d.rm){S.cart=S.cart.filter(function(x){return x.key!==d.rm});save()}
+ render();
+});
+// ad links use ?p=<id> (Meta appends UTM params to the query, which breaks #/ routes)
+var qp=location.search.match(/[?&]p=(\w+)/);if(qp&&!location.hash)history.replaceState(null,'','#/product/'+qp[1]);
+render();
+// catalog ads (several designs) use ?c=<all|ls|tees|chest>: land on that product grid instead of the hero
+var qc=location.search.match(/[?&]c=(\w+)/);if(qc&&!qp&&(!location.hash||location.hash==='#/')){history.scrollRestoration='manual';var toGrid=function(){var g=document.getElementById('g-'+qc[1])||document.getElementById('g-all');if(g&&!location.hash.replace('#/',''))g.scrollIntoView()};toGrid();addEventListener('load',toGrid);setTimeout(toGrid,700)}
+})();
+</script>
+</body>
+</html>

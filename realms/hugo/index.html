@@ -1,0 +1,1807 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Hugo · the dorm</title>
+<style>
+  html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#0a0a0a;
+    font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;}
+  #menuBtn{position:fixed;left:16px;bottom:16px;background:rgba(0,0,0,.60);
+    border:1px solid rgba(255,255,255,.18);color:#e0e0e0;padding:6px 14px;
+    border-radius:9px;font-size:11px;letter-spacing:.14em;cursor:pointer;
+    font-family:monospace;text-transform:uppercase;z-index:30;user-select:none;}
+  #menuBtn:hover{background:rgba(255,255,255,.10);}
+  #hud{position:fixed;left:16px;bottom:52px;color:#e6e6e6;font-size:12px;line-height:1.8;
+    background:rgba(0,0,0,.80);padding:12px 16px;border-radius:12px;
+    border:1px solid rgba(255,255,255,.10);max-width:52ch;
+    display:none;backdrop-filter:blur(8px);}
+  #crosshair{position:fixed;left:50%;top:50%;width:10px;height:10px;
+    transform:translate(-50%,-50%);pointer-events:none;}
+  #crosshair:before,#crosshair:after{content:"";position:absolute;background:#f0f0f0;opacity:.9;}
+  #crosshair:before{width:10px;height:1px;left:0;top:4.5px;}
+  #crosshair:after{width:1px;height:10px;left:4.5px;top:0;}
+  #crosshair.ads::before{width:6px!important;}
+  #crosshair.ads::after{height:6px!important;}
+  #interact{position:fixed;left:50%;bottom:18%;transform:translateX(-50%);
+    color:#f5f5f5;background:rgba(0,0,0,.55);padding:8px 12px;border-radius:10px;
+    font-size:13px;letter-spacing:.2px;opacity:0;transition:opacity .15s ease;
+    border:1px solid rgba(255,255,255,.08)}
+  #notice{position:fixed;right:16px;top:16px;color:#ddd;background:rgba(0,0,0,.55);
+    padding:10px 12px;border-radius:12px;border:1px solid rgba(255,255,255,.1);
+    font-size:12px;max-width:56ch}
+  #vignette{position:fixed;inset:0;pointer-events:none;will-change:opacity;
+    background:radial-gradient(ellipse at center,transparent 52%,rgba(0,0,0,.72) 100%);opacity:0;}
+  #scope-overlay{position:fixed;inset:0;pointer-events:none;opacity:0;display:none;
+    background:radial-gradient(circle 97px at 50% 50%,transparent 96px,rgba(6,6,6,.97) 97px);}
+  #scope-overlay::before,#scope-overlay::after{content:'';position:absolute;background:rgba(190,190,190,.55);}
+  #scope-overlay::before{left:50%;top:50%;width:1px;height:148px;transform:translate(-50%,-50%);}
+  #scope-overlay::after{left:50%;top:50%;width:148px;height:1px;transform:translate(-50%,-50%);}
+  /* PiP second camera */
+  #pip{position:fixed;bottom:90px;right:16px;width:260px;height:162px;
+    border:1px solid rgba(255,255,255,.12);border-radius:8px;overflow:hidden;
+    pointer-events:none;box-shadow:0 4px 24px rgba(0,0,0,.6);display:none;}
+  #pip canvas{display:block;width:100%!important;height:100%!important;}
+  #pipLabel{position:absolute;top:5px;left:8px;font-size:9px;letter-spacing:.18em;
+    color:rgba(255,255,255,.35);font-family:monospace;pointer-events:none;z-index:2;}
+  /* Load Hugo button */
+  #loadHugoBtn{position:fixed;top:16px;left:16px;background:rgba(0,200,100,.15);
+    border:1px solid rgba(0,255,120,.4);color:#00ff88;padding:7px 14px;border-radius:8px;
+    font-size:11px;letter-spacing:.15em;cursor:pointer;font-family:monospace;
+    text-transform:uppercase;transition:background .2s;}
+  #loadHugoBtn:hover{background:rgba(0,200,100,.28);}
+  #glbInput,#crosshair,#hugoHud,#weaponBar,#mjBar,#loadHugoBtn,#interact{display:none!important;}
+  #tpIndicator{position:fixed;top:48px;left:16px;font-size:10px;letter-spacing:.15em;
+    color:rgba(255,255,255,.35);font-family:monospace;text-transform:uppercase;}
+</style>
+<script>
+(function(){
+  function load(src,cb){var s=document.createElement('script');s.src=src;s.async=true;
+    s.onload=()=>cb();s.onerror=()=>cb();document.head.appendChild(s);}
+  window.loadTHREE=function(done){
+    if(window.THREE)return done();
+    load('https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js',function(){
+      if(window.THREE)return done();
+      load('https://unpkg.com/three@0.128.0/build/three.min.js',done);
+    });
+  };
+})();
+</script>
+</head>
+<body>
+<div id="hud"></div>
+<button id="menuBtn" onclick="var h=document.getElementById('hud');h.style.display=h.style.display==='block'?'none':'block'">☰ CONTROLS</button>
+<div id="interact">Press E</div>
+<div id="crosshair"></div>
+<div id="vignette"></div>
+<div id="scope-overlay"></div>
+<div id="notice">Loading engine…</div>
+<div id="pip"><div id="pipLabel">CAM-2 SHOULDER</div></div>
+<button id="loadHugoBtn" onclick="document.getElementById('glbInput').click()">⬆ Load Hugo.glb</button>
+<input type="file" id="glbInput" accept=".glb,.gltf"/>
+<div id="tpIndicator">FP MODE</div>
+
+<script>
+loadTHREE(function(){
+  /*
+  ╔══════════════════════════════════════════════════════════════╗
+  ║  HUGO DORM — AGENT INTEGRATION GUIDE                        ║
+  ╠══════════════════════════════════════════════════════════════╣
+  ║  window.HugoAgent   — Hugo's internal/external state        ║
+  ║    .getState()      — {health,pain,stress,alertness,...}     ║
+  ║    .takeDamage(part,amount,pos)                              ║
+  ║    .setState(patch) — override any state field               ║
+  ║    .on('damage',cb) — subscribe to damage events            ║
+  ║    .on('death',cb)  — subscribe to death event              ║
+  ║    .reset()         — full state reset                       ║
+  ║                                                              ║
+  ║  window.DormBridge  — frame-by-frame integration            ║
+  ║    .onTick(cb)      — cb({dt,hugoState,playerPos,physicsMode}) ║
+  ║    .sendCommand({type:'damage',amount:10,part:'head'})       ║
+  ║    .sendCommand({type:'teleport',x:0,z:0})                   ║
+  ║    .sendCommand({type:'reset'})                              ║
+  ║                                                              ║
+  ║  MuJoCo: set MUJOCO_URL = your wss:// tunnel URL            ║
+  ║  Badge goes GREEN + pulses when realtime physics active      ║
+  ╚══════════════════════════════════════════════════════════════╝
+  */
+  const _gs=document.createElement('script');
+  _gs.src='https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js';
+  _gs.onload=()=>{window._gltfReady=true;};
+  _gs.onerror=()=>{window._gltfReady=false;console.error('GLTFLoader failed to load');};
+  document.head.appendChild(_gs);
+
+  const notice=document.getElementById('notice');
+  const show=(m)=>{if(notice)notice.textContent=m;};
+  // ── keyframes ────────────────────────────────────────────────────────────────
+  const _kf=document.createElement('style');
+  _kf.textContent=`
+    @keyframes mjPulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.3;transform:scale(1.5)}}
+    @keyframes painFlash{0%{outline:3px solid rgba(255,0,0,.0)}50%{outline:3px solid rgba(255,0,0,.7)}100%{outline:3px solid rgba(255,0,0,.0)}}
+  `;
+  document.head.appendChild(_kf);
+
+  // ── Physics badge ─────────────────────────────────────────────────────────
+  const mjStatEl=document.createElement('div');
+  mjStatEl.style.cssText='position:fixed;top:64px;left:16px;display:flex;align-items:center;gap:5px;font-size:9px;letter-spacing:.12em;font-family:monospace;text-transform:uppercase;';
+  const _mjDot=document.createElement('span');
+  _mjDot.style.cssText='width:7px;height:7px;border-radius:50%;background:rgba(255,100,100,.7);flex-shrink:0;';
+  const _mjTxt=document.createElement('span');
+  _mjTxt.style.color='rgba(255,100,100,.7)';
+  _mjTxt.textContent='PHYSICS: PROCEDURAL';
+  mjStatEl.appendChild(_mjDot);mjStatEl.appendChild(_mjTxt);
+  document.body.appendChild(mjStatEl);
+  function setPhysicsBadge(live){
+    _mjDot.style.background=live?'rgba(0,255,136,.9)':'rgba(255,100,100,.7)';
+    _mjDot.style.animation=live?'mjPulse 1.2s ease-in-out infinite':'none';
+    _mjTxt.style.color=live?'rgba(0,255,136,.9)':'rgba(255,100,100,.7)';
+    _mjTxt.textContent=live?'▶ PHYSICS: REALTIME MUJOCO':'▷ PHYSICS: PROCEDURAL';}
+
+  // ── HugoAgent — internal + external state ────────────────────────────────
+  const HugoAgent={
+    state:{health:100,pain:0,alertness:50,stress:0,stamina:100,
+           lastHitPart:null,lastHitTime:0,hitCount:0,alive:true,physicsMode:'procedural'},
+    _boneImpulse:{}, _listeners:{},
+    on(e,cb){(this._listeners[e]||(this._listeners[e]=[])).push(cb);},
+    emit(e,d){(this._listeners[e]||[]).forEach(cb=>cb(d));},
+    takeDamage(part,amount,pos){
+      if(!this.state.alive)return;
+      this.state.health=Math.max(0,this.state.health-amount);
+      this.state.pain=Math.min(100,this.state.pain+amount*1.8);
+      this.state.stress=Math.min(100,this.state.stress+amount*0.9);
+      this.state.alertness=Math.min(100,this.state.alertness+35);
+      this.state.lastHitPart=part;this.state.lastHitTime=performance.now();this.state.hitCount++;
+      if(part){this._boneImpulse[part]={
+        rx:(Math.random()-.5)*1.1,ry:(Math.random()-.5)*.5,rz:(Math.random()-.5)*.5,
+        ttl:.4,maxTtl:.4};}
+      if(this.state.health<=0){this.state.alive=false;this.emit('death',{part,pos});}
+      this.emit('damage',{part,amount,health:this.state.health,pos});
+      // screen flash
+      document.body.style.animation='none';
+      setTimeout(()=>{document.body.style.animation='painFlash .25s ease-out';},10);},
+    update(dt){
+      this.state.pain=Math.max(0,this.state.pain-dt*9);
+      this.state.stress=Math.max(0,this.state.stress-dt*4);
+      this.state.alertness=Math.max(50,this.state.alertness-dt*5);
+      for(const k in this._boneImpulse){
+        this._boneImpulse[k].ttl-=dt;
+        if(this._boneImpulse[k].ttl<=0)delete this._boneImpulse[k];}},
+    getState(){return{...this.state};},
+    setState(p){Object.assign(this.state,p);this.emit('stateChange',this.state);},
+    reset(){Object.assign(this.state,{health:100,pain:0,stress:0,alertness:50,hitCount:0,alive:true});
+      this._boneImpulse={};this.emit('reset',this.state);}
+  };
+  window.HugoAgent=HugoAgent;
+
+  // ── Hugo HUD ──────────────────────────────────────────────────────────────
+  const _hhud=document.createElement('div');
+  _hhud.id='hugoHud';
+  _hhud.style.cssText=`position:fixed;bottom:90px;right:16px;width:190px;font-family:monospace;
+    font-size:9px;letter-spacing:.08em;background:rgba(0,0,0,.78);border:1px solid rgba(255,255,255,.1);
+    border-radius:8px;padding:10px 12px;display:none;user-select:none;`;
+  _hhud.innerHTML=`<div style="color:rgba(255,255,255,.45);margin-bottom:6px;letter-spacing:.15em">HUGO // AGENT STATE</div>
+    <div id="hh_hp" style="margin:2px 0"></div>
+    <div id="hh_pain" style="margin:2px 0"></div>
+    <div id="hh_stress" style="margin:2px 0"></div>
+    <div id="hh_alert" style="margin:2px 0"></div>
+    <div id="hh_hits" style="margin-top:5px;color:rgba(255,255,255,.35)"></div>
+    <div id="hh_part" style="color:rgba(255,255,255,.35)"></div>`;
+  document.body.appendChild(_hhud);
+  function updateHugoHud(){
+    const s=HugoAgent.state;
+    _hhud.style.display='block';
+    function bar(v,col){const f=Math.round(v/10);return `<span style="color:${col}">${'█'.repeat(f)}${'░'.repeat(10-f)}</span>`;}
+    document.getElementById('hh_hp').innerHTML=`HP&nbsp;&nbsp;&nbsp;&nbsp;${bar(s.health,'#00ff88')} ${Math.round(s.health)}`;
+    document.getElementById('hh_pain').innerHTML=`PAIN&nbsp;&nbsp;${bar(s.pain,'#ff3333')} ${Math.round(s.pain)}`;
+    document.getElementById('hh_stress').innerHTML=`STRESS ${bar(s.stress,'#ffaa00')} ${Math.round(s.stress)}`;
+    document.getElementById('hh_alert').innerHTML=`ALERT&nbsp;&nbsp;${bar(s.alertness,'#44aaff')} ${Math.round(s.alertness)}`;
+    document.getElementById('hh_hits').textContent=`SHOTS HIT: ${s.hitCount}`;
+    document.getElementById('hh_part').textContent=`LAST HIT: ${s.lastHitPart||'—'}`;}
+  if(!window.THREE){show('THREE failed to load.');return;}
+  const THREE=window.THREE;
+
+  // ─── Procedural Textures ────────────────────────────────────────────────────
+  function makeCanvas(w,h){const c=document.createElement('canvas');c.width=w;c.height=h;
+    return{c,ctx:c.getContext('2d',{alpha:false})};}
+  function fillNoise(ctx,w,h,base,jit=8,al=22){
+    ctx.fillStyle=base;ctx.fillRect(0,0,w,h);
+    const img=ctx.getImageData(0,0,w,h);const d=img.data;
+    for(let i=0;i<d.length;i+=4){const n=(Math.random()*2-1)*jit;
+      d[i]=Math.min(255,Math.max(0,d[i]+n));
+      d[i+1]=Math.min(255,Math.max(0,d[i+1]+n*.8));
+      d[i+2]=Math.min(255,Math.max(0,d[i+2]+n*.6));d[i+3]=255;}
+    ctx.putImageData(img,0,0);ctx.globalAlpha=al/255;
+    for(let k=0;k<3;k++){
+      const g=ctx.createRadialGradient(Math.random()*w,Math.random()*h,1,
+        Math.random()*w,Math.random()*h,Math.random()*Math.max(w,h));
+      g.addColorStop(0,'rgba(255,255,255,.3)');g.addColorStop(1,'rgba(0,0,0,.3)');
+      ctx.fillStyle=g;ctx.fillRect(0,0,w,h);}ctx.globalAlpha=1;}
+  function makeWallTex(tW=48,tH=24,gr=2){
+    const sc=devicePixelRatio||1,W=Math.round(tW*sc),H=Math.round(tH*sc);
+    const{c,ctx}=makeCanvas(W,H);fillNoise(ctx,W,H,'#6e6860',2,7);
+    ctx.globalAlpha=.15;ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);ctx.globalAlpha=1;
+    ctx.fillStyle='#4e4840';ctx.fillRect(0,0,W,Math.max(1,gr*sc));ctx.fillRect(0,0,Math.max(1,gr*sc),H);
+    ctx.strokeStyle='rgba(30,25,20,.18)';ctx.lineWidth=Math.max(1,gr*sc*.6);
+    ctx.beginPath();ctx.moveTo(0,.5*gr*sc);ctx.lineTo(W,.5*gr*sc);
+    ctx.moveTo(.5*gr*sc,0);ctx.lineTo(.5*gr*sc,H);ctx.stroke();
+    const t=new THREE.CanvasTexture(c);t.wrapS=t.wrapT=THREE.RepeatWrapping;t.anisotropy=4;return t;}
+  function makeFloorTex(tile=40,gr=2){
+    const sc=devicePixelRatio||1,W=Math.round(tile*sc),H=Math.round(tile*sc);
+    const{c,ctx}=makeCanvas(W,H);fillNoise(ctx,W,H,'#636058',2,6);
+    const lin=ctx.createLinearGradient(0,0,W,H);
+    lin.addColorStop(0,'rgba(255,255,255,.10)');lin.addColorStop(1,'rgba(0,0,0,.06)');
+    ctx.fillStyle=lin;ctx.fillRect(0,0,W,H);
+    ctx.fillStyle='#474340';ctx.fillRect(0,0,W,Math.max(1,gr*sc));ctx.fillRect(0,0,Math.max(1,gr*sc),H);
+    ctx.strokeStyle='rgba(25,20,18,.18)';ctx.lineWidth=Math.max(1,gr*sc*.6);
+    ctx.beginPath();ctx.moveTo(0,.5*gr*sc);ctx.lineTo(W,.5*gr*sc);
+    ctx.moveTo(.5*gr*sc,0);ctx.lineTo(.5*gr*sc,H);ctx.stroke();
+    const t=new THREE.CanvasTexture(c);t.wrapS=t.wrapT=THREE.RepeatWrapping;t.anisotropy=4;return t;}
+
+  // ─── Scene & Renderers ──────────────────────────────────────────────────────
+  const scene=new THREE.Scene();scene.background=new THREE.Color(0x0a0a0a);
+  const renderer=new THREE.WebGLRenderer({antialias:true});
+  renderer.setPixelRatio(Math.min(2,devicePixelRatio||1));
+  renderer.setSize(innerWidth,innerHeight);renderer.shadowMap.enabled=false;
+  document.body.appendChild(renderer.domElement);
+
+  // PiP renderer
+  const PIP_W=260,PIP_H=162;
+  const renderer2=new THREE.WebGLRenderer({antialias:true,alpha:true});
+  renderer2.setPixelRatio(1);renderer2.setSize(PIP_W,PIP_H);
+  document.getElementById('pip').appendChild(renderer2.domElement);
+
+  // ─── Cameras ────────────────────────────────────────────────────────────────
+  const EYE=1.67;
+  const camera=new THREE.PerspectiveCamera(75,innerWidth/innerHeight,.02,200);
+  camera.position.set(0,EYE,1.75);camera.rotation.order='YXZ';
+  scene.add(camera);
+
+  // PiP shoulder camera
+  const camera2=new THREE.PerspectiveCamera(65,PIP_W/PIP_H,.05,200);
+  camera2.rotation.order='YXZ';
+
+  let yaw=0,pitch=0;
+  const MAX_PITCH=Math.PI/2-.01;
+  function setLook(dx,dy){
+    const ax=Math.abs(dx),ay=Math.abs(dy);
+    if(ax>ay*1.8&&ay<.6)dy=0;if(ay>ax*1.8&&ax<.6)dx=0;
+    yaw-=dx*.0022;pitch-=dy*.0022;
+    pitch=Math.max(-MAX_PITCH,Math.min(MAX_PITCH,pitch));}
+
+  // ── Mouse look ──
+  let _ptrLocked=false,_dragLook=false,_lastMouse=null;
+  function tryLock(){try{renderer.domElement.requestPointerLock();}catch(e){}}
+  renderer.domElement.addEventListener('click',e=>{
+    renderer.domElement.focus();
+    if(!_ptrLocked)tryLock();});
+  document.addEventListener('pointerlockchange',()=>{
+    _ptrLocked=!!(document.pointerLockElement===renderer.domElement);
+    show(_ptrLocked?'Pointer locked — P to unlock | WASD move | V 3P toggle'
+      :'RIGHT-DRAG to look | LEFT-CLICK to fire | WASD move | V toggle 3P');});
+  document.addEventListener('mousemove',e=>{
+    if(_ptrLocked)setLook(e.movementX,e.movementY);});
+  renderer.domElement.addEventListener('mousedown',e=>{
+    if(e.button===2){
+      if(!_ptrLocked&&!(window.SpawnLoadout&&SpawnLoadout.isActive())){_dragLook=true;_lastMouse={x:e.clientX,y:e.clientY};}
+      if(window.SpawnLoadout&&SpawnLoadout.isActive())SpawnLoadout.setInput({ads:true});
+      else player.adsHeld=true;
+      e.preventDefault();}});
+  renderer.domElement.addEventListener('mouseup',e=>{
+    if(e.button===2){
+      _dragLook=false;_lastMouse=null;
+      if(window.SpawnLoadout&&SpawnLoadout.isActive())SpawnLoadout.setInput({ads:false});
+      else player.adsHeld=false;}});
+  renderer.domElement.addEventListener('contextmenu',e=>e.preventDefault());
+  document.addEventListener('mousemove',e=>{
+    if(_dragLook&&!_ptrLocked&&_lastMouse){
+      setLook(e.clientX-_lastMouse.x,e.clientY-_lastMouse.y);
+      _lastMouse={x:e.clientX,y:e.clientY};}});
+
+  // ─── Lights ─────────────────────────────────────────────────────────────────
+  scene.add(new THREE.HemisphereLight(0xaabbcc,0x111111,.55));
+  const dir=new THREE.DirectionalLight(0xdde0e8,.5);dir.position.set(3,5,2);scene.add(dir);
+  const overhead=new THREE.PointLight(0xeef6ff,.45,12);overhead.position.set(0,2.5,0);scene.add(overhead);
+  const flashlight=new THREE.SpotLight(0xffffff,1.2,10,Math.PI/8,.35,1);
+  camera.add(flashlight);camera.add(flashlight.target);
+  const setFlashTarget=()=>{
+    const fwd=new THREE.Vector3(-Math.sin(yaw),0,-Math.cos(yaw));
+    flashlight.target.position.copy(camera.position).add(fwd);};
+
+  // ─── Room ───────────────────────────────────────────────────────────────────
+  const room={w:3.860,d:5.759,h:2.813};
+  const wallTex=makeWallTex(60,30,2);
+  const floorTex=makeFloorTex(40,2);
+  const wTW=.60,wTH=.30,fT=.40;
+  const wallMat=new THREE.MeshStandardMaterial({map:wallTex,roughness:.95});
+  const floorMat=new THREE.MeshStandardMaterial({map:floorTex,roughness:.6});
+  const ceilingMat=new THREE.MeshStandardMaterial({color:0x888888,roughness:1.0});
+  const woodLight=new THREE.MeshStandardMaterial({color:0xcdaa76,roughness:.75});
+  const woodDark=new THREE.MeshStandardMaterial({color:0x6e553b,roughness:.7});
+  const bedding=new THREE.MeshStandardMaterial({color:0x0b214a,roughness:.95});
+  const metalBlack=new THREE.MeshStandardMaterial({color:0x222222,roughness:.45,metalness:.6});
+  const applianceW=new THREE.MeshStandardMaterial({color:0xffffff,roughness:.35});
+  const fridgeBlk=new THREE.MeshStandardMaterial({color:0x111111,roughness:.45});
+
+  const floor=new THREE.Mesh(new THREE.PlaneGeometry(room.w,room.d),floorMat);
+  floor.rotation.x=-Math.PI/2;floor.material.map.repeat.set(room.w/fT,room.d/fT);scene.add(floor);
+  const ceiling=new THREE.Mesh(new THREE.PlaneGeometry(room.w,room.d),ceilingMat);
+  ceiling.rotation.x=Math.PI/2;ceiling.position.set(0,room.h,0);scene.add(ceiling);
+
+  function makeWall(width,height,rotY,pos){
+    const mat=new THREE.MeshStandardMaterial({map:wallTex,roughness:.95,side:THREE.DoubleSide});
+    mat.map=mat.map.clone();mat.map.wrapS=mat.map.wrapT=THREE.RepeatWrapping;
+    mat.map.repeat.set(width/wTW,height/wTH);mat.map.center.set(.5,.5);
+    const m=new THREE.Mesh(new THREE.PlaneGeometry(width,height,1,1),mat);
+    m.position.set(pos[0],pos[1],pos[2]);m.rotation.y=rotY;return m;}
+  const backWall=makeWall(room.w,room.h,0,[0,room.h/2,-room.d/2]);scene.add(backWall);
+  const frontWall=makeWall(room.w,room.h,Math.PI,[0,room.h/2,room.d/2]);scene.add(frontWall);
+  const leftWall=makeWall(room.d,room.h,-Math.PI/2,[-room.w/2,room.h/2,0]);scene.add(leftWall);
+  const rightWall=makeWall(room.d,room.h,Math.PI/2,[room.w/2,room.h/2,0]);scene.add(rightWall);
+
+  const curtains=new THREE.Mesh(new THREE.PlaneGeometry(2.2,1.8),
+    new THREE.MeshStandardMaterial({color:0xeee7d6,roughness:.95}));
+  curtains.position.set(0,1.6,-room.d/2+.01);scene.add(curtains);
+  const heater=new THREE.Mesh(new THREE.BoxGeometry(2.2,.18,.08),
+    new THREE.MeshStandardMaterial({color:0xf0f0f0,roughness:.6}));
+  heater.position.set(0,.24,-room.d/2+.04);scene.add(heater);
+
+  const DOOR_W=.92,DOOR_H=2.05,DOOR_T=.045,DOOR_X=0,FRONT_Z=room.d/2;
+  scene.remove(frontWall);
+  const wallSideW=(room.w-DOOR_W)*.5,headerH=room.h-DOOR_H;
+  function makeFWP(width,height,cx,cy,cz){
+    const mat=new THREE.MeshStandardMaterial({map:wallTex,roughness:.95,side:THREE.DoubleSide});
+    mat.map=mat.map.clone();mat.map.wrapS=mat.map.wrapT=THREE.RepeatWrapping;
+    mat.map.repeat.set(width/wTW,height/wTH);mat.map.center.set(.5,.5);
+    const m=new THREE.Mesh(new THREE.PlaneGeometry(width,height,1,1),mat);
+    m.position.set(cx,cy,cz);m.rotation.y=Math.PI;return m;}
+  const frontWallLeft=makeFWP(wallSideW,room.h,-room.w/2+wallSideW/2,room.h/2,FRONT_Z);
+  const frontWallRight=makeFWP(wallSideW,room.h,room.w/2-wallSideW/2,room.h/2,FRONT_Z);
+  const frontWallTop=makeFWP(DOOR_W,headerH,DOOR_X,DOOR_H+headerH/2,FRONT_Z);
+  scene.add(frontWallLeft,frontWallRight,frontWallTop);
+
+  const doorPivot=new THREE.Group();
+  doorPivot.position.set(DOOR_X-DOOR_W/2,0,FRONT_Z-.005);scene.add(doorPivot);
+  const doorLeaf=new THREE.Mesh(new THREE.BoxGeometry(DOOR_W,DOOR_H,DOOR_T),
+    new THREE.MeshStandardMaterial({color:0x3b2b1a,roughness:.9}));
+  doorLeaf.position.set(DOOR_W/2,DOOR_H/2,-DOOR_T/2);doorPivot.add(doorLeaf);
+  const doorKnob=new THREE.Mesh(new THREE.SphereGeometry(.04,16,16),
+    new THREE.MeshStandardMaterial({color:0xc0c0c0,roughness:.3,metalness:.8}));
+  doorKnob.position.set(DOOR_W-.08,1.0,-DOOR_T*.35);doorLeaf.add(doorKnob);
+  doorPivot.userData={type:'hingeDoor',open:false,theta:0,min:0,max:Math.PI*.55,speed:10,rotDir:-1};
+  doorLeaf.userData.pivot=doorPivot;
+
+  function addBox(w,h,d,mat,x,y,z,ry=0){
+    const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
+    m.position.set(x,y,z);m.rotation.y=ry;scene.add(m);return m;}
+
+  // Desk
+  function createDeskSet(){
+    const DW=1.07,DD=.61,DH=.75,TT=.03;
+    const dk=new THREE.Group();
+    const top=new THREE.Mesh(new THREE.BoxGeometry(DW,TT,DD),woodLight);
+    top.position.set(0,DH+TT/2,0);dk.add(top);
+    const leftLeg=new THREE.Mesh(new THREE.BoxGeometry(.02,DH,DD),woodLight);
+    leftLeg.position.set(-DW/2+.01,DH/2,0);dk.add(leftLeg);
+    const tower=new THREE.Mesh(new THREE.BoxGeometry(.38,DH-.03,DD),woodLight);
+    tower.position.set(DW/2-.19,(DH-.03)/2,0);dk.add(tower);
+    const s1=new THREE.Mesh(new THREE.BoxGeometry(DW,.02,.25),woodLight);
+    s1.position.set(0,DH+.20,-.18);dk.add(s1);
+    const s2=s1.clone();s2.position.y=DH+.45;dk.add(s2);
+    const HH=.40;
+    const ckL=new THREE.Mesh(new THREE.BoxGeometry(.02,HH,.25),woodLight);
+    ckL.position.set(-DW/2+.01,DH+.25,-.18);dk.add(ckL);
+    const ckR=ckL.clone();ckR.position.x*=-1;dk.add(ckR);
+    const bp=new THREE.Mesh(new THREE.BoxGeometry(DW-.002,HH,.012),woodLight);
+    bp.position.set(0,DH+.25,-.305);dk.add(bp);
+    const lb=new THREE.Mesh(new THREE.BoxGeometry(.36,.02,.25),metalBlack);
+    lb.position.set(0,DH+.01,DD/2-.13);dk.add(lb);
+    const hg=new THREE.Group();hg.position.set(0,.01,-.125);lb.add(hg);
+    const scrMat=new THREE.MeshStandardMaterial({color:0x6fa7e6,emissive:0x6fa7e6,emissiveIntensity:.6,roughness:.95});
+    const scr=new THREE.Mesh(new THREE.BoxGeometry(.34,.21,.012),scrMat);
+    scr.position.set(0,.105,0);hg.add(scr);hg.rotation.x=-.95;
+    dk.userData={w:DW,h:DH+TT,d:DD};scene.add(dk);window.desk=dk;}
+  createDeskSet();
+  let desk=window.desk;
+
+  const wardrobe=addBox(.95,2,.60,woodLight,0,1,0);
+  (function(){
+    let w2=scene.getObjectByName('wardrobe2');
+    if(!w2){w2=new THREE.Mesh(new THREE.BoxGeometry(.95,2,.60),woodLight);
+      w2.name='wardrobe2';w2.position.y=1;scene.add(w2);}
+    const dims=o=>o.geometry?.parameters?
+      {w:o.geometry.parameters.width,d:o.geometry.parameters.depth}:
+      {w:o.userData.w||0,d:o.userData.d||0};
+    const flx=d=>-room.w/2+d/2+.02;
+    [wardrobe,w2].forEach(o=>o.rotation.y=-Math.PI/2);
+    wardrobe.position.x=flx(dims(wardrobe).d);
+    desk.position.x=flx(desk.userData.d);
+    w2.position.x=flx(dims(w2).d);
+    desk.rotation.y=Math.PI/2;
+    const flim=room.d/2-.14;
+    w2.position.z=flim-dims(w2).w/2;
+    desk.position.z=w2.position.z-(dims(w2).w/2+.03+desk.userData.w/2);
+    wardrobe.position.z=desk.position.z-(desk.userData.w/2+.03+dims(wardrobe).w/2);
+    wardrobe.position.y=w2.position.y=1;})();
+
+  const bedLeftFrame=addBox(2.03,.25,.99,woodDark,-room.w/2+1.10,.125,-room.d/2+1.05);
+  const bedLeftMatt=addBox(1.98,.20,.94,bedding,bedLeftFrame.position.x,.33,bedLeftFrame.position.z);
+  const bedRightFrame=addBox(2.03,.25,.99,woodDark,room.w/2-1.10,.125,-room.d/2+1.05);
+  const bedRightMatt=addBox(1.98,.20,.94,bedding,bedRightFrame.position.x,.33,bedRightFrame.position.z);
+  (function(){
+    const BW=.99,FY=.125,MY=.33,WG=.03,CL=.04,NG=.02;
+    const Lb=Math.max(.1,room.w-2*WG),Lr=6*.60;
+    bedRightFrame.rotation.y=0;bedRightMatt.rotation.y=0;
+    bedRightFrame.scale.set(Lb/2.03,1,1);bedRightMatt.scale.set(Lb/1.98,1,1);
+    bedRightFrame.position.set(0,FY,-room.d/2+BW/2+WG+CL);
+    bedRightMatt.position.set(0,MY,-room.d/2+BW/2+WG+CL);
+    bedLeftFrame.rotation.y=Math.PI/2;bedLeftMatt.rotation.y=Math.PI/2;
+    bedLeftFrame.scale.set(1,1,Lr/2.03);bedLeftMatt.scale.set(1,1,Lr/1.98);
+    bedLeftFrame.position.set(room.w/2-BW/2-WG,FY,-room.d/2+Lr/2+WG+CL);
+    bedLeftMatt.position.set(bedLeftFrame.position.x,MY,bedLeftFrame.position.z);
+    bedRightFrame.position.z+=NG;bedRightMatt.position.z+=NG;
+    bedLeftFrame.position.x-=NG;bedLeftMatt.position.x-=NG;})();
+
+  let fridgeDoor;
+  const DRS=new THREE.Group();DRS.name='dresserUnit';
+  DRS.add(new THREE.Mesh(new THREE.BoxGeometry(.75,.85,.50),woodLight));
+  let yCur=.85/2-.22/2;
+  [.22,.22,.30].forEach((h,i,arr)=>{
+    const f=new THREE.Mesh(new THREE.BoxGeometry(.73,h,.022),woodLight);
+    f.position.set(0,yCur,-.25-.011-.0015);DRS.add(f);
+    const eg=new THREE.EdgesGeometry(f.geometry);
+    f.add(new THREE.LineSegments(eg,new THREE.LineBasicMaterial({color:0x333333})));
+    const inn=new THREE.Mesh(new THREE.BoxGeometry(.68,h-.05,.012),woodLight);
+    inn.position.set(0,0,.006);f.add(inn);
+    const knb=new THREE.Mesh(new THREE.CylinderGeometry(.018,.0165,.028,18),
+      new THREE.MeshStandardMaterial({color:0xc0c0c0,roughness:.35,metalness:.8}));
+    knb.rotation.x=-Math.PI/2;knb.position.set(0,0,-.014);f.add(knb);
+    yCur-=(h/2+.016+(arr[i+1]||0)/2);});
+  DRS.rotation.y=Math.PI/2;DRS.position.set(room.w/2-.25-.02,.425,.85);scene.add(DRS);
+
+  const fridge=new THREE.Mesh(new THREE.BoxGeometry(.50,.55,.48),fridgeBlk);
+  fridge.position.set(DRS.position.x,DRS.position.y+.425+.275+.012,DRS.position.z+.06);scene.add(fridge);
+  const fryer=new THREE.Mesh(new THREE.BoxGeometry(.25,.28,.25),applianceW);
+  fryer.position.set(DRS.position.x+.30,DRS.position.y+.425+.14+.012,DRS.position.z-.10);scene.add(fryer);
+  fridgeDoor=new THREE.Mesh(new THREE.BoxGeometry(.02,.45,.46),
+    new THREE.MeshStandardMaterial({color:0xffffff,roughness:.35}));
+  fridgeDoor.position.set(fridge.position.x+.256,fridge.position.y,fridge.position.z);scene.add(fridgeDoor);
+  fridgeDoor.userData={type:'hinge',
+    pivot:new THREE.Vector3(fridge.position.x+.25+.006,fridge.position.y,fridge.position.z+.24),
+    open:false,min:0,max:Math.PI/1.7,theta:0};
+
+  // ─── Corridor ───────────────────────────────────────────────────────────────
+  const corridorW=2.20,corridorLen=30.0;
+  const hallGroup=new THREE.Group();scene.add(hallGroup);
+  const hallFloor=new THREE.Mesh(new THREE.PlaneGeometry(corridorLen,corridorW),floorMat.clone());
+  hallFloor.rotation.x=-Math.PI/2;hallFloor.position.set(0,0,room.d/2+corridorW/2);
+  hallFloor.material.map=floorMat.map.clone();
+  hallFloor.material.map.wrapS=hallFloor.material.map.wrapT=THREE.RepeatWrapping;
+  hallFloor.material.map.repeat.set(corridorLen/.40,corridorW/.40);hallGroup.add(hallFloor);
+  const hallCeiling=new THREE.Mesh(new THREE.PlaneGeometry(corridorLen,corridorW),ceilingMat.clone());
+  hallCeiling.rotation.x=Math.PI/2;hallCeiling.position.set(0,room.h,room.d/2+corridorW/2);hallGroup.add(hallCeiling);
+  const wallMatHall=wallMat.clone();wallMatHall.map=wallMat.map.clone();
+  wallMatHall.map.wrapS=wallMatHall.map.wrapT=THREE.RepeatWrapping;
+  wallMatHall.map.repeat.set(corridorLen/.60,room.h/.30);
+  const sideW=(corridorLen-room.w)*.5;
+  function makeSWM(){const m=wallMatHall.clone();m.map=wallMatHall.map.clone();
+    m.map.wrapS=m.map.wrapT=THREE.RepeatWrapping;m.map.repeat.set(sideW/.60,room.h/.30);return m;}
+  const wSL=new THREE.Mesh(new THREE.PlaneGeometry(sideW,room.h),makeSWM());
+  wSL.rotation.y=0;wSL.position.set(-(room.w/2+sideW/2),room.h/2,room.d/2);hallGroup.add(wSL);
+  const wSR=new THREE.Mesh(new THREE.PlaneGeometry(sideW,room.h),makeSWM());
+  wSR.rotation.y=0;wSR.position.set(room.w/2+sideW/2,room.h/2,room.d/2);hallGroup.add(wSR);
+  const wNMat=wallMatHall.clone();wNMat.map=wallMatHall.map.clone();
+  wNMat.map.wrapS=wNMat.map.wrapT=THREE.RepeatWrapping;
+  wNMat.map.repeat.set(corridorLen/.60,room.h/.30);
+  const wallNorth=new THREE.Mesh(new THREE.PlaneGeometry(corridorLen,room.h),wNMat);
+  wallNorth.rotation.y=Math.PI;wallNorth.position.set(0,room.h/2,room.d/2+corridorW);hallGroup.add(wallNorth);
+  const hallLight=new THREE.PointLight(0xdde4ee,0.7,20);
+  hallLight.position.set(0,2.6,room.d/2+corridorW/2);hallGroup.add(hallLight);
+
+  const doorSpacing=room.w+.15;
+  const dormDoorXs=[];
+  const _firstR=room.w+.075;
+  for(let x=_firstR;x<corridorLen/2-room.w/2-.05;x+=doorSpacing){dormDoorXs.push(x);dormDoorXs.push(-x);}
+  dormDoorXs.sort((a,b)=>a-b);
+  const DORM_W=room.w,DORM_D=room.d,DORM_DW=DOOR_W,DORM_DH=DOOR_H;
+  const northWallZ=FRONT_Z+corridorW;
+
+  function buildSegWall(x0,x1,z,rotY,oxs){
+    const sorted=[...oxs].sort((a,b)=>a-b);
+    const seg=(xa,xb,ya,yb)=>{
+      const w=xb-xa,h=yb-ya;if(w<.01||h<.01)return;
+      const m=wallMatHall.clone();m.map=wallMatHall.map.clone();
+      m.map.wrapS=m.map.wrapT=THREE.RepeatWrapping;m.map.repeat.set(w/.60,h/.30);
+      const mesh=new THREE.Mesh(new THREE.PlaneGeometry(w,h),m);
+      mesh.rotation.y=rotY;mesh.position.set((xa+xb)/2,(ya+yb)/2,z);hallGroup.add(mesh);};
+    let cur=x0;
+    for(const cx of sorted){
+      seg(cur,cx-DORM_DW/2,0,room.h);seg(cx-DORM_DW/2,cx+DORM_DW/2,DORM_DH,room.h);cur=cx+DORM_DW/2;}
+    seg(cur,x1,0,room.h);}
+  const southDormXs=dormDoorXs;
+  hallGroup.remove(wSL);hallGroup.remove(wSR);hallGroup.remove(wallNorth);
+  buildSegWall(-corridorLen/2,-room.w/2,FRONT_Z,0,southDormXs.filter(cx=>cx<0));
+  buildSegWall(room.w/2,corridorLen/2,FRONT_Z,0,southDormXs.filter(cx=>cx>0));
+  buildSegWall(-corridorLen/2,corridorLen/2,northWallZ,Math.PI,dormDoorXs);
+  {const m=wallMatHall.clone();m.map=wallMatHall.map.clone();
+    m.map.wrapS=m.map.wrapT=THREE.RepeatWrapping;m.map.repeat.set(corridorW/.60,room.h/.30);
+    const mesh=new THREE.Mesh(new THREE.PlaneGeometry(corridorW,room.h),m);
+    mesh.rotation.y=-Math.PI/2;mesh.position.set(-corridorLen/2,room.h/2,FRONT_Z+corridorW/2);
+    hallGroup.add(mesh);}
+
+  const T_X=corridorLen/2,T_STEM=6.0;
+  const tZ0=FRONT_Z-T_STEM,tZ1=northWallZ+T_STEM;
+  const tTZ=tZ1-tZ0,tCZ=(tZ0+tZ1)/2,tCX=T_X+corridorW/2;
+  function makeTM(rx,ry){const tex=wallTex.clone();tex.wrapS=tex.wrapT=THREE.RepeatWrapping;
+    tex.repeat.set(rx,ry);return new THREE.MeshStandardMaterial({map:tex,roughness:.95,side:THREE.DoubleSide});}
+  {const tex=floorTex.clone();tex.wrapS=tex.wrapT=THREE.RepeatWrapping;tex.repeat.set(corridorW/.40,tTZ/.40);
+    const fl=new THREE.Mesh(new THREE.PlaneGeometry(corridorW,tTZ),
+      new THREE.MeshStandardMaterial({map:tex,roughness:.6,side:THREE.DoubleSide}));
+    fl.rotation.x=-Math.PI/2;fl.position.set(tCX,0,tCZ);hallGroup.add(fl);}
+  {const ce=new THREE.Mesh(new THREE.PlaneGeometry(corridorW,tTZ),
+      new THREE.MeshStandardMaterial({color:0x888888,roughness:1,side:THREE.DoubleSide}));
+    ce.rotation.x=Math.PI/2;ce.position.set(tCX,room.h,tCZ);hallGroup.add(ce);}
+  function buildSegWallZ(z0,z1,x,rotY,ozs){
+    const sorted=[...ozs].sort((a,b)=>a-b);
+    const seg=(za,zb,ya,yb)=>{const dz=zb-za,h=yb-ya;if(dz<.01||h<.01)return;
+      const m=makeTM(dz/.60,h/.30);const mesh=new THREE.Mesh(new THREE.PlaneGeometry(dz,h),m);
+      mesh.rotation.y=rotY;mesh.position.set(x,(ya+yb)/2,(za+zb)/2);hallGroup.add(mesh);};
+    let cur=z0;
+    for(const cz of sorted){seg(cur,cz-DORM_DW/2,0,room.h);seg(cz-DORM_DW/2,cz+DORM_DW/2,DORM_DH,room.h);cur=cz+DORM_DW/2;}
+    seg(cur,z1,0,room.h);}
+  const stubDoorZs=[];
+  {const _fs=room.w/2+.075;
+    for(let dz=_fs;dz<T_STEM-room.w/2-.05;dz+=doorSpacing){
+      stubDoorZs.push(FRONT_Z-dz);stubDoorZs.push(northWallZ+dz);}}
+  buildSegWallZ(tZ0,tZ1,T_X+corridorW,Math.PI/2,stubDoorZs);
+  buildSegWallZ(tZ0,FRONT_Z,T_X,-Math.PI/2,stubDoorZs.filter(z=>z<FRONT_Z));
+  buildSegWallZ(northWallZ,tZ1,T_X,-Math.PI/2,stubDoorZs.filter(z=>z>northWallZ));
+  function addTEW(z,ry){const mesh=new THREE.Mesh(new THREE.PlaneGeometry(corridorW,room.h),
+    makeTM(corridorW/.60,room.h/.30));mesh.rotation.y=ry;mesh.position.set(tCX,room.h/2,z);hallGroup.add(mesh);}
+  addTEW(tZ0,0);addTEW(tZ1,Math.PI);
+  [[tCX,2.5,FRONT_Z+corridorW/2],[tCX,2.5,tZ0+T_STEM/2],[tCX,2.5,tZ1-T_STEM/2]].forEach(([x,y,z])=>{
+    const l=new THREE.PointLight(0xeef6ff,1.0,10);l.position.set(x,y,z);hallGroup.add(l);});
+
+  const hingeDoorPivots=[doorPivot];
+  const dormDoorLeaves=[];
+  function spawnDorm(cx,isNorth){
+    const zFace=isNorth?northWallZ:FRONT_Z,dir=isNorth?1:-1;
+    const zBack=zFace+dir*DORM_D,zMid=(zFace+zBack)/2;
+    const fl=new THREE.Mesh(new THREE.PlaneGeometry(DORM_W,DORM_D),floorMat.clone());
+    fl.rotation.x=-Math.PI/2;fl.position.set(cx,0,zMid);
+    fl.material.map=fl.material.map.clone();fl.material.map.wrapS=fl.material.map.wrapT=THREE.RepeatWrapping;
+    fl.material.map.repeat.set(DORM_W/.40,DORM_D/.40);scene.add(fl);
+    const ce=new THREE.Mesh(new THREE.PlaneGeometry(DORM_W,DORM_D),ceilingMat.clone());
+    ce.rotation.x=Math.PI/2;ce.position.set(cx,room.h,zMid);scene.add(ce);
+    scene.add(makeWall(DORM_W,room.h,isNorth?Math.PI:0,[cx,room.h/2,zBack]));
+    scene.add(makeWall(DORM_D,room.h,Math.PI/2,[cx-DORM_W/2,room.h/2,zMid]));
+    scene.add(makeWall(DORM_D,room.h,-Math.PI/2,[cx+DORM_W/2,room.h/2,zMid]));
+    const bedX=cx+DORM_W/2-.515;
+    [DORM_D-1.15,DORM_D-3.55].forEach(d=>{
+      const bz=zFace+dir*d;
+      const fr=new THREE.Mesh(new THREE.BoxGeometry(.95,.25,2),woodDark);fr.position.set(bedX,.125,bz);scene.add(fr);
+      const mt=new THREE.Mesh(new THREE.BoxGeometry(.91,.20,1.95),bedding);mt.position.set(bedX,.33,bz);scene.add(mt);});
+    const wa=new THREE.Mesh(new THREE.BoxGeometry(.60,2,.55),woodLight);
+    wa.position.set(cx-DORM_W/2+.33,1,zFace+dir*.90);scene.add(wa);
+    const dk=new THREE.Mesh(new THREE.BoxGeometry(.65,.75,.55),woodLight);
+    dk.position.set(cx-DORM_W/2+.36,.375,zFace+dir*2.60);scene.add(dk);
+    const lgt=new THREE.PointLight(0xdde4ee,.45,7);lgt.position.set(cx,room.h-.3,zMid);scene.add(lgt);
+    const dp=new THREE.Group();dp.position.set(cx-DORM_DW/2,0,zFace+dir*.005);scene.add(dp);
+    const dl=new THREE.Mesh(new THREE.BoxGeometry(DORM_DW,DORM_DH,DOOR_T),
+      new THREE.MeshStandardMaterial({color:0x3b2b1a,roughness:.9}));
+    dl.position.set(DORM_DW/2,DORM_DH/2,dir*DOOR_T/2);dp.add(dl);
+    const dk2=new THREE.Mesh(new THREE.SphereGeometry(.04,16,16),
+      new THREE.MeshStandardMaterial({color:0xc0c0c0,roughness:.3,metalness:.8}));
+    dk2.position.set(DORM_DW-.08,1,-DOOR_T*.35);dl.add(dk2);
+    dp.userData={type:'hingeDoor',open:false,theta:0,min:0,max:Math.PI*.55,speed:10,rotDir:isNorth?1:-1};
+    dl.userData.pivot=dp;hingeDoorPivots.push(dp);dormDoorLeaves.push(dl);}
+  function spawnDormX(cz,isEast){
+    const xFace=isEast?T_X+corridorW:T_X,xdir=isEast?1:-1;
+    const xBack=xFace+xdir*DORM_D,xMid=(xFace+xBack)/2;
+    const fl=new THREE.Mesh(new THREE.PlaneGeometry(DORM_D,DORM_W),floorMat.clone());
+    fl.rotation.x=-Math.PI/2;fl.position.set(xMid,0,cz);
+    fl.material.map=fl.material.map.clone();fl.material.map.wrapS=fl.material.map.wrapT=THREE.RepeatWrapping;
+    fl.material.map.repeat.set(DORM_D/.40,DORM_W/.40);scene.add(fl);
+    const ce=new THREE.Mesh(new THREE.PlaneGeometry(DORM_D,DORM_W),ceilingMat.clone());
+    ce.rotation.x=Math.PI/2;ce.position.set(xMid,room.h,cz);scene.add(ce);
+    scene.add(makeWall(DORM_W,room.h,isEast?Math.PI/2:-Math.PI/2,[xBack,room.h/2,cz]));
+    scene.add(makeWall(DORM_D,room.h,0,[xMid,room.h/2,cz-DORM_W/2]));
+    scene.add(makeWall(DORM_D,room.h,Math.PI,[xMid,room.h/2,cz+DORM_W/2]));
+    const bedZ=cz+DORM_W/2-.515;
+    [DORM_D-1.15,DORM_D-3.55].forEach(d=>{
+      const bx=xFace+xdir*d;
+      const fr=new THREE.Mesh(new THREE.BoxGeometry(2,.25,.95),woodDark);fr.position.set(bx,.125,bedZ);scene.add(fr);
+      const mt=new THREE.Mesh(new THREE.BoxGeometry(1.95,.20,.91),bedding);mt.position.set(bx,.33,bedZ);scene.add(mt);});
+    const wa=new THREE.Mesh(new THREE.BoxGeometry(.55,2,.60),woodLight);
+    wa.position.set(xFace+xdir*.90,1,cz-DORM_W/2+.33);scene.add(wa);
+    const dk=new THREE.Mesh(new THREE.BoxGeometry(.55,.75,.65),woodLight);
+    dk.position.set(xFace+xdir*2.60,.375,cz-DORM_W/2+.36);scene.add(dk);
+    const lgt=new THREE.PointLight(0xdde4ee,.45,7);lgt.position.set(xMid,room.h-.3,cz);scene.add(lgt);
+    const dp=new THREE.Group();dp.position.set(xFace+xdir*.005,0,cz-DORM_DW/2);scene.add(dp);
+    const dl=new THREE.Mesh(new THREE.BoxGeometry(DOOR_T,DORM_DH,DORM_DW),
+      new THREE.MeshStandardMaterial({color:0x3b2b1a,roughness:.9}));
+    dl.position.set(xdir*DOOR_T/2,DORM_DH/2,DORM_DW/2);dp.add(dl);
+    dp.userData={type:'hingeDoor',open:false,theta:0,min:0,max:Math.PI*.55,speed:10,rotDir:isEast?-1:1};
+    dl.userData.pivot=dp;hingeDoorPivots.push(dp);dormDoorLeaves.push(dl);}
+  southDormXs.forEach(cx=>spawnDorm(cx,false));
+  dormDoorXs.forEach(cx=>spawnDorm(cx,true));
+  stubDoorZs.forEach(cz=>{spawnDormX(cz,true);spawnDormX(cz,false);});
+
+  // ─── Interactions ───────────────────────────────────────────────────────────
+  const interactables=[fridgeDoor,doorLeaf];
+  const raycaster=new THREE.Raycaster();
+  const interactUI=document.getElementById('interact');
+  let canInteract=null;
+  function updateInteractables(){
+    canInteract=null;
+    raycaster.setFromCamera({x:0,y:0},camera);
+    const picks=raycaster.intersectObjects(interactables,true);
+    if(picks.length&&picks[0].distance<1.6)canInteract=picks[0].object;
+    interactUI.style.opacity=canInteract?1:0;}
+  function useObject(obj){
+    if(!obj)return;
+    if(obj.userData?.pivot){obj.userData.pivot.userData.open=!obj.userData.pivot.userData.open;return;}
+    if(obj.userData?.type==='hinge')obj.userData.open=!obj.userData.open;}
+  function animateHinges(dt){
+    const d=fridgeDoor,ud=d.userData;
+    if(ud?.type==='hinge'){
+      if(ud.theta===undefined)ud.theta=0;
+      const target=ud.open?ud.max:ud.min;
+      ud.theta+=(target-ud.theta)*Math.min(1,dt*6);
+      const p=ud.pivot;
+      const m=new THREE.Matrix4()
+        .makeTranslation(-p.x,-p.y,-p.z)
+        .multiply(new THREE.Matrix4().makeRotationY(ud.theta))
+        .multiply(new THREE.Matrix4().makeTranslation(p.x,p.y,p.z));
+      d.matrixAutoUpdate=false;d.matrix.copy(m);}
+    hingeDoorPivots.forEach(pivot=>{
+      const dpud=pivot.userData;
+      if(dpud?.type==='hingeDoor'){
+        const target=dpud.open?dpud.max:dpud.min;
+        dpud.theta+=(target-dpud.theta)*Math.min(1,dt*dpud.speed);
+        pivot.rotation.y=(dpud.rotDir!==undefined?dpud.rotDir:-1)*dpud.theta;}});}
+  dormDoorLeaves.forEach(leaf=>{interactables.push(leaf);});
+
+  // ─── Input ──────────────────────────────────────────────────────────────────
+  const inp={keys:Object.create(null),fireHeld:false,useTap:false};
+  const tpInd=document.getElementById('tpIndicator');
+
+  addEventListener('keydown',e=>{
+    inp.keys[e.code]=true;
+    if(e.code==='KeyE')inp.useTap=true;
+    if(e.code==='KeyV'){
+      thirdPerson=!thirdPerson;
+      tpInd.textContent=thirdPerson?'3P MODE':'FP MODE';
+      document.getElementById('crosshair').style.opacity=thirdPerson?'0':'1';
+      document.getElementById('pip').style.display=thirdPerson?'block':'none';
+    }
+    if(e.code==='KeyF')flashlight.intensity=flashlight.intensity>0?0:1.2;
+    if(e.code==='KeyL')overhead.intensity=overhead.intensity>0?0:.03;
+    if(e.code==='KeyR'){
+      if(window.SpawnLoadout&&SpawnLoadout.isActive()){SpawnLoadout.setInput({reload:true});}
+      else{player.x=0;player.y=EYE;player.z=1.75;
+        player.px=0;player.py=EYE;player.pz=1.75;
+        player.vx=0;player.vy=0;player.vz=0;yaw=0;pitch=0;}}
+    if(e.code==='KeyP'){if(_ptrLocked)document.exitPointerLock();else tryLock();}
+    if(window.SpawnLoadout&&SpawnLoadout.isActive()){
+      const n=e.code==='Digit1'?0:e.code==='Digit2'?1:e.code==='Digit3'?2:e.code==='Digit4'?3:e.code==='Digit5'?4:-1;
+      if(n>=0)SpawnLoadout.setInput({slotIndex:n});}});
+  addEventListener('keyup',e=>{
+    inp.keys[e.code]=false;
+    if(e.code==='KeyR'&&window.SpawnLoadout&&SpawnLoadout.isActive())SpawnLoadout.setInput({reload:false});});
+  
+  renderer.domElement.addEventListener('mouseup',e=>{if(e.button===0)inp.fireHeld=false;});
+  renderer.domElement.addEventListener('wheel',e=>{
+    if(window.SpawnLoadout&&SpawnLoadout.isActive())SpawnLoadout.setInput({slotDelta:e.deltaY>0?1:-1});},{passive:true});
+
+
+  // ─── Touch controls (phones/tablets only: primary pointer is a finger) ──────
+  // Left stick walks (push to the rim to run), drag anywhere else to look, buttons send the same keys as the keyboard.
+  // Phones and tablets only. Pointer media queries lie on touchscreen laptops (this one reports no mouse at all),
+  // so go by the browser itself: a mobile browser, or an iPad (which calls itself a Mac but has a touchscreen).
+  const MOBILE = (navigator.userAgentData && navigator.userAgentData.mobile) || /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent)
+    || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
+  const TOUCH = MOBILE || /[?&]touch=1/.test(location.search);
+  if (TOUCH) {
+    const css = document.createElement('style');
+    css.textContent = `
+      #tLook{position:fixed;inset:0;z-index:20;touch-action:none}
+      #tStick{position:fixed;left:22px;bottom:26px;width:118px;height:118px;border-radius:50%;z-index:21;touch-action:none;
+        background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.22);backdrop-filter:blur(4px)}
+      #tKnob{position:absolute;left:50%;top:50%;width:50px;height:50px;margin:-25px 0 0 -25px;border-radius:50%;
+        background:rgba(255,255,255,.28);border:1px solid rgba(255,255,255,.5)}
+      #tBtns{position:fixed;right:18px;bottom:26px;z-index:21;display:grid;grid-template-columns:repeat(2,58px);gap:12px;touch-action:none}
+      #tBtns button{width:58px;height:58px;border-radius:50%;border:1px solid rgba(255,255,255,.35);background:rgba(0,0,0,.35);
+        color:#fff;font:600 10px/1 ui-monospace,monospace;letter-spacing:.08em;backdrop-filter:blur(4px);-webkit-user-select:none;user-select:none}
+      #tBtns button.on{background:rgba(255,255,255,.85);color:#000}
+      #tBtns .big{grid-column:2;grid-row:1 / span 2;height:128px;border-radius:29px;align-self:end}
+      #hud,#weaponBar{display:none!important}
+      #menuBtn{top:12px!important;left:12px!important;bottom:auto!important}
+      #pip{width:140px!important;height:88px!important;top:12px!important;bottom:auto!important;right:12px!important}`;
+    document.head.append(css);
+    const look = document.createElement('div'); look.id = 'tLook';
+    const stick = document.createElement('div'); stick.id = 'tStick'; stick.innerHTML = '<div id="tKnob"></div>';
+    const btns = document.createElement('div'); btns.id = 'tBtns';
+    btns.innerHTML = '<button data-k="KeyE" aria-label="Use door">USE</button><button class="big" data-k="Space" aria-label="Jump">JUMP</button><button data-k="KeyV" aria-label="Switch view">VIEW</button>';
+    document.body.append(look, stick, btns);
+    // The moment a mouse moves or a key is pressed this is a computer: the touch controls go away for good.
+    const off = () => { for (const el of [css, look, stick, btns]) el.remove(); removeEventListener('pointermove', onMouse); removeEventListener('keydown', off); };
+    const onMouse = e => { if (e.pointerType === 'mouse') off(); };
+    addEventListener('pointermove', onMouse); addEventListener('keydown', off);
+    const knob = stick.firstChild, R = 59;
+    const key = (code, down) => dispatchEvent(new KeyboardEvent(down ? 'keydown' : 'keyup', { code }));
+
+    let sId = null, sx = 0, sy = 0;
+    const stickMove = t => {
+      let dx = t.clientX - sx, dy = t.clientY - sy; const d = Math.hypot(dx, dy);
+      if (d > R) { dx *= R / d; dy *= R / d; }
+      knob.style.transform = `translate(${dx}px,${dy}px)`;
+      inp.joy = d < 8 ? null : { x: dx / R, y: -dy / R }; inp.joySprint = d > R * .92;
+    };
+    const stickEnd = () => { sId = null; inp.joy = null; inp.joySprint = false; knob.style.transform = ''; };
+    stick.addEventListener('touchstart', e => {
+      e.preventDefault(); const t = e.changedTouches[0], r = stick.getBoundingClientRect();
+      sId = t.identifier; sx = r.left + r.width / 2; sy = r.top + r.height / 2; stickMove(t);
+    }, { passive: false });
+
+    let lId = null, lx = 0, ly = 0;
+    look.addEventListener('touchstart', e => {
+      e.preventDefault(); if (lId !== null) return; const t = e.changedTouches[0]; lId = t.identifier; lx = t.clientX; ly = t.clientY;
+    }, { passive: false });
+
+    addEventListener('touchmove', e => {
+      for (const t of e.changedTouches) {
+        if (t.identifier === sId) stickMove(t);
+        else if (t.identifier === lId) { setLook((t.clientX - lx) * 1.8, (t.clientY - ly) * 1.8); lx = t.clientX; ly = t.clientY; }
+      }
+      e.preventDefault();
+    }, { passive: false });
+    const ended = e => { for (const t of e.changedTouches) { if (t.identifier === sId) stickEnd(); if (t.identifier === lId) lId = null; } };
+    addEventListener('touchend', ended); addEventListener('touchcancel', ended);
+
+    for (const b of btns.children) {
+      b.addEventListener('touchstart', e => { e.preventDefault(); b.classList.add('on'); key(b.dataset.k, true); }, { passive: false });
+      const up = e => { e.preventDefault(); b.classList.remove('on'); key(b.dataset.k, false); };
+      b.addEventListener('touchend', up); b.addEventListener('touchcancel', up);
+    }
+  }
+
+  // ─── Hugo GLB Loading ────────────────────────────────────────────────────────
+  let hugoRoot=null;
+  let hugoProxy=null;
+  let hugoRightHand=null;
+  let _hugoBones={}; // name→object dict for FK bone lookup
+  let thirdPerson=false;
+
+  // ─── MuJoCo Physics WebSocket ────────────────────────────────────────────────
+  // Set MUJOCO_URL to your live server URL, or leave empty for procedural fallback
+  // ── MuJoCo URL bar — paste new tunnel URL each session ─────────────────────
+  // Load saved URL but don't auto-connect to it - user must click CONNECT
+  // Load URL from hash fragment or localStorage
+  const _hashUrl = location.hash.replace('#','');
+  if(_hashUrl.startsWith('wss://')){
+    localStorage.setItem('mjURL',_hashUrl);
+    location.hash='';
+  }
+  // Served locally (127.0.0.1 / localhost): connect to serve-mujoco.py on :8771 unless a wss:// hash says otherwise.
+  const _mjLocal=/^(127\.0\.0\.1|localhost)$/.test(location.hostname);
+  let MUJOCO_URL = _hashUrl.startsWith('wss://') ? _hashUrl
+    : _mjLocal ? 'ws://127.0.0.1:8771' : (localStorage.getItem('mjURL')||'');
+  (function(){
+    const bar = document.createElement('div');
+    bar.id='mjBar';
+    bar.style.cssText = `position:fixed;top:0;left:0;right:0;z-index:9999;background:rgba(0,0,0,.92);
+      border-bottom:1px solid rgba(255,255,255,.1);display:flex;align-items:center;gap:8px;
+      padding:6px 12px;font-family:monospace;font-size:11px;`;
+    bar.innerHTML = `<span style="color:rgba(255,255,255,.5);white-space:nowrap">MuJoCo URL</span>
+      <input id="mjUrlIn" placeholder=""
+        style="flex:1;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.2);
+        color:#fff;padding:4px 8px;border-radius:4px;font-family:monospace;font-size:11px;"
+        value="${MUJOCO_URL}"/>
+      <button id="mjUrlBtn" style="background:rgba(0,255,136,.15);border:1px solid rgba(0,255,136,.4);
+        color:#00ff88;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:11px;">CONNECT</button>
+      <button id="mjUrlX" style="background:none;border:none;color:rgba(255,255,255,.3);
+        cursor:pointer;font-size:18px;line-height:1;">×</button>`;
+    document.body.appendChild(bar);
+    function tryConnect(){
+      const v=document.getElementById('mjUrlIn').value.trim();
+      if(!v)return;
+      localStorage.setItem('mjURL',v);
+      MUJOCO_URL=v; mjConnect();
+      document.getElementById('mjBar').style.display='none';}
+    document.getElementById('mjUrlBtn').onclick=tryConnect;
+    document.getElementById('mjUrlIn').onkeydown=e=>{if(e.key==='Enter')tryConnect();};
+    document.getElementById('mjUrlX').onclick=()=>bar.style.display='none';
+    // Bar stays open — paste tunnel URL and click Connect
+  })();
+  let _mj=null,_mjReady=false,_mjData=null,_mjBoneMap=null,_mjRetry=0;
+
+  // ─── Procedural bone walk cycle (runs when MuJoCo unavailable) ────────────
+  let _boneWalkT=0;
+  const _bq=new THREE.Quaternion();
+  function applyProceduralBones(dt,moving,speed){
+    if(!hugoRoot||_mjReady)return;
+    if(!_mjBoneMap)return;
+    _boneWalkT+=dt*(moving?3.5:0.8);
+    const t=_boneWalkT;
+    const spd=moving?Math.min(speed/5,1):0;
+    const w=Math.sin(t)*spd;
+    const w2=Math.sin(t*2)*spd*0.4;
+    function bset(bone,rx,ry,rz){
+      if(!bone)return;
+      _bq.setFromEuler(new THREE.Euler(rx,ry,rz,'XYZ'));
+      bone.quaternion.slerp(_bq,0.25);}
+    const M=_mjBoneMap;
+    bset(M[1],  w2*0.05, w*0.04, 0);
+    bset(M[2],  w*0.35,  0, 0);
+    bset(M[3], -Math.max(0,w)*0.4+0.08, 0, 0);
+    bset(M[4],  w*0.12, 0, 0);
+    bset(M[5], -w*0.35, 0, 0);
+    bset(M[6],  Math.max(0,-w)*0.4+0.08, 0, 0);
+    bset(M[7], -w*0.12, 0, 0);
+    bset(M[8], -w2*0.03, w*0.02, 0);
+    bset(M[9], -w2*0.02, 0, 0);
+    bset(M[12], -w*0.28+0.12, 0.22, 0.12);
+    bset(M[13],  0.18+Math.max(0,-w)*0.12, 0, 0);
+    bset(M[15],  w*0.28+0.12, -0.22, -0.12);
+    bset(M[16],  0.18+Math.max(0,w)*0.12, 0, 0);
+    // Apply bone impulses from bullet hits
+    if(hugoRoot&&Object.keys(HugoAgent._boneImpulse).length>0){
+      hugoRoot.traverse(o=>{
+        const imp=HugoAgent._boneImpulse[o.name];
+        if(!imp)return;
+        const t=imp.ttl/imp.maxTtl;
+        const _iq=new THREE.Quaternion().setFromEuler(
+          new THREE.Euler(imp.rx*t, imp.ry*t, imp.rz*t,'XYZ'));
+        o.quaternion.multiply(_iq);});}}
+
+  const MJ_BONE_PATTERNS=[
+    null,
+    ['pelvis','hips','root'],
+    ['thigh','upper_leg','upleg'],
+    ['shin','lower_leg','leg'],
+    ['foot','ankle'],
+    ['thigh','upper_leg','upleg'],
+    ['shin','lower_leg','leg'],
+    ['foot','ankle'],
+    ['spine'],
+    ['chest','spine1','spine2'],
+    ['neck'],
+    ['head'],
+    ['upper_arm','arm'],
+    ['forearm','lower_arm'],
+    ['hand'],
+    ['upper_arm','arm'],
+    ['forearm','lower_arm'],
+    ['hand'],
+  ];
+  const MJ_BONE_SIDE=[null,null,'L','L','L','R','R','R',null,null,null,null,'L','L','L','R','R','R'];
+
+  function mjConnect(){
+    if(!MUJOCO_URL){
+      setPhysicsBadge(false);
+      return;}
+    if(_mj){try{_mj.close();}catch(e){}_mj=null;}
+    try{
+      const _url=MUJOCO_URL.replace(/\/+$/,''); // strip trailing slashes
+      _mj=new WebSocket(_url);
+      _mj.binaryType='arraybuffer';
+      _mj.onopen=()=>{
+        _mjReady=true;_mjRetry=0;
+        HugoAgent.state.physicsMode='mujoco';
+        setPhysicsBadge(true);
+        const _bar=document.getElementById('mjBar');
+        if(_bar)setTimeout(()=>_bar.style.display='none',1500);
+        show('▶ REALTIME MUJOCO connected');
+        console.log('[MuJoCo] connected');
+        _mj.send(JSON.stringify({type:'stream',fps:60,model:'humanoid'}));};
+      _mj.onmessage=e=>{
+        try{
+          const d=typeof e.data==='string'?JSON.parse(e.data):e.data;
+          _mjData=d;
+          applyMjDataToHugo(d);}catch(err){}};
+      _mj.onerror=()=>{_mjReady=false;setPhysicsBadge(false);};
+      _mj.onclose=()=>{
+        _mjReady=false;
+        HugoAgent.state.physicsMode='procedural';
+        setPhysicsBadge(false);
+        _mjRetry++;
+        const delay=Math.min(5000,500*_mjRetry);
+        setTimeout(mjConnect,delay);
+        if(_mjRetry===1)show(`MuJoCo disconnected — retrying`);};}
+    catch(e){console.warn('[MuJoCo] connect failed',e);}}
+
+  function buildMjBoneMap(root){
+    _mjBoneMap=new Array(MJ_BONE_PATTERNS.length).fill(null);
+    _hugoBones={};
+    const bones=[];
+    root.traverse(o=>{
+      if(o.isBone||o.type==='Bone'){bones.push(o);_hugoBones[o.name]=o;}
+      else if(o.name)bones.push(o);
+    });
+    MJ_BONE_PATTERNS.forEach((patterns,idx)=>{
+      if(!patterns)return;
+      const side=MJ_BONE_SIDE[idx];
+      for(const pat of patterns){
+        const found=bones.find(b=>{
+          const n=b.name.toLowerCase();
+          const matchPat=n.includes(pat.toLowerCase());
+          if(!matchPat)return false;
+          if(!side)return true;
+          const sL=side==='L';
+          return sL?(n.includes('.l')||n.includes('_l')||n.includes('left'))
+                   :(n.includes('.r')||n.includes('_r')||n.includes('right'));});
+        if(found){_mjBoneMap[idx]=found;break;}
+      }});
+    console.log('[MuJoCo] bone map:',_mjBoneMap.map((b,i)=>i+':'+(b?b.name:'—')).join(', '));
+    // Rest pose of the skinned DEF bones (the *_fk bones carry no skin weights): local quat + rotation relative to Hugo's root
+    root.updateMatrixWorld(true);
+    const rootInv=root.getWorldQuaternion(new THREE.Quaternion()).invert();
+    Object.values(_hugoBones).forEach(b=>{if(b.name.startsWith('DEF-'))
+      b.userData.mjRest=[b.quaternion.clone(),rootInv.clone().multiply(b.getWorldQuaternion(new THREE.Quaternion()))];});}
+
+  const _mjQ=new THREE.Quaternion(),_mjQ2=new THREE.Quaternion();
+  function applyMjDataToHugo(d){
+    if(!hugoRoot||!_mjBoneMap)return;
+
+    // Format A: per-joint angles from proven Colab/Vast.ai server
+    if(d.lhip_x!==undefined){
+      // Apply root position from MuJoCo (x=fwd, y=left, z=up → Three x=right, y=up, z=-fwd)
+      if(d.pos){
+        const sc=hugoRoot.scale.x;
+        const[px,py,pz]=d.pos;
+        hugoRoot.position.set(-py*sc, pz*sc, -px*sc);
+      }
+      if(d.quat){
+        const[qw,qx,qy,qz]=d.quat;
+        _mjQ.set(-qy,qz,-qx,qw);
+        hugoRoot.quaternion.copy(_mjQ);
+      }
+      // Drive FK bones using _hugoBones dict (name→object)
+      const bk=k=>_hugoBones[B_FK[k]];
+      const lhx=d.lhip_x||0, lhy=d.lhip_y||0, lhz=d.lhip_z||0;
+      const rhx=d.rhip_x||0, rhy=d.rhip_y||0, rhz=d.rhip_z||0;
+      const lt=bk('lthigh_fk');
+      if(lt){lt.rotation.order='YXZ';lt.rotation.y=lhx;lt.rotation.x=lhz;lt.rotation.z=-lhy;}
+      const ls=bk('lshin_fk');
+      if(ls){ls.rotation.order='YXZ';ls.rotation.y=Math.max(0,-d.lknee||0);}
+      const rt=bk('rthigh_fk');
+      if(rt){rt.rotation.order='YXZ';rt.rotation.y=rhx;rt.rotation.x=rhz;rt.rotation.z=rhy;}
+      const rs=bk('rshin_fk');
+      if(rs){rs.rotation.order='YXZ';rs.rotation.y=Math.max(0,-d.rknee||0);}
+      // Arms counter-swing
+      const lua=bk('luarm_fk');
+      if(lua){lua.rotation.order='YXZ';lua.rotation.y=-lhx*0.4;lua.rotation.z=-0.25;}
+      const rua=bk('ruarm_fk');
+      if(rua){rua.rotation.order='YXZ';rua.rotation.y=-rhx*0.4;rua.rotation.z=0.25;}
+      // serve-mujoco.py: d.bones = {DEF bone: [w,x,y,z] MuJoCo body rotation relative to its parent, 0 = rest pose}.
+      // Same axis swap as the root quat, applied on top of the bone's rest pose: local = rest * R^-1 * q * R.
+      if(d.bones)for(const k in d.bones){
+        const b=_hugoBones[k],r=b&&b.userData.mjRest;if(!r)continue;
+        const[w,x,y,z]=d.bones[k];_mjQ.set(-y,z,-x,w);
+        b.quaternion.copy(r[0]).multiply(_mjQ2.copy(r[1]).invert().multiply(_mjQ).multiply(r[1]));}
+      return;}
+
+    // Format B: raw xquat array (18-body Colab server)
+    const xq=d.xquat||d.body_xquat;
+    if(!xq)return;
+    // Apply root world position
+    if(d.pos){
+      const sc=hugoRoot.scale.x;
+      const[px,py,pz]=d.pos;
+      hugoRoot.position.set(-py*sc,pz*sc,-px*sc);
+    }
+    _mjBoneMap.forEach((bone,idx)=>{
+      if(!bone)return;
+      const o=idx*4;
+      if(o+3>=xq.length)return;
+      const mw=xq[o],mx=xq[o+1],my=xq[o+2],mz=xq[o+3];
+      // Convert global xquat to local by pre-multiplying parent inverse
+      // Simple remap for now: drives DEF bones with coordinate swap
+      _mjQ.set(mx, mz, -my, mw);
+      bone.quaternion.slerp(_mjQ,0.25);
+    });}
+
+  // FK bone name map from proven hugo_viewer_v2 session
+  const B_FK={
+    lthigh_fk:'thigh_fkL_104', lshin_fk:'shin_fkL_103', lfoot_fk:'foot_fkL_101',
+    rthigh_fk:'thigh_fkR_122', rshin_fk:'shin_fkR_121', rfoot_fk:'foot_fkR_119',
+    luarm_fk:'upper_arm_fkL_17', lfarm_fk:'forearm_fkL_16',
+    ruarm_fk:'upper_arm_fkR_47', rfarm_fk:'forearm_fkR_46',
+    hips:'hips_148', torso:'torso_172', neck:'neck_166', head:'head_160'};
+
+  mjConnect();
+
+  function buildHugoProxy(){
+    const g=new THREE.Group();
+    const mSkin=new THREE.MeshStandardMaterial({color:0xd4a484,roughness:.75});
+    const mCloth=new THREE.MeshStandardMaterial({color:0x1c1c2e,roughness:.9});
+    const mShoe=new THREE.MeshStandardMaterial({color:0x111111,roughness:.8});
+    const torso=new THREE.Mesh(new THREE.CylinderGeometry(.148,.130,.49,12),mCloth);
+    torso.position.y=1.125; g.add(torso);
+    const rl=new THREE.Mesh(new THREE.CylinderGeometry(.070,.063,.34,10),mCloth);
+    rl.position.set(.082,.64,0); g.add(rl);
+    const ll=new THREE.Mesh(new THREE.CylinderGeometry(.070,.063,.34,10),mCloth);
+    ll.position.set(-.082,.64,0); g.add(ll);
+    const rc=new THREE.Mesh(new THREE.CylinderGeometry(.058,.044,.44,10),mCloth);
+    rc.position.set(.082,.26,0); g.add(rc);
+    const lc=new THREE.Mesh(new THREE.CylinderGeometry(.058,.044,.44,10),mCloth);
+    lc.position.set(-.082,.26,0); g.add(lc);
+    const rsho=new THREE.Mesh(new THREE.BoxGeometry(.095,.052,.20),mShoe);
+    rsho.position.set(.082,.026,.025); g.add(rsho);
+    const lsho=new THREE.Mesh(new THREE.BoxGeometry(.095,.052,.20),mShoe);
+    lsho.position.set(-.082,.026,.025); g.add(lsho);
+    const neck=new THREE.Mesh(new THREE.CylinderGeometry(.048,.054,.10,10),mSkin);
+    neck.position.y=1.42; g.add(neck);
+    const head=new THREE.Mesh(new THREE.SphereGeometry(.11,14,14),mSkin);
+    head.position.y=1.54; g.add(head);
+    const raU=new THREE.Mesh(new THREE.CylinderGeometry(.048,.042,.27,8),mSkin);
+    raU.position.set(.21,1.24,-.05); raU.rotation.z=-.36; raU.rotation.x=.28; g.add(raU);
+    const raF=new THREE.Mesh(new THREE.CylinderGeometry(.038,.032,.25,8),mSkin);
+    raF.position.set(.32,1.01,-.20); raF.rotation.z=-.16; raF.rotation.x=.52; g.add(raF);
+    const laU=new THREE.Mesh(new THREE.CylinderGeometry(.048,.042,.27,8),mSkin);
+    laU.position.set(-.19,1.24,-.05); laU.rotation.z=.30; laU.rotation.x=.33; g.add(laU);
+    const laF=new THREE.Mesh(new THREE.CylinderGeometry(.038,.032,.25,8),mSkin);
+    laF.position.set(-.26,1.00,-.24); laF.rotation.z=.13; laF.rotation.x=.58; g.add(laF);
+    const handAnchor=new THREE.Object3D();
+    handAnchor.name='rightHandAnchor';
+    handAnchor.position.set(.36,.88,-.32);
+    g.add(handAnchor); g.userData.rightHandAnchor=handAnchor;
+    return g;}
+
+  hugoProxy=buildHugoProxy();
+  hugoProxy.visible=true;
+  scene.add(hugoProxy);
+  let _slFired=false;
+
+  function buildRigMeSign(){
+    const canvas=document.createElement('canvas');
+    canvas.width=512;canvas.height=160;
+    const ctx=canvas.getContext('2d');
+    ctx.fillStyle='rgba(0,255,120,0.10)';
+    const r=28;
+    ctx.beginPath();ctx.moveTo(r,0);ctx.lineTo(512-r,0);ctx.arcTo(512,0,512,r,r);
+    ctx.lineTo(512,160-r);ctx.arcTo(512,160,512-r,160,r);
+    ctx.lineTo(r,160);ctx.arcTo(0,160,0,160-r,r);
+    ctx.lineTo(0,r);ctx.arcTo(0,0,r,0,r);ctx.closePath();ctx.fill();
+    ctx.strokeStyle='rgba(0,255,120,0.70)';ctx.lineWidth=4;ctx.stroke();
+    ctx.fillStyle='#00ff88';
+    ctx.font='bold 72px monospace';ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillText('RIG ME',256,72);
+    ctx.fillStyle='rgba(0,255,120,0.50)';
+    ctx.font='26px monospace';
+    ctx.fillText('load hugo.glb above ↑',256,128);
+    const tex=new THREE.CanvasTexture(canvas);
+    const mat=new THREE.MeshBasicMaterial({map:tex,transparent:true,depthTest:false,depthWrite:false,side:THREE.DoubleSide});
+    const mesh=new THREE.Mesh(new THREE.PlaneGeometry(1.0,.31),mat);
+    mesh.renderOrder=9999;
+    return mesh;}
+  const rigSign=buildRigMeSign();
+  rigSign.position.set(0,1.90,0);
+  hugoProxy.add(rigSign);
+
+  // ── File input — wait for GLTFLoader to be ready ──
+  document.getElementById('glbInput').addEventListener('change',e=>{
+    const file=e.target.files[0];if(!file)return;
+    show('Waiting for GLTFLoader…');
+    waitForGLTF(()=>loadGLB(file));});
+
+  function waitForGLTF(cb,tries=0){
+    if(window._gltfReady&&window.THREE&&THREE.GLTFLoader){cb();return;}
+    if(tries>60){show('GLTFLoader failed to load — check console');return;}
+    setTimeout(()=>waitForGLTF(cb,tries+1),100);}
+
+  function loadGLB(file){
+    const url=typeof file==='string'?file:URL.createObjectURL(file);
+    const loader=new THREE.GLTFLoader();
+    show('Loading Hugo.glb…');
+    loader.load(url,gltf=>{
+      if(hugoRoot){scene.remove(hugoRoot);hugoRoot=null;}
+      hugoRoot=gltf.scene;
+      const box=new THREE.Box3().setFromObject(hugoRoot);
+      const size=box.getSize(new THREE.Vector3());
+      const targetH=DOOR_H*0.805;
+      const sc=targetH/size.y;hugoRoot.scale.setScalar(sc);
+      const box2=new THREE.Box3().setFromObject(hugoRoot);
+      hugoRoot.position.y = -box2.min.y; // snap feet to floor y=0
+      hugoRoot.traverse(obj=>{
+        if(obj.isBone||obj.type==='Object3D'){
+          const n=obj.name.toLowerCase();
+          if(!hugoRightHand&&(n.includes('hand')&&(n.includes('r')||n.includes('right'))&&!n.includes('l'))){
+            hugoRightHand=obj;}}});
+      hugoRoot.visible=true;
+      hugoProxy.visible=false;
+      scene.add(hugoRoot);
+      buildMjBoneMap(hugoRoot);
+      if(!_mjReady)mjConnect();
+      document.getElementById('loadHugoBtn').textContent='✓ Hugo Loaded';
+      document.getElementById('loadHugoBtn').style.color='#00ff88';
+      show('Hugo is in the room. Press V to see him in third person.');
+      if(typeof file!=='string')URL.revokeObjectURL(url);
+    },xhr=>{
+      if(xhr.lengthComputable)show(`Loading Hugo: ${Math.round(xhr.loaded/xhr.total*100)}%`);
+    },err=>{show('GLB load error: '+err);console.error(err);});
+  }
+
+  waitForGLTF(()=>loadGLB('hugo.glb' + (/claude\.(ai|com)$/.test(location.hostname) ? '.wasm' : '')));   // artifact host serves only known extensions
+
+  // ─── Weapon Viewmodel ────────────────────────────────────────────────────────
+  const VM_PRESET={
+    pistol:{pos:[.27,-.20,-.42],rx:-.08,scale:1.0},
+    smg:{pos:[.26,-.20,-.48],rx:-.07,scale:1.1},
+    shotgun:{pos:[.24,-.19,-.54],rx:-.06,scale:1.1},
+    ar:{pos:[.23,-.18,-.56],rx:-.06,scale:1.1},
+    dmr:{pos:[.22,-.17,-.58],rx:-.05,scale:1.0},
+    sniper:{pos:[.20,-.16,-.62],rx:-.05,scale:1.0},
+    marksman:{pos:[.15,-.17,-.50],rx:-.05,scale:1.2},
+    utility:{pos:[.24,-.19,-.48],rx:-.07,scale:1.1}};
+  const ADS_PRESET={
+    pistol:[0,-.17,-.37],smg:[0,-.16,-.42],shotgun:[0,-.15,-.48],
+    ar:[0,-.14,-.50],dmr:[0,-.13,-.52],sniper:[0,-.12,-.56],
+    marksman:[0,-.13,-.44],utility:[0,-.15,-.42]};
+
+  function buildWeaponViewModel(w){
+    const g=new THREE.Group();
+    const mD=new THREE.MeshStandardMaterial({color:0x1a1a1a,roughness:.50,metalness:.65});
+    const mM=new THREE.MeshStandardMaterial({color:0x333333,roughness:.45,metalness:.50});
+    const mO=new THREE.MeshStandardMaterial({color:0x4a5240,roughness:.65,metalness:.1});
+    const mW=new THREE.MeshStandardMaterial({color:0x6b4226,roughness:.80});
+    const mS=new THREE.MeshStandardMaterial({color:0x111111,roughness:.30,metalness:.80});
+    function bx(mat,W,H,D,x,y,z,rx=0){
+      const m=new THREE.Mesh(new THREE.BoxGeometry(W,H,D),mat);
+      m.position.set(x,y,z);if(rx)m.rotation.x=rx;g.add(m);return m;}
+    function cy(mat,r,len,x,y,z){
+      const m=new THREE.Mesh(new THREE.CylinderGeometry(r,r,len,12),mat);
+      m.position.set(x,y,z);m.rotation.x=Math.PI/2;g.add(m);return m;}
+    function muzzleAt(x,y,z){const p=new THREE.Object3D();p.position.set(x,y,z);g.add(p);g.userData.muzzle=p;}
+    const t=w.type;
+    if(t==='pistol'){
+      bx(mD,.048,.036,.190,0,.004,0);bx(mM,.040,.096,.135,0,-.056,.020);
+      bx(mW,.034,.090,.072,0,-.076,.058,.14);cy(mD,.010,.095,0,.005,-.138);
+      bx(mD,.022,.008,.040,0,.025,-.090);bx(mD,.014,.008,.010,0,.025,.010);
+      bx(mM,.008,.026,.050,0,-.040,-.025);muzzleAt(0,.005,-.188);
+    }else if(t==='smg'){
+      bx(mD,.050,.062,.230,0,.002,0);bx(mO,.044,.112,.068,0,-.064,.058,.08);
+      bx(mM,.034,.095,.058,0,-.064,-.018);cy(mD,.011,.125,0,.013,-.190);
+      bx(mD,.028,.028,.082,0,-.006,.132);bx(mD,.036,.012,.095,0,.004,-.096);
+      bx(mD,.024,.008,.040,0,.034,-.060);muzzleAt(0,.013,-.252);
+    }else if(t==='shotgun'){
+      bx(mD,.058,.060,.265,0,.002,0);bx(mM,.052,.038,.115,0,-.011,-.088);
+      cy(mD,.018,.348,0,.018,-.272);cy(mD,.012,.248,0,-.008,-.212);
+      bx(mW,.042,.108,.072,0,-.060,.062,.10);bx(mW,.044,.056,.165,0,.008,.168,-.06);
+      bx(mD,.028,.010,.075,0,.034,-.060);muzzleAt(0,.018,-.448);
+    }else if(t==='ar'){
+      bx(mO,.052,.064,.265,0,.001,0);bx(mD,.050,.038,.225,0,.029,-.010);
+      bx(mD,.044,.042,.165,0,.021,-.172);bx(mO,.040,.112,.062,0,-.067,.042,.14);
+      bx(mO,.038,.132,.062,0,-.080,-.010,.08);cy(mD,.012,.205,0,.026,-.304);
+      bx(mO,.040,.036,.185,0,.010,.204,-.04);bx(mD,.020,.014,.026,0,.048,.062);
+      bx(mD,.028,.009,.180,0,.049,-.050);muzzleAt(0,.026,-.408);
+    }else if(t==='dmr'){
+      bx(mD,.050,.060,.305,0,.001,0);bx(mO,.040,.108,.062,0,-.067,.042,.14);
+      bx(mO,.036,.142,.058,0,-.088,-.010,.05);cy(mD,.011,.285,0,.024,-.364);
+      bx(mD,.042,.038,.185,0,.019,-.202);cy(mS,.019,.145,0,.063,-.054);
+      bx(mS,.032,.016,.025,0,.063,.048);bx(mS,.028,.016,.025,0,.063,-.158);
+      bx(mO,.038,.040,.205,0,.008,.224,-.05);muzzleAt(0,.024,-.508);
+    }else if(t==='sniper'){
+      bx(mD,.048,.056,.345,0,.001,0);cy(mD,.012,.385,0,.022,-.434);
+      cy(mS,.023,.205,0,.071,-.062);bx(mS,.036,.018,.028,0,.071,.048);
+      bx(mS,.030,.018,.028,0,.071,-.172);bx(mD,.018,.018,.048,.032,.032,.092);
+      bx(mW,.038,.102,.060,0,-.067,.052,.14);bx(mW,.042,.054,.224,0,.008,.248,-.06);
+      bx(mD,.034,.076,.052,0,-.064,-.010,.04);bx(mD,.030,.010,.300,0,.050,.010);
+      muzzleAt(0,.022,-.628);
+    }else if(t==='marksman'){
+      const mBow=new THREE.MeshStandardMaterial({color:0x5c3d1e,roughness:.80});
+      const mStr=new THREE.MeshStandardMaterial({color:0xddddcc,roughness:1.0});
+      bx(mBow,.020,.225,.026,0,.132,-.024,.05);bx(mBow,.020,.205,.026,0,-.122,-.024,-.05);
+      bx(mBow,.036,.092,.042,0,0,-.016);cy(mD,.005,.325,0,.010,-.178);
+      bx(mD,.014,.022,.030,0,.010,-.350);bx(mStr,.003,.362,.003,0,.010,-.012);
+      muzzleAt(0,.010,-.368);
+    }else{
+      cy(mD,.035,.225,0,.016,-.158);bx(mD,.054,.054,.155,0,.001,-.020);
+      bx(mO,.040,.108,.062,0,-.067,.042,.16);bx(mM,.010,.030,.052,0,-.040,-.022);
+      bx(mD,.040,.038,.125,0,.008,.118,-.06);muzzleAt(0,.016,-.272);}
+    return g;}
+
+  function buildWeaponHandGrip(weaponType){
+    const g=new THREE.Group();
+    const mSkin=new THREE.MeshStandardMaterial({color:0xd4a080,roughness:.8});
+    const palm=new THREE.Mesh(new THREE.BoxGeometry(.05,.07,.04),mSkin);
+    palm.position.set(0,-.07,-.01);g.add(palm);
+    const fingerAngles=[-.5,-.4,-.35,-.3];
+    const fingerOffsets=[-.015,-.005,.005,.015];
+    fingerAngles.forEach((ang,i)=>{
+      const f=new THREE.Mesh(new THREE.CylinderGeometry(.007,.006,.055,6),mSkin);
+      f.position.set(fingerOffsets[i],-.115,-.025);f.rotation.x=ang;g.add(f);
+      const ft=new THREE.Mesh(new THREE.SphereGeometry(.007,6,6),mSkin);
+      ft.position.set(fingerOffsets[i],-.14,-.048);g.add(ft);});
+    const thumb=new THREE.Mesh(new THREE.CylinderGeometry(.009,.008,.045,6),mSkin);
+    thumb.position.set(.028,-.075,.005);thumb.rotation.z=1.2;thumb.rotation.x=-.2;g.add(thumb);
+    const trigger=new THREE.Mesh(new THREE.CylinderGeometry(.006,.006,.04,6),mSkin);
+    trigger.position.set(-.003,-.085,-.032);trigger.rotation.x=-.7;g.add(trigger);
+    return g;}
+
+  function _applyVMPreset(g,type){
+    const p=VM_PRESET[type]||VM_PRESET.ar;
+    g.position.set(p.pos[0],p.pos[1],p.pos[2]);
+    g.rotation.set(p.rx,-.05,0);g.scale.setScalar(p.scale);
+    g.userData.baseRotX=p.rx;g.userData.basePosZ=p.pos[2];
+    g.userData.weaponType=type;
+    g.traverse(o=>{
+      if(o.isMesh){
+        o.material=o.material.clone();
+        o.material.depthTest=false;o.material.depthWrite=false;o.renderOrder=9999;}});}
+
+  let weaponVMGroup=null;
+  let hugoWeaponGroup=null;
+  let currentWeaponType='ar';
+
+  // Hugo's weapon is always in his hand — managed separately from Chaze's
+  let _hugoWpType='ar';
+  function spawnHugoWeapon(type){
+    return; // calm build: Hugo carries nothing
+    _hugoWpType=type||_hugoWpType;
+    if(hugoWeaponGroup){scene.remove(hugoWeaponGroup);hugoWeaponGroup=null;}
+    hugoWeaponGroup=buildWorldWeapon({type:_hugoWpType});
+    scene.add(hugoWeaponGroup);}
+
+  function spawnDefaultWeapon(){
+    return; // calm build: no viewmodel
+    // Chaze's FP viewmodel only — no world weapon for spectator
+    if(window.SpawnLoadout)return;
+    if(weaponVMGroup){camera.remove(weaponVMGroup);weaponVMGroup=null;}
+    currentWeaponType='ar';
+    weaponVMGroup=buildWeaponViewModel({type:'ar'});
+    _applyVMPreset(weaponVMGroup,'ar');
+    camera.add(weaponVMGroup);}
+
+  function buildWorldWeapon(w){
+    const g=new THREE.Group();
+    const mD=new THREE.MeshStandardMaterial({color:0x1a1a1a,roughness:.50,metalness:.65});
+    const mM=new THREE.MeshStandardMaterial({color:0x333333,roughness:.45,metalness:.50});
+    const mO=new THREE.MeshStandardMaterial({color:0x4a5240,roughness:.65,metalness:.1});
+    const mW=new THREE.MeshStandardMaterial({color:0x6b4226,roughness:.80});
+    function bx(mat,W,H,D,x,y,z,rx=0){
+      const m=new THREE.Mesh(new THREE.BoxGeometry(W,H,D),mat);
+      m.position.set(x,y,z);if(rx)m.rotation.x=rx;g.add(m);}
+    function cy(mat,r,len,x,y,z){
+      const m=new THREE.Mesh(new THREE.CylinderGeometry(r,r,len,12),mat);
+      m.position.set(x,y,z);m.rotation.x=Math.PI/2;g.add(m);}
+    const t=w.type||w;
+    if(t==='pistol'){
+      bx(mD,.048,.036,.190,0,.004,0);bx(mM,.040,.096,.135,0,-.056,.020);
+      bx(mW,.034,.090,.072,0,-.076,.058,.14);cy(mD,.010,.095,0,.005,-.138);
+      bx(mM,.008,.026,.050,0,-.040,-.025);
+    }else{
+      bx(mO,.052,.064,.265,0,.001,0);bx(mD,.050,.038,.225,0,.029,-.010);
+      bx(mD,.044,.042,.165,0,.021,-.172);bx(mO,.040,.112,.062,0,-.067,.042,.14);
+      bx(mO,.038,.132,.062,0,-.080,-.010,.08);cy(mD,.012,.205,0,.026,-.304);
+      bx(mO,.040,.036,.185,0,.010,.204,-.04);}
+    const grip=buildWeaponHandGrip(t);g.add(grip);
+    return g;}
+
+  if(!window.SpawnLoadout){
+    spawnDefaultWeapon();}
+  if(window.SpawnLoadout){
+    SpawnLoadout.on('onWeaponChanged',({weapon})=>{
+      _slFired=true;
+      // Only update CHAZE's FP viewmodel — Hugo keeps his own weapon
+      if(weaponVMGroup){camera.remove(weaponVMGroup);weaponVMGroup=null;}
+      if(!weapon)return;
+      currentWeaponType=weapon.type;
+      weaponVMGroup=buildWeaponViewModel(weapon);
+      _applyVMPreset(weaponVMGroup,weapon.type);
+      camera.add(weaponVMGroup);});
+  }
+
+  // ─── Colliders ───────────────────────────────────────────────────────────────
+  const collidables=[floor,ceiling,backWall,frontWallLeft,frontWallRight,frontWallTop,
+    leftWall,rightWall,wardrobe,DRS,fridge,fryer,
+    bedLeftFrame,bedLeftMatt,bedRightFrame,bedRightMatt,
+    hallFloor,hallCeiling,fridgeDoor,doorLeaf];
+  dormDoorLeaves.forEach(leaf=>{interactables.push(leaf);collidables.push(leaf);});
+
+  // ─── Bullet/FX Pools ─────────────────────────────────────────────────────────
+  const bullets=[];
+  const IMP=28,FLC=12;
+  const impPool=[],flPool=[];
+  let impH=0,flH=0;
+  {const ig=new THREE.SphereGeometry(.015,6,6);
+    const im=new THREE.MeshStandardMaterial({color:0xffeeaa,emissive:0xffcc66,emissiveIntensity:1.2,roughness:1});
+    for(let i=0;i<IMP;i++){const m=new THREE.Mesh(ig,im.clone());m.visible=false;scene.add(m);impPool.push({mesh:m,ttl:0});}}
+  {const fg=new THREE.ConeGeometry(.04,.10,8);
+    const fm=new THREE.MeshStandardMaterial({color:0xffcc66,emissive:0xffcc66,emissiveIntensity:1.5,roughness:.4,depthTest:false,depthWrite:false});
+    for(let i=0;i<FLC;i++){const m=new THREE.Mesh(fg,fm.clone());m.visible=false;m.renderOrder=9998;scene.add(m);flPool.push({mesh:m,ttl:0});}}
+  const TRBN=12;const trPool=[];let trH=0;
+  for(let i=0;i<TRBN;i++){
+    const geo=new THREE.BufferGeometry();
+    geo.setAttribute('position',new THREE.BufferAttribute(new Float32Array(6),3));
+    const mat=new THREE.LineBasicMaterial({color:0xffdd88,transparent:true,opacity:0,depthTest:true});
+    const ln=new THREE.Line(geo,mat);ln.userData.ttl=0;ln.visible=false;scene.add(ln);trPool.push(ln);}
+
+  function spawnImpact(pos,normal){
+    const sl=impPool[impH++%IMP];sl.mesh.position.copy(pos);
+    if(normal)sl.mesh.position.addScaledVector(normal,.003);
+    sl.mesh.material.emissiveIntensity=1.2;sl.mesh.scale.setScalar(1);sl.mesh.visible=true;sl.ttl=.14;}
+  const _mP=new THREE.Vector3(),_fD=new THREE.Vector3(),_fQ=new THREE.Quaternion(),_yA=new THREE.Vector3(0,1,0);
+  function spawnMuzzleFlash(){
+    const mO=weaponVMGroup&&weaponVMGroup.userData.muzzle;if(!mO)return;
+    mO.updateWorldMatrix(true,false);mO.getWorldPosition(_mP);
+    camera.getWorldDirection(_fD);_fQ.setFromUnitVectors(_yA,_fD);
+    const sl=flPool[flH++%FLC];sl.mesh.position.copy(_mP);sl.mesh.quaternion.copy(_fQ);
+    sl.mesh.scale.setScalar(.75+Math.random()*.5);sl.mesh.visible=true;sl.ttl=.05;}
+  const _tE=new THREE.Vector3();
+  function spawnTracer(ox,oy,oz,ex,ey,ez,col,ttl){
+    const ln=trPool[trH%TRBN];trH++;
+    const pa=ln.geometry.attributes.position.array;
+    pa[0]=ox;pa[1]=oy;pa[2]=oz;pa[3]=ex;pa[4]=ey;pa[5]=ez;
+    ln.geometry.attributes.position.needsUpdate=true;
+    ln.material.color.setHex(col||0xffdd88);ln.material.opacity=.90;
+    ln.userData.ttl=ttl||.07;ln.visible=true;}
+  const _bp=new THREE.Vector3(),_bd=new THREE.Vector3();
+  // Hugo hit detection helpers
+  function getHugoMeshes(){
+    const out=[];
+    const root=hugoRoot||hugoProxy;
+    if(root)root.traverse(o=>{if(o.isMesh)out.push(o);});
+    return out;}
+  function findNearestBone(pos){
+    const root=hugoRoot||hugoProxy;if(!root)return null;
+    let best=null,bestD=999;
+    root.traverse(o=>{
+      if(!o.isBone&&o.type!=='Object3D')return;
+      const d=pos.distanceTo(o.getWorldPosition(new THREE.Vector3()));
+      if(d<bestD){bestD=d;best=o.name;}});
+    return best;}
+  // Big blood splat pool for hugo hits
+  const _bloodPool=[];const _BN=16;let _bH=0;
+  {const bg=new THREE.SphereGeometry(.04,6,6);
+   const bm=new THREE.MeshStandardMaterial({color:0xcc0000,emissive:0x440000,emissiveIntensity:.8,roughness:1,depthTest:false,depthWrite:false});
+   for(let i=0;i<_BN;i++){const m=new THREE.Mesh(bg,bm.clone());m.visible=false;m.renderOrder=9990;scene.add(m);_bloodPool.push({mesh:m,ttl:0});}}
+  function spawnBloodHit(pos){
+    const s=_bloodPool[_bH++%_BN];
+    s.mesh.position.copy(pos);s.mesh.scale.setScalar(.8+Math.random()*.8);
+    s.mesh.visible=true;s.ttl=.45;}
+
+  function updateBullets(dt){
+    for(let i=bullets.length-1;i>=0;i--){
+      const b=bullets[i];if(b.gravity)b.vel.y-=9.8*dt;
+      _bp.copy(b.mesh.position);b.mesh.position.addScaledVector(b.vel,dt);b.alive-=dt;
+      _bd.subVectors(b.mesh.position,_bp);const sl=_bd.length();
+      if(sl>0){
+        _bd.multiplyScalar(1/sl);raycaster.set(_bp,_bd);raycaster.far=sl+.02;
+        // Check Hugo first
+        const hugoMeshes=getHugoMeshes();
+        if(hugoMeshes.length){
+          const hh=raycaster.intersectObjects(hugoMeshes,false);
+          if(hh.length&&hh[0].distance<sl+.02){
+            const hitPos=hh[0].point;
+            const boneName=findNearestBone(hitPos)||'torso';
+            const dmg=8+Math.random()*12;
+            HugoAgent.takeDamage(boneName,dmg,hitPos);
+            spawnBloodHit(hitPos);
+            spawnImpact(hitPos,hh[0].face?.normal);
+            updateHugoHud();
+            scene.remove(b.mesh);bullets.splice(i,1);continue;}}
+        // Then world colliders
+        const h=raycaster.intersectObjects(collidables,false);
+        if(h.length){spawnImpact(h[0].point,h[0].face?.normal);scene.remove(b.mesh);bullets.splice(i,1);continue;}}
+      if(b.alive<=0){scene.remove(b.mesh);bullets.splice(i,1);}}
+    for(let i=0;i<IMP;i++){const s=impPool[i];if(!s.mesh.visible)continue;
+      s.ttl-=dt;if(s.ttl<=0){s.mesh.visible=false;continue;}
+      s.mesh.material.emissiveIntensity*=.80;s.mesh.scale.multiplyScalar(.87);}
+    for(let i=0;i<FLC;i++){const f=flPool[i];if(!f.mesh.visible)continue;
+      f.ttl-=dt;if(f.ttl<=0)f.mesh.visible=false;}
+    for(let i=0;i<TRBN;i++){const ln=trPool[i];if(!ln.visible)continue;
+      ln.userData.ttl-=dt;ln.material.opacity*=.72;
+      if(ln.userData.ttl<=0||ln.material.opacity<.02)ln.visible=false;}
+    // Blood hit decay
+    for(let i=0;i<_BN;i++){const b=_bloodPool[i];if(!b.mesh.visible)continue;
+      b.ttl-=dt;if(b.ttl<=0){b.mesh.visible=false;continue;}
+      b.mesh.material.emissiveIntensity*=.88;b.mesh.scale.multiplyScalar(.93);}
+    // HugoAgent update
+    HugoAgent.update(dt);}
+
+  // ─── Player State ────────────────────────────────────────────────────────────
+  const player={x:0,y:EYE,z:1.75,px:0,py:EYE,pz:1.75,
+    vx:0,vy:0,vz:0,onGround:false,coyote:0,jumpBuf:0,fireCdt:0,recoilP:0,recoilK:0,
+    adsP:0,adsHeld:false,_prevFire:false};
+  const fovState={base:75,current:75,sprint:0,firePulse:0};
+  let _lastDt=.016,_bobPhase=0;
+  const vigEl=document.getElementById('vignette');
+  const scopeEl=document.getElementById('scope-overlay');
+  const crossEl=document.getElementById('crosshair');
+  const cfg={accelGnd:62,accelAir:16,maxSpd:5.0,maxSprint:8.5,friction:18,
+    gravity:22,jumpVel:7.2,coyoteT:.12,jumpBufT:.14,fireRate:9,recoilDecay:15,kickDecay:22};
+
+  // Per-weapon stats: fireRate(rps), recoil, isAuto, damage, spread
+  const WPN_STATS={
+    pistol:  {rate:3.5,  recoil:.055, auto:false, dmg:28, spread:.008, kick:.9},
+    smg:     {rate:11,   recoil:.028, auto:true,  dmg:14, spread:.022, kick:.55},
+    ar:      {rate:8,    recoil:.038, auto:true,  dmg:22, spread:.014, kick:.7},
+    dmr:     {rate:1.8,  recoil:.095, auto:false, dmg:55, spread:.003, kick:1.2},
+    sniper:  {rate:0.7,  recoil:.14,  auto:false, dmg:90, spread:.001, kick:1.5},
+    shotgun: {rate:1.2,  recoil:.12,  auto:false, dmg:80, spread:.09,  kick:1.4},
+    marksman:{rate:2.5,  recoil:.07,  auto:false, dmg:45, spread:.006, kick:1.0},
+  };
+  function _wpStats(){return WPN_STATS[currentWeaponType]||WPN_STATS.ar;}
+  const DOOR_OPEN_ENOUGH=.22,DOORWAY_HALF_W=DOOR_W*.5-.20,DOOR_PASS_Z0=FRONT_Z-.35,HM=.32;
+  function clamp(v,lo,hi){return v<lo?lo:v>hi?hi:v;}
+  function inDormRoom(x,z){
+    const hw=DORM_W/2-HM;
+    if(z>=northWallZ-HM&&z<=northWallZ+DORM_D-HM)for(const cx of dormDoorXs)if(x>=cx-hw&&x<=cx+hw)return true;
+    if(z<=FRONT_Z+HM&&z>=FRONT_Z-DORM_D+HM)for(const cx of dormDoorXs)if(x>=cx-hw&&x<=cx+hw)return true;
+    if(x>=T_X+corridorW-HM&&x<=T_X+corridorW+DORM_D-HM)for(const cz of stubDoorZs)if(z>=cz-hw&&z<=cz+hw)return true;
+    if(x<=T_X+HM&&x>=T_X-DORM_D+HM)for(const cz of stubDoorZs)if(z>=cz-hw&&z<=cz+hw)return true;
+    return false;}
+  function inHallBounds(x,z){
+    const inB=z>=FRONT_Z+.02&&z<=northWallZ-HM&&x>=-corridorLen/2+HM&&x<=T_X+corridorW-HM;
+    const inS=x>=T_X+.02&&x<=T_X+corridorW-HM&&z>=tZ0+HM&&z<=tZ1-HM;
+    return inB||inS||inDormRoom(x,z);}
+
+  const SIM_HZ=120,FIXED_DT=1/120,MAX_FRAME=.05;
+  let simAcc=0,simLast=performance.now()/1000;
+
+  function fixedUpdate(dt){
+    player.px=player.x;player.py=player.y;player.pz=player.z;
+    if(inp.useTap){inp.useTap=false;useObject(canInteract);}
+    const sy=Math.sin(yaw),cy=Math.cos(yaw);
+    const fw=(inp.keys['KeyW']?1:0)-(inp.keys['KeyS']?1:0)+(inp.joy?inp.joy.y:0);
+    const st=(inp.keys['KeyD']?1:0)-(inp.keys['KeyA']?1:0)+(inp.joy?inp.joy.x:0);
+    let wx=fw*(-sy)+st*cy,wz=fw*(-cy)+st*(-sy);
+    const wl=Math.hypot(wx,wz);if(wl>0){wx/=wl;wz/=wl;}
+    const sprint=inp.keys['ShiftLeft']||inp.keys['ShiftRight']||inp.joySprint;
+    const maxSpd=sprint?cfg.maxSprint:cfg.maxSpd;
+    const wasGround=player.onGround;
+    if(player.y<=EYE+.001){player.y=EYE;player.vy=0;player.onGround=true;}else player.onGround=false;
+    if(wasGround&&!player.onGround)player.coyote=cfg.coyoteT;
+    else if(player.onGround)player.coyote=0;else player.coyote=Math.max(0,player.coyote-dt);
+    if(inp.keys['Space'])player.jumpBuf=cfg.jumpBufT;else player.jumpBuf=Math.max(0,player.jumpBuf-dt);
+    if((player.onGround||player.coyote>0)&&player.jumpBuf>0){
+      player.vy=cfg.jumpVel;player.onGround=false;player.coyote=0;player.jumpBuf=0;}
+    if(player.onGround){const spd=Math.hypot(player.vx,player.vz);
+      if(spd>0){const ns=Math.max(0,spd-spd*cfg.friction*dt);player.vx=player.vx/spd*ns;player.vz=player.vz/spd*ns;}}
+    if(wl>0){const accel=player.onGround?cfg.accelGnd:cfg.accelAir;
+      const cur=player.vx*wx+player.vz*wz;const add=Math.min(maxSpd-cur,accel*dt);
+      if(add>0){player.vx+=wx*add;player.vz+=wz*add;}}
+    if(!player.onGround)player.vy-=cfg.gravity*dt;
+    let nx=player.x+player.vx*dt,ny=player.y+player.vy*dt,nz=player.z+player.vz*dt;
+    if(ny<EYE){ny=EYE;player.vy=0;player.onGround=true;}
+    if(ny>room.h-.1){ny=room.h-.1;player.vy=Math.min(0,player.vy);}
+    if(!thirdPerson){
+      const inDX=Math.abs(nx-DOOR_X)<=DOORWAY_HALF_W;
+      const doorOpen=(doorPivot.userData.theta||0)>=DOOR_OPEN_ENOUGH;
+      const RM=.35;
+      const rMinX=-room.w/2+RM,rMaxX=room.w/2-RM,rMinZ=-room.d/2+RM,rMaxZ=FRONT_Z-RM;
+      const bMaxZ=northWallZ-HM;
+      const inStub=player.x>=T_X-.1&&player.x<=T_X+corridorW+.1;
+      const inHall=player.z>=FRONT_Z-.02||inStub||inDormRoom(player.x,player.z);
+      if(!inHall){
+        nx=clamp(nx,rMinX,rMaxX);
+        nz=(nz>DOOR_PASS_Z0&&inDX&&doorOpen)?clamp(nz,rMinZ,bMaxZ):clamp(nz,rMinZ,rMaxZ);
+      }else{
+        if(nz<FRONT_Z&&inDX&&doorOpen&&!inStub){nx=clamp(nx,rMinX,rMaxX);nz=clamp(nz,rMinZ,bMaxZ);}
+        else if(!inHallBounds(nx,nz)){
+          if(inHallBounds(nx,player.z))nz=player.z;
+          else if(inHallBounds(player.x,nz))nx=player.x;
+          else{nx=player.x;nz=player.z;}}}}
+    player.x=nx;player.y=ny;player.z=nz;
+    player.recoilP+=(-player.recoilP)*Math.min(1,dt*cfg.recoilDecay);
+    player.recoilK+=(-player.recoilK)*Math.min(1,dt*cfg.kickDecay);
+    player.fireCdt=Math.max(0,player.fireCdt-dt);
+    // ADS interpolation for fallback system
+    if(!(window.SpawnLoadout&&SpawnLoadout.isActive())){
+      const _adsSpd=_wpStats().rate<2?5:8; // sniper/dmr aim slower
+      player.adsP=Math.min(1,Math.max(0,player.adsP+(player.adsHeld?_adsSpd:-_adsSpd*1.5)*dt));
+    }
+    if(_ptrLocked&&!(window.SpawnLoadout&&SpawnLoadout.isActive())&&player.fireCdt<=0){
+      const _ws=_wpStats();
+      const _shouldFire=_ws.auto?inp.fireHeld:inp.fireHeld&&!player._prevFire;
+      if(_shouldFire){
+        player.fireCdt=1/_ws.rate;
+        player.recoilP+=_ws.recoil;
+        player.recoilK=Math.min(1,player.recoilK+_ws.kick*.55);
+        fireShot();}
+      player._prevFire=inp.fireHeld;}
+    if(window.SpawnLoadout&&SpawnLoadout.isActive()){
+      SpawnLoadout.setInput({fire:inp.fireHeld&&_ptrLocked});SpawnLoadout.update(dt);}}
+
+  function fireShot(){
+    spawnMuzzleFlash();
+    const start=new THREE.Vector3();camera.getWorldPosition(start);
+    const fd=new THREE.Vector3();camera.getWorldDirection(fd);fd.normalize();
+    const p=new THREE.Mesh(new THREE.SphereGeometry(.01,6,6),
+      new THREE.MeshStandardMaterial({color:0xffd28a,emissive:0xffd28a,emissiveIntensity:.2,roughness:.9}));
+    p.position.copy(start);scene.add(p);
+    bullets.push({mesh:p,vel:fd.multiplyScalar(28),alive:1.2,gravity:false});}
+
+  const playerForLoadout={
+    get position(){return camera.position;},get yaw(){return yaw;},get pitch(){return pitch;},
+    get vx(){return player.vx;},get vz(){return player.vz;},eyeHeight:0,
+    get isMoving(){return(Math.abs(player.vx)+Math.abs(player.vz))>.1;},
+    getFovRad:()=>camera.fov*(Math.PI/180),getAspect:()=>camera.aspect};
+
+  if(window.SpawnLoadout){
+    const _sR=new THREE.Raycaster(),_sO=new THREE.Vector3(),_sD=new THREE.Vector3();
+    let _tsN=0;
+    const _tF={smg:3,pistol:4,ar:5,dmr:1,sniper:1,shotgun:0,marksman:0,utility:0};
+    SpawnLoadout.setRaycastHit(function(hit){
+      _sO.set(hit.origin.x,hit.origin.y,hit.origin.z);_sD.set(hit.direction.x,hit.direction.y,hit.direction.z);
+      _sR.set(_sO,_sD);_sR.far=200;
+      // Check Hugo first
+      const _hm=getHugoMeshes();
+      if(_hm.length){const _hh=_sR.intersectObjects(_hm,false);
+        if(_hh.length){const _hp=_hh[0].point;
+          HugoAgent.takeDamage(findNearestBone(_hp)||'torso',10+Math.random()*8,_hp);
+          spawnBloodHit(_hp);spawnImpact(_hp,_hh[0].face?.normal);updateHugoHud();return;}}
+      const h=_sR.intersectObjects(collidables,false);if(h.length)spawnImpact(h[0].point,h[0].face?.normal);
+      const wt=SpawnLoadout.currentWeapon?SpawnLoadout.currentWeapon():null;
+      if(wt&&wt.tracerColor){const freq=_tF[wt.type]??4;
+        if(freq>0&&(++_tsN%freq===0)){
+          const d=hit.distance<200?hit.distance:80;
+          _tE.set(hit.origin.x+hit.direction.x*d,hit.origin.y+hit.direction.y*d,hit.origin.z+hit.direction.z*d);
+          if(h.length)_tE.copy(h[0].point);
+          spawnTracer(hit.origin.x,hit.origin.y,hit.origin.z,_tE.x,_tE.y,_tE.z,wt.tracerColor,.08);}}});
+    SpawnLoadout.setSpawnProjectile(function(proj){
+      const isA=proj.weapon.type==='marksman';
+      const m=new THREE.Mesh(
+        isA?new THREE.CylinderGeometry(.008,.008,.30,8):new THREE.SphereGeometry(.055,8,8),
+        new THREE.MeshStandardMaterial({color:isA?0xccaa55:0x33441a,emissive:isA?0xaa8833:0x223300,emissiveIntensity:.6,roughness:.75}));
+      if(isA)m.rotation.x=Math.PI/2;m.position.set(proj.origin.x,proj.origin.y,proj.origin.z);scene.add(m);
+      const vel=new THREE.Vector3(proj.dir.x,proj.dir.y,proj.dir.z).multiplyScalar(proj.speed);
+      bullets.push({mesh:m,vel,alive:4.0,gravity:true});});
+    SpawnLoadout.attachToPlayer(playerForLoadout,{
+      seed:Math.floor(Math.random()*0xffffffff),
+      recoilApply:function(_rx,ry){player.recoilP+=ry*.016;player.recoilK=Math.min(1,player.recoilK+ry*.55);}});
+    setTimeout(()=>{if(!_slFired)spawnDefaultWeapon();},400);
+    SpawnLoadout.setFxCallback(fx=>{if(fx.type==='muzzleFlash')spawnMuzzleFlash();});
+    SpawnLoadout.on('onWeaponFired',()=>{fovState.firePulse=Math.min(fovState.firePulse+1.8,5.0);});}
+
+  // ─── Render Frame ────────────────────────────────────────────────────────────
+  const _worldWpPos=new THREE.Vector3();
+
+  function renderFrame(alpha){
+    const dt=_lastDt;
+    const cx=player.px+(player.x-player.px)*alpha;
+    const cy=player.py+(player.y-player.py)*alpha;
+    const cz=player.pz+(player.z-player.pz)*alpha;
+    const spd2d=Math.hypot(player.vx,player.vz);
+    const sprinting=inp.keys['ShiftLeft']||inp.keys['ShiftRight']||inp.joySprint;
+    const bobAmp=sprinting?.016:.009;
+    const bobAmt=player.onGround?Math.min(spd2d/cfg.maxSprint,1)*bobAmp:0;
+    _bobPhase+=dt*spd2d*(sprinting?4.2:3.0);
+    const camBobY=Math.sin(_bobPhase)*bobAmt;
+    const camBobX=Math.sin(_bobPhase*.5)*bobAmt*.28;
+
+    if(hugoRoot){hugoRoot.visible=true;}
+    if(hugoProxy){hugoProxy.visible=!hugoRoot;}
+
+    if(hugoWeaponGroup){
+      hugoWeaponGroup.visible=true;
+      // FIXED: always attach world weapon to hand, regardless of FP/TP mode
+      // Try to get right hand bone world position directly
+      {const _rh=hugoRightHand||
+          (_hugoBones&&(
+            _hugoBones['hand.R']||_hugoBones['Hand_R']||_hugoBones['RightHand']||
+            _hugoBones['DEF-hand.R']||_hugoBones['hand_r']||
+            // fallback: search for any right hand bone
+            Object.values(_hugoBones).find(b=>{const n=b.name.toLowerCase();
+              return(n.includes('hand')||n.includes('wrist'))&&
+                    (n.includes('.r')||n.includes('_r')||n.includes('right'))&&
+                    !n.includes('left')&&!n.includes('.l')&&!n.includes('_l');})
+          ));
+        const _ref=hugoRoot||hugoProxy;
+        if(_rh){
+          _rh.updateWorldMatrix(true,false);
+          _rh.getWorldPosition(_worldWpPos);
+          hugoWeaponGroup.position.copy(_worldWpPos);
+          hugoWeaponGroup.quaternion.copy(_rh.getWorldQuaternion(new THREE.Quaternion()));
+        }else if(_ref){
+          // Fallback: offset from Hugo root at arm height
+          const ry=_ref.rotation.y||0;
+          const sc=_ref.scale.x||1;
+          hugoWeaponGroup.position.set(
+            _ref.position.x+Math.cos(ry)*0.20*sc+Math.sin(ry)*0.25*sc,
+            _ref.position.y+1.05*sc,
+            _ref.position.z-Math.sin(ry)*0.20*sc+Math.cos(ry)*0.25*sc);
+          hugoWeaponGroup.rotation.y=ry+Math.PI/2;
+          hugoWeaponGroup.rotation.x=-.15;
+        }}}
+
+    if(!thirdPerson){
+      camera.position.set(cx+camBobX*.4,cy+camBobY,cz);
+      camera.rotation.set(pitch+player.recoilP+camBobY*.25,yaw,camBobX*.6);
+      if(weaponVMGroup)weaponVMGroup.visible=true;
+    }else{
+      const tpD=2.6, tpH=1.1;
+      camera.position.set(
+        cx - Math.sin(yaw)*tpD,
+        cy + tpH,
+        cz - Math.cos(yaw)*tpD);
+      camera.lookAt(cx, cy+0.5, cz);
+      if(weaponVMGroup)weaponVMGroup.visible=false;}
+
+    if(thirdPerson){
+      const _sr=0.9, _sf=0.6, _sh=0.55;
+      camera2.position.set(
+        cx + Math.cos(yaw)*_sr - Math.sin(yaw)*_sf,
+        cy + _sh,
+        cz - Math.sin(yaw)*_sr - Math.cos(yaw)*_sf);
+      camera2.lookAt(cx - Math.sin(yaw)*0.4, cy+0.3, cz - Math.cos(yaw)*0.4);}
+
+    const vmT=(window.SpawnLoadout&&SpawnLoadout.getViewmodelTransform)?SpawnLoadout.getViewmodelTransform():{
+      adsProgress:player.adsP, dx:0,dy:0,dz:0, drx:0,dry:0,drz:0, fovMul:1-player.adsP*.35};
+    const fovMul=vmT?vmT.fovMul:1.0;
+    const tSB=(sprinting&&spd2d>2.0)?4.5:0;
+    fovState.sprint+=(tSB-fovState.sprint)*Math.min(1,dt*9);
+    fovState.firePulse=Math.max(0,fovState.firePulse-dt*22);
+    const targetFov=(fovState.base+fovState.sprint+fovState.firePulse)*fovMul;
+    fovState.current+=(targetFov-fovState.current)*Math.min(1,dt*20);
+    if(Math.abs(camera.fov-fovState.current)>.05){camera.fov=fovState.current;camera.updateProjectionMatrix();}
+
+    if(!thirdPerson&&weaponVMGroup){
+      const k=Math.max(0,player.recoilK);
+      if(vmT){
+        const wType=weaponVMGroup.userData.weaponType||'ar';
+        const hip=VM_PRESET[wType]||VM_PRESET.ar;const ads=ADS_PRESET[wType]||ADS_PRESET.ar;
+        const ap=vmT.adsProgress;
+        weaponVMGroup.position.set(
+          hip.pos[0]+(ads[0]-hip.pos[0])*ap+vmT.dx,
+          hip.pos[1]+(ads[1]-hip.pos[1])*ap+vmT.dy,
+          hip.pos[2]+(ads[2]-hip.pos[2])*ap+vmT.dz+k*-.050);
+        weaponVMGroup.rotation.set(hip.rx+(0-hip.rx)*ap+vmT.drx+k*-.038,-0.05*(1-ap)+vmT.dry,vmT.drz);
+      }else{
+        weaponVMGroup.position.z=(weaponVMGroup.userData.basePosZ||-.50)+k*-.050;
+        weaponVMGroup.rotation.x=(weaponVMGroup.userData.baseRotX||-.07)+k*-.038;}}
+
+    if(vigEl)vigEl.style.opacity=(Math.min(spd2d/cfg.maxSprint,1)*.60).toFixed(2);
+    if(vmT&&weaponVMGroup&&!thirdPerson){
+      const wT=weaponVMGroup.userData.weaponType||'ar';const isSn=(wT==='sniper');
+      if(isSn&&vmT.adsProgress>.80){
+        const op=((vmT.adsProgress-.80)/.20).toFixed(2);
+        if(scopeEl){scopeEl.style.display='block';scopeEl.style.opacity=op;}
+        if(crossEl)crossEl.style.opacity=(1-Number(op)).toFixed(2);
+      }else{
+        if(scopeEl){scopeEl.style.opacity='0';if(vmT.adsProgress<.05)scopeEl.style.display='none';}
+        if(crossEl){crossEl.style.opacity=thirdPerson?'0':'1';
+          crossEl.classList.toggle('ads',vmT.adsProgress>.45&&!isSn);}}}
+
+    if(rigSign&&hugoProxy&&!hugoRoot){
+      rigSign.lookAt(camera.position);}
+    setFlashTarget();
+    updateInteractables();
+    renderer.render(scene,camera);
+    if(thirdPerson)renderer2.render(scene,camera2);}
+
+  // ─── Main Loop ───────────────────────────────────────────────────────────────
+  document.getElementById('hud').innerHTML=
+    `<b style="letter-spacing:.08em">FP / TP DORM</b>
+    <span style="opacity:.45;font-size:10px"> ${room.w.toFixed(2)}m × ${room.h.toFixed(2)}m × ${room.d.toFixed(2)}m</span><br>
+    <span style="opacity:.7">WASD</span> move &nbsp;
+    <span style="opacity:.7">Shift</span> sprint &nbsp;
+    <span style="opacity:.7">Space</span> jump<br>
+    <span style="opacity:.7">V</span> 3P/FP &nbsp;
+    <span style="opacity:.7">E</span> interact &nbsp;
+    <span style="opacity:.7">R</span> reset &nbsp;
+    <span style="opacity:.7">H</span> Hugo HUD<br>
+    <span style="opacity:.45;font-size:10px">Right-drag look • Left-click fire • Shoot Hugo for damage</span>`;
+
+  // ── Loadout weapon icon bar ────────────────────────────────────────────────
+  const WEAPON_ICONS={
+    pistol:'🔫', smg:'🔫', shotgun:'🔫', ar:'🪖',
+    dmr:'🎯', sniper:'🎯', marksman:'🏹', utility:'💣'};
+  const WEAPON_LABELS={
+    pistol:'PISTOL', smg:'SMG', shotgun:'SHOTGUN', ar:'ASSAULT RIFLE',
+    dmr:'DMR', sniper:'SNIPER', marksman:'BOW', utility:'UTILITY'};
+  const _wBar=document.createElement('div');
+  _wBar.id='weaponBar';
+  _wBar.style.cssText=`position:fixed;bottom:16px;left:50%;transform:translateX(-50%);
+    display:flex;gap:6px;padding:8px 14px;background:rgba(0,0,0,.82);
+    border:1px solid rgba(255,255,255,.15);border-radius:12px;font-family:monospace;
+    font-size:10px;letter-spacing:.1em;align-items:center;z-index:100;`;
+  document.body.appendChild(_wBar);
+  function updateWeaponBar(slots, activeIdx){
+    _wBar.innerHTML='';
+    if(!slots||!slots.length)return;
+    slots.forEach((s,i)=>{
+      if(!s)return;
+      const el=document.createElement('div');
+      el.style.cssText=`display:flex;flex-direction:column;align-items:center;gap:2px;
+        padding:4px 8px;border-radius:6px;cursor:pointer;transition:background .1s;
+        ${i===activeIdx?'background:rgba(255,255,255,.15);outline:1px solid rgba(255,255,255,.3)':''}`;
+      const icon=document.createElement('span');
+      icon.style.fontSize='20px';icon.textContent=WEAPON_ICONS[s.type]||'🔫';
+      const lbl=document.createElement('span');
+      lbl.style.color=i===activeIdx?'#fff':'rgba(255,255,255,.45)';
+      lbl.textContent=WEAPON_LABELS[s.type]||s.type.toUpperCase();
+      const num=document.createElement('span');
+      num.style.color='rgba(255,255,255,.3)';num.textContent=`[${i+1}]`;
+      el.appendChild(icon);el.appendChild(lbl);el.appendChild(num);
+      el.onclick=()=>SpawnLoadout&&SpawnLoadout.setInput({slotIndex:i});
+      _wBar.appendChild(el);});
+  }
+  if(window.SpawnLoadout){
+    SpawnLoadout.on('onLoadoutChanged',({slots,activeIndex})=>updateWeaponBar(slots,activeIndex));
+    SpawnLoadout.on('onWeaponChanged',()=>{
+      const slots=SpawnLoadout.getSlots?SpawnLoadout.getSlots():null;
+      const idx=SpawnLoadout.activeIndex?SpawnLoadout.activeIndex():0;
+      if(slots)updateWeaponBar(slots,idx);});
+  } else if(false) {
+    // Fallback: generate randomized 5-slot loadout every load (no SpawnLoadout)
+    const _ALL_WP=['pistol','pistol','smg','smg','ar','ar','ar','dmr','dmr','sniper','sniper','pistol','smg','ar','dmr'];
+    // Fisher-Yates shuffle
+    for(let i=_ALL_WP.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[_ALL_WP[i],_ALL_WP[j]]=[_ALL_WP[j],_ALL_WP[i]];}
+    const _defSlots=_ALL_WP.slice(0,5).map(t=>({type:t}));
+    const _defActive=Math.floor(Math.random()*5);
+    updateWeaponBar(_defSlots,_defActive);
+    if(weaponVMGroup){camera.remove(weaponVMGroup);weaponVMGroup=null;}
+    currentWeaponType=_defSlots[_defActive].type;
+    weaponVMGroup=buildWeaponViewModel({type:currentWeaponType});
+    _applyVMPreset(weaponVMGroup,currentWeaponType);
+    camera.add(weaponVMGroup);
+    // Number keys 1-5 change CHAZE's weapon
+    addEventListener('keydown',e=>{
+      const n=e.code==='Digit1'?0:e.code==='Digit2'?1:e.code==='Digit3'?2:
+              e.code==='Digit4'?3:e.code==='Digit5'?4:-1;
+      if(n<0)return;
+      updateWeaponBar(_defSlots,n);
+      if(weaponVMGroup){camera.remove(weaponVMGroup);weaponVMGroup=null;}
+      currentWeaponType=_defSlots[n].type;
+      weaponVMGroup=buildWeaponViewModel({type:currentWeaponType});
+      _applyVMPreset(weaponVMGroup,currentWeaponType);
+      camera.add(weaponVMGroup);});
+  }
+
+  // ── H key toggles Hugo HUD ────────────────────────────────────────────────
+  addEventListener('keydown',e=>{if(e.code==='KeyH'){
+    const h=document.getElementById('hugoHud');
+    h.style.display=h.style.display==='none'?'block':'none';}});
+  // ── Agent Architecture Integration Bridge ──────────────────────────────────
+  // window.DormBridge exposes hooks for your external agent folder.
+  // Call DormBridge.onTick(cb) to receive {dt, hugoState, playerPos} every frame.
+  // Call DormBridge.sendCommand({type:'damage',amount:10}) etc. from your agent.
+  window.DormBridge={
+    _tickCbs:[],
+    onTick(cb){this._tickCbs.push(cb);},
+    sendCommand(cmd){
+      if(cmd.type==='damage')HugoAgent.takeDamage(cmd.part||'torso',cmd.amount||10,new THREE.Vector3());
+      if(cmd.type==='reset')HugoAgent.reset();
+      if(cmd.type==='setState')HugoAgent.setState(cmd.state);
+      if(cmd.type==='teleport'){player.x=cmd.x||0;player.z=cmd.z||0;}},
+    _tick(dt){this._tickCbs.forEach(cb=>cb({
+      dt, hugoState:HugoAgent.getState(),
+      playerPos:{x:player.x,y:player.y,z:player.z},
+      physicsMode:HugoAgent.state.physicsMode}));}};
+
+  // Embedded in the portfolio: sleep while the frame is scrolled out of view (the dorm otherwise costs the page
+  // about half its frame rate from off screen). Same-origin, so it can look at its own frame; checked twice a second.
+  let _offscreen=false,_visN=0;
+  function offscreen(){
+    if(++_visN%30)return _offscreen;
+    try{const fe=window.frameElement;if(!fe)return _offscreen=false;
+      const r=fe.getBoundingClientRect(),h=parent.innerHeight;_offscreen=r.bottom<-50||r.top>h+50||parent.document.hidden;}catch(e){_offscreen=false;}
+    return _offscreen;}
+  function loop(){
+    if(offscreen()){simLast=performance.now()/1000;requestAnimationFrame(loop);return;}
+    const now=performance.now()/1000;let dt=now-simLast;simLast=now;
+    if(dt>MAX_FRAME)dt=MAX_FRAME;simAcc+=dt;
+    while(simAcc>=FIXED_DT){fixedUpdate(FIXED_DT);simAcc-=FIXED_DT;}
+    _lastDt=dt;
+    animateHinges(dt);updateBullets(dt);
+    // Procedural bones when MuJoCo not connected
+    // procedural bone animation DISABLED — MuJoCo only
+    DormBridge._tick(dt);
+    renderFrame(simAcc/FIXED_DT);
+    requestAnimationFrame(loop);}
+  // Init Hugo with random weapon — all functions now defined
+  const _HUGO_WP_TYPES=['pistol','smg','ar','dmr','sniper'];
+  spawnHugoWeapon(_HUGO_WP_TYPES[Math.floor(Math.random()*_HUGO_WP_TYPES.length)]);
+
+  renderer.render(scene,camera);requestAnimationFrame(loop);
+  addEventListener('resize',()=>{
+    camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();
+    renderer.setSize(innerWidth,innerHeight);});
+  show(TOUCH?'Left stick walks, push to the edge to run · drag to look · USE opens doors'
+    :'Click to look around · WASD walk · Shift run · Space jump · E doors · V third person');
+});
+</script>
+</body>
+</html>
