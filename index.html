@@ -1,14 +1,15 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <script>/* iOS zooms the whole page in when a field rendered under 16px gets focus (the embedded apps sit scaled down inside their frames) and never zooms back out. Capping the scale stops that; pinch zoom still works on iOS. */
 if (/iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)) document.querySelector('meta[name=viewport]').content += ',maximum-scale=1';
 /* Every load opens at the top of the scroll home: no restored scroll position (a #hash in the URL still jumps). */
-history.scrollRestoration = 'manual';</script>
-<meta name="theme-color" content="#F4F3EE" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#161615" media="(prefers-color-scheme: dark)">
+history.scrollRestoration = 'manual';
+/* Theme: dark for every first visit (same as the Read less frame, whatever the OS says); only a choice made with the Theme button changes it. Applied here so the page never paints in the wrong theme. */
+try { if (localStorage.getItem('theme') === 'light') document.documentElement.dataset.theme = 'light'; } catch {}</script>
+<meta name="theme-color" content="#161615">
 <title>Chiagozie Oliver · Engineer</title>
 <meta name="description" content="Full-stack and real-time systems engineer. Fintech, 3D simulation, live media. The products on this page are the real builds, running.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -24,7 +25,8 @@ history.scrollRestoration = 'manual';</script>
   color-scheme:light dark;
 }
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--paper:#161615;--ink:#ECEAE3;--muted:#9A9890;--line:#3A3936;--rule:#262624;--stage:#000;--accent:#8FA0FF}}
-:root[data-theme="dark"]{--paper:#161615;--ink:#ECEAE3;--muted:#9A9890;--line:#3A3936;--rule:#262624;--stage:#000;--accent:#8FA0FF}
+:root[data-theme="light"]{color-scheme:light}
+:root[data-theme="dark"]{color-scheme:dark;--paper:#161615;--ink:#ECEAE3;--muted:#9A9890;--line:#3A3936;--rule:#262624;--stage:#000;--accent:#8FA0FF}
 
 *{box-sizing:border-box}
 section,footer{scroll-margin-top:56px}
@@ -841,10 +843,11 @@ const fitDesk = () => { for (const st of document.querySelectorAll('.stage.desk,
 fitDesk(); addEventListener('resize', fitDesk);
 (() => {
   const b = document.getElementById('theme'), r = document.documentElement;
-  try { const t = localStorage.getItem('theme'); if (t) r.dataset.theme = t; } catch {}
+  // data-theme is always set (dark by default, see <head>); the browser toolbar colour follows it, Read less included.
+  const tc = document.querySelector('meta[name=theme-color]'), sync = () => { tc.content = r.dataset.theme === 'light' ? '#F4F3EE' : '#161615'; };
+  sync(); new MutationObserver(sync).observe(r, { attributes: true, attributeFilter: ['data-theme'] });
   b.onclick = () => {
-    const dark = r.dataset.theme ? r.dataset.theme === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
-    r.dataset.theme = dark ? 'light' : 'dark';
+    r.dataset.theme = r.dataset.theme === 'light' ? 'dark' : 'light';
     try { localStorage.setItem('theme', r.dataset.theme); } catch {}
   };
 })();
@@ -877,7 +880,11 @@ addEventListener('pageshow', () => fetch(location.pathname, { method: 'HEAD', ca
 (() => {
   const os = document.getElementById('os'), b = document.getElementById('mode'); let f = null;
   const MAP = { hugo: 'hugo', void: 'void', ezer: 'ezer', revelation: 'revelation', impact: 'stores', trading: 'morgan', frame: 'frame', concepts: 'notes' };
+  let prev = null;   // the visitor's theme while Read less is open
   const set = on => {
+    // The Read less frame is dark by design: everything of the page around it goes dark with it, and the chosen theme comes back on leaving.
+    const r = document.documentElement;
+    if (on) { prev = prev || r.dataset.theme; r.dataset.theme = 'dark'; } else if (prev) { r.dataset.theme = prev; prev = null; }
     document.body.classList.toggle('simple', on); os.hidden = !on; b.setAttribute('aria-pressed', on);
     b.setAttribute('aria-label', on ? 'Read less view on. Switch to scroll view' : 'Scroll view on. Switch to read less view');
     if (on && !f) { f = document.createElement('iframe'); const sm = new URLSearchParams(location.search).get('scrollMode'); const src = 'OS.dc.html?v=20261112lock' + (sm ? '&scrollMode=' + encodeURIComponent(sm) : ''); f.title = 'Projects'; f.allow = 'fullscreen; pointer-lock; autoplay; clipboard-write'; os.append(f);
