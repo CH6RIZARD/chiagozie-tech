@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="dark">
 <style>html,body{margin:0;height:100%;background:#161615;color-scheme:dark}</style><!-- dark before support.js loads React + Babel: on a phone over LTE that takes seconds, and the unstyled page showed as a white box -->
+<script>parent !== window && parent.postMessage({ type: 'chaze-homed' }, '*')</script><!-- the site keeps this frame invisible until its dark page exists, so its blank first document never shows -->
 <script src="./support.js"></script>
 </head>
 <body>
@@ -39,6 +40,13 @@ html{touch-action:manipulation}
 @keyframes ovOut{to{opacity:0}}
 @keyframes skel{from{background-position:200% 0}to{background-position:-200% 0}}
 .sk{background:linear-gradient(90deg,#222226 25%,#33333a 50%,#222226 75%);background-size:200% 100%;animation:skel 1.4s linear infinite}
+/* iPhone Pro body around the 402x874 screen, in design px (--u): titanium rim with edge light, black glass border, side buttons, layered shadow. The boot skeleton sets --u in container units so it sits exactly on the real one. */
+.tiPhone{--u:1px;position:relative;flex:0 0 auto;width:calc(430*var(--u));height:calc(902*var(--u));margin:calc(8*var(--u));border-radius:calc(62*var(--u));background:#050506;border:calc(4*var(--u)) solid;border-color:#a3a5aa #55565b #2b2c30 #74767b;box-shadow:0 0 0 calc(1*var(--u)) #000,inset 0 0 0 calc(1*var(--u)) rgba(255,255,255,.08)}
+/* titanium = a 4px rim of solid side colours (lit top-left, shaded bottom-right), no big gradients or blurred box-shadows: the devices scale while scrolling and WebKit re-rasters those every frame. The drop shadow is one small gradient (::after). */
+.tiPhone::before{content:"";position:absolute;inset:0;border-radius:calc(58*var(--u));border:calc(1*var(--u)) solid rgba(255,255,255,.22);border-bottom-color:rgba(255,255,255,.06)}
+.tiPhone::after{content:"";position:absolute;z-index:-1;left:-8%;right:-8%;top:6%;bottom:-9%;border-radius:50%;background:radial-gradient(closest-side,rgba(0,0,0,.75),rgba(0,0,0,.45) 55%,rgba(0,0,0,.18) 80%,rgba(0,0,0,0))}
+.tiScreen{position:absolute;inset:calc(10*var(--u));border-radius:calc(48*var(--u));overflow:hidden;background:#000;outline:calc(1*var(--u)) solid rgba(255,255,255,.07)}
+.tiBtn{position:absolute;width:calc(5*var(--u));border-radius:calc(2*var(--u));background:linear-gradient(90deg,#26272a,#86888d 45%,#34353a)}
 </style>
 </helmet>
 <div style="height:100%;display:flex;flex-direction:column;overflow:hidden;position:relative;font:400 15px/1.5 Inter,system-ui,sans-serif">
@@ -46,7 +54,7 @@ html{touch-action:manipulation}
   <sc-if value="{{ isDesk }}" hint-placeholder-val="{{ true }}">
     <div data-screen-label="Devices" ref="{{ col }}" style="{{ grid }}">
       <div ref="{{ phRef }}" onPointerDown="{{ actPh }}" onFocus="{{ actPh }}" style="{{ phBox }}"><div style="flex:1;min-height:0;position:relative"><dc-import name="OSDevice" kind="phone" items="{{ phItems }}" notes="{{ notes }}" open="{{ phOpen }}" home="{{ phHome }}" note="{{ moreId }}" hint-size="0,0" style="width:100%;height:100%"></dc-import>
-        <sc-if value="{{ booting }}" hint-placeholder-val="{{ true }}"><div aria-hidden="true" style="{{ bootStyle }}"><div style="{{ skPhFit }}"><div style="width:min(402px,100cqw,45.9954cqh);aspect-ratio:402/874;container-type:inline-size;position:relative;flex:0 0 auto"><div style="position:absolute;inset:0;border-radius:11.940cqw;overflow:hidden;background:#15161a url(realms/wall-phone3.png) center/cover;box-shadow:0 0 0 1px rgba(0,0,0,.12)"><span style="position:absolute;left:50%;top:2.736cqw;width:31.343cqw;height:9.204cqw;margin-left:-15.672cqw;border-radius:5.970cqw;background:#000"></span><span class="sk" style="position:absolute;left:13.433cqw;top:6.468cqw;width:9.950cqw;height:2.985cqw;border-radius:99px"></span><span class="sk" style="position:absolute;right:10.448cqw;top:6.468cqw;width:15.920cqw;height:2.985cqw;border-radius:99px"></span><div style="position:absolute;left:0;right:0;top:0;display:grid;grid-template-columns:repeat(3,1fr);gap:7.463cqw 3.483cqw;padding:22.886cqw 7.463cqw 0"><sc-for list="{{ skPh }}" as="k" hint-placeholder-count="3"><span style="display:flex;flex-direction:column;align-items:center;gap:2.488cqw"><span class="sk" style="width:20.896cqw;height:20.896cqw;border-radius:4.726cqw"></span><span class="sk" style="width:11.940cqw;height:2.985cqw;margin-bottom:0.746cqw;border-radius:99px"></span></span></sc-for></div><div style="position:absolute;left:3.483cqw;right:3.483cqw;bottom:7.463cqw;height:20.896cqw;border-radius:8.458cqw;background:linear-gradient(180deg,rgba(255,255,255,.16),rgba(255,255,255,.05) 55%,rgba(255,255,255,.08)),rgba(120,120,128,.16);box-shadow:inset 0 0 0 1px rgba(255,255,255,.1);display:flex;align-items:center;justify-content:space-evenly"><sc-for list="{{ skDock }}" as="k" hint-placeholder-count="3"><span class="sk" style="width:14.925cqw;height:14.925cqw;border-radius:3.358cqw"></span></sc-for></div><span style="position:absolute;left:50%;bottom:2.488cqw;width:36.816cqw;height:1.244cqw;margin-left:-18.408cqw;border-radius:99px;background:rgba(255,255,255,.35)"></span></div></div></div></div></sc-if></div><div style="{{ phFoot }}">
+        <sc-if value="{{ booting }}" hint-placeholder-val="{{ true }}"><div aria-hidden="true" style="{{ bootStyle }}"><div style="{{ skPhFit }}"><div style="width:min(446px,100cqw,48.5839cqh);aspect-ratio:446/918;container-type:inline-size;position:relative;flex:0 0 auto"><div class="tiPhone" style="--u:calc(100cqw / 446);position:absolute;left:0;top:0"><i class="tiBtn" style="left:calc(-8*var(--u));top:calc(150*var(--u));height:calc(34*var(--u))"></i><i class="tiBtn" style="left:calc(-8*var(--u));top:calc(214*var(--u));height:calc(62*var(--u))"></i><i class="tiBtn" style="left:calc(-8*var(--u));top:calc(290*var(--u));height:calc(62*var(--u))"></i><i class="tiBtn" style="right:calc(-8*var(--u));top:calc(250*var(--u));height:calc(100*var(--u))"></i><div class="tiScreen" style="container-type:size"><div style="position:absolute;inset:0;border-radius:11.940cqw;overflow:hidden;background:#15161a url(realms/wall-phone3.png) center/cover;box-shadow:0 0 0 1px rgba(0,0,0,.12)"><span style="position:absolute;left:50%;top:2.736cqw;width:31.343cqw;height:9.204cqw;margin-left:-15.672cqw;border-radius:5.970cqw;background:#000"></span><span class="sk" style="position:absolute;left:13.433cqw;top:6.468cqw;width:9.950cqw;height:2.985cqw;border-radius:99px"></span><span class="sk" style="position:absolute;right:10.448cqw;top:6.468cqw;width:15.920cqw;height:2.985cqw;border-radius:99px"></span><div style="position:absolute;left:0;right:0;top:0;display:grid;grid-template-columns:repeat(3,1fr);gap:7.463cqw 3.483cqw;padding:22.886cqw 7.463cqw 0"><sc-for list="{{ skPh }}" as="k" hint-placeholder-count="3"><span style="display:flex;flex-direction:column;align-items:center;gap:2.488cqw"><span class="sk" style="width:20.896cqw;height:20.896cqw;border-radius:4.726cqw"></span><span class="sk" style="width:11.940cqw;height:2.985cqw;margin-bottom:0.746cqw;border-radius:99px"></span></span></sc-for></div><div style="position:absolute;left:3.483cqw;right:3.483cqw;bottom:7.463cqw;height:20.896cqw;border-radius:8.458cqw;background:linear-gradient(180deg,rgba(255,255,255,.16),rgba(255,255,255,.05) 55%,rgba(255,255,255,.08)),rgba(120,120,128,.16);box-shadow:inset 0 0 0 1px rgba(255,255,255,.1);display:flex;align-items:center;justify-content:space-evenly"><sc-for list="{{ skDock }}" as="k" hint-placeholder-count="3"><span class="sk" style="width:14.925cqw;height:14.925cqw;border-radius:3.358cqw"></span></sc-for></div><span style="position:absolute;left:50%;bottom:2.488cqw;width:36.816cqw;height:1.244cqw;margin-left:-18.408cqw;border-radius:99px;background:rgba(255,255,255,.35)"></span></div></div></div></div></div></div></sc-if></div><div style="{{ phFoot }}">
   
   <sc-if value="{{ phHas }}" hint-placeholder-val="{{ false }}">
     <span style="flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:400 17px/1 Fraunces,Georgia,serif">{{ phCur.name }}</span>
@@ -94,7 +102,7 @@ html{touch-action:manipulation}
         </div>
       </sc-if>
     </div>
-    <sc-if value="{{ showExpandMo }}" hint-placeholder-val="{{ false }}"><button type="button" onClick="{{ navGo }}" style="position:fixed;left:0;right:0;bottom:0;z-index:11;height:64px;padding-top:32px;background:linear-gradient(180deg,rgba(22,22,21,0) 0%,#161615 60%);display:flex;align-items:center;justify-content:center;gap:8px;border:0;cursor:pointer;color:#ECEAE3;font:500 11px/1 'IBM Plex Mono',monospace;letter-spacing:.1em;text-transform:uppercase;white-space:nowrap" style-hover="color:#8FA0FF">{{ navLabel }}</button></sc-if>
+    <sc-if value="{{ showExpandMo }}" hint-placeholder-val="{{ false }}"><button type="button" onClick="{{ navGo }}" style="position:fixed;left:0;right:0;bottom:0;z-index:11;height:44px;padding-top:12px;background:linear-gradient(180deg,rgba(22,22,21,0) 0%,#161615 60%);display:flex;align-items:center;justify-content:center;gap:8px;border:0;cursor:pointer;color:#ECEAE3;font:500 11px/1 'IBM Plex Mono',monospace;letter-spacing:.1em;text-transform:uppercase;white-space:nowrap" style-hover="color:#8FA0FF">{{ navLabel }}</button></sc-if>
     <sc-if value="{{ moreOverlay }}" hint-placeholder-val="{{ false }}">
       <div role="dialog" aria-label="Non-mobile / web builds" data-screen-label="Concepts" style="{{ ovStyle }}">
         <div style="{{ ovHdrStyle }}">
@@ -222,7 +230,7 @@ class Component extends DCLogic {
       rows: [['Data', 'Supabase Postgres with PostGIS and row-level security. Region codes derived server-side by a spatial trigger. Stream health written by a scheduled function so dead cams degrade instead of hang.'], ['Ranking', 'Feed split into engaged and niche buckets, ranked separately and interleaved by a tunable ratio, with quality gates on the niche side.'], ['Privacy', 'End-to-end encrypted DMs over libsignal. No email, no password, no location column anywhere in the schema.'], ['Stack', 'Expo · Supabase · PostGIS · libsignal · hls.js · Three.js']] },
     { id: 'ezer', name: 'EZER', status: 'Built', kind: 'Fintech', thumb: 'realms/thumbs/ezer.jpg', demo: true, href: 'https://ezersaves.com', line: 'Subscriptions become decisions.', stack: 'TypeScript · Fastify · Prisma · Plaid · Expo',
       about: 'Turn subscriptions into explicit decisions. Link a bank, see every recurring charge including trials caught by on-device inbox scanning, cancel without dead ends, and sweep what you cancel into savings goals.',
-      rows: [['Backend', 'Fastify and Prisma across 19 models. Double-entry ledger for goal savings so every cent is traceable; Plaid Transfer for ACH.'], ['Detection', 'Transaction recurrence detection plus Gmail and Outlook scanning on the device. Raw email never leaves the phone.'], ['Mobile', 'Expo / React Native. Google Play internal testing. iOS signed and installed from Windows with xtool.'], ['Card', 'Pay-in-4 virtual card designed; sequenced debit-first until a sponsor bank is in place. Not marketed until the program exists.'], ['Stack', 'TypeScript · Fastify · Prisma · Postgres · Plaid · Expo · Railway']] },
+      rows: [['Backend', 'Fastify and Prisma across 19 models. Double-entry ledger for goal savings so every cent is traceable; Plaid Transfer for ACH.'], ['Detection', 'Transaction recurrence detection plus Gmail and Outlook scanning on the device. Raw email never leaves the phone.'], ['Mobile', 'Expo / React Native. Google Play internal testing. iOS without a Mac: Swift cross-compiled in WSL2, signed and sideloaded.'], ['Card', 'Pay-in-4 virtual card designed; sequenced debit-first until a sponsor bank is in place. Not marketed until the program exists.'], ['Stack', 'TypeScript · Fastify · Prisma · Postgres · Plaid · Expo · Railway']] },
     { id: 'revelation', name: 'Revelation', status: 'Live', kind: 'Publishing', thumb: 'realms/thumbs/revelation.jpg', demo: true, href: 'https://revelati6n.com', line: 'Publishing that survives losing its database.', stack: 'Node · Express · SSE',
       about: 'A single-author publishing site with comments, threaded replies, reactions and live view counts over Server-Sent Events. The storage layer degrades across three backends while keeping transactional integrity, so the site keeps serving and accepting comments even if the database disappears.',
       rows: [['Realtime', 'View counts and reactions stream over Server-Sent Events; no websocket dependency, reconnects for free.'], ['Storage', 'Three backends behind one interface. If the database is gone the site keeps serving and accepting comments, then reconciles.'], ['Threads', 'Comments, nested replies, reactions, single-author publishing with drafts shown as "in progress".'], ['Stack', 'Node · Express · SSE · vanilla front end']] },
@@ -265,16 +273,29 @@ class Component extends DCLogic {
     });
   }
   expRef = React.createRef();
-  onAnyScroll = () => {
+  // Scroll runs once per frame: read layout, then write transform/opacity straight onto the two devices. No React render per scroll event (that was the stutter).
+  onAnyScroll = () => { if (!this.scrollRaf) this.scrollRaf = requestAnimationFrame(this.onScrollFrame); };
+  devStyle(dev, k, mode) {
+    const w = dev === 'ph' ? 1 - k : k; // how much this device is "up"
+    if (mode === 'parallax') return { transform: 'scale(' + (.86 + .14 * w) + ')', opacity: .4 + .6 * w };
+    if (mode === 'depth') return { transform: 'perspective(900px) translateZ(' + (-220 + 220 * w) + 'px) rotateX(' + ((dev === 'ph' ? -1 : 1) * 10 * (1 - w)) + 'deg)', opacity: .35 + .65 * w };
+    if (mode === 'focus') return { filter: 'blur(' + (6 * (1 - w)) + 'px) saturate(' + (.5 + .5 * w) + ')', opacity: .55 + .45 * w, transform: 'scale(' + (.94 + .06 * w) + ')' };
+    if (mode === 'sticky') return { transform: 'scale(' + (.88 + .12 * w) + ')', opacity: .45 + .55 * w };
+    return null;
+  }
+  onScrollFrame = () => {
+    this.scrollRaf = 0;
     const g = this.grid(); if (!g || !this.narrow()) return;
-    const gr = g.getBoundingClientRect(), b = this.expRef.current, patch = {};
-    if (b) { const r = b.getBoundingClientRect(); const locked = false; /* founder ask: the button stays pinned above the Hugo strip, it never rides up with the page */ if (locked !== !!this.state.expLocked) patch.expLocked = locked; }
+    const gr = g.getBoundingClientRect();
+    if (this.state.expLocked) this.setState({ expLocked: false }); /* founder ask: the button stays pinned above the Hugo strip, it never rides up with the page */
     // scroll direction decides which device is "up": the one holding most of the viewport
-    if (this.mode() !== 'snap') { // continuous: progress = how far the monitor has travelled into view
-      const mo = this.moRef.current;
-      if (mo) { const r = mo.getBoundingClientRect(), span = Math.max(1, gr.height * .6); const prog = Math.max(0, Math.min(1, (gr.bottom - r.top - gr.height * .25) / span)); if (Math.abs(prog - (this.state.prog || 0)) > .01) patch.prog = prog; }
+    const mode = this.mode();
+    if (mode !== 'snap') { // continuous: progress = how far the monitor has travelled into view
+      const mo = this.moRef.current, ph = this.phRef.current;
+      if (mo) { const r = mo.getBoundingClientRect(), span = Math.max(1, gr.height * .6); const prog = Math.max(0, Math.min(1, (gr.bottom - r.top - gr.height * .25) / span));
+        if (Math.abs(prog - (this.prog || 0)) > .002) { this.prog = prog;
+          [[ph, 'ph'], [mo, 'mo']].forEach(([el, dev]) => { const st = el && this.devStyle(dev, prog, mode); if (st) Object.assign(el.style, st); }); } }
     }
-    if (Object.keys(patch).length) this.setState(patch);
     // settle: decide the active device only once scrolling has stopped, with hysteresis so it never flips mid-gesture
     clearTimeout(this.settleT);
     this.settleT = setTimeout(() => {
@@ -311,8 +332,16 @@ class Component extends DCLogic {
   }
   chipAnim() { const q = typeof location !== 'undefined' && new URLSearchParams(location.search).get('chipAnim'); return q || this.props.chipAnim || 'stagger'; }
   mode() { const q = typeof location !== 'undefined' && new URLSearchParams(location.search).get('scrollMode'); return q || this.props.scrollMode || 'parallax'; }
-  componentDidMount() { addEventListener('scroll', this.onAnyScroll, true); addEventListener('resize', this.onAnyScroll);
-    this.msg = e => { const d = e.data; if (d && d.type === 'chaze-open') this.openId(d.id); };
+  // back to the Home screen with nothing open, scrolled to the phone; the parent shows the frame again only after this has painted
+  goHomeScreen() {
+    clearTimeout(this.ovT); cancelAnimationFrame(this.glideRaf); this.gliding = false;
+    this.setState({ ph: null, mo: null, focus: null, drawer: false, more: null, moreOpen: false, ovLeaving: false, m: null, note: null, sheet: false, act: 'ph' }, () => {
+      const g = this.grid(); if (g) g.scrollTop = 0; this.onScrollFrame();
+      requestAnimationFrame(() => requestAnimationFrame(() => parent.postMessage({ type: 'chaze-homed' }, '*')));
+    });
+  }
+  componentDidMount() { addEventListener('scroll', this.onAnyScroll, { capture: true, passive: true }); addEventListener('resize', this.onAnyScroll);
+    this.msg = e => { const d = e.data; if (d && d.type === 'chaze-open') this.openId(d.id); if (d && d.type === 'chaze-home') this.goHomeScreen(); };
     this.key = e => { if (e.key === 'Escape') this.setState(s => s.drawer || s.sheet ? { drawer: false, sheet: false } : { focus: null }); };
     this.rs = () => this.forceUpdate();
     addEventListener('message', this.msg); addEventListener('keydown', this.key); addEventListener('resize', this.rs);
@@ -320,7 +349,7 @@ class Component extends DCLogic {
     this.bootT = [setTimeout(() => this.setState({ boot: 1 }), 1400), setTimeout(() => this.setState({ boot: 0 }), 1900)];
     this.timer = setInterval(() => { const s = this.state; if (s.m !== 'frame' || !s.alive) return; if (s.pw && s.se && s.mo2) this.setState({ dt: s.dt + 0.1 }); else this.setState({ alive: false }); }, 100);
   }
-  componentWillUnmount() { clearTimeout(this.ovT); cancelAnimationFrame(this.glideRaf); (this.bootT || []).forEach(clearTimeout); clearTimeout(this.glideT); clearTimeout(this.settleT); removeEventListener('scroll', this.onAnyScroll, true); removeEventListener('resize', this.onAnyScroll); clearInterval(this.timer); removeEventListener('message', this.msg); removeEventListener('keydown', this.key); removeEventListener('resize', this.rs); }
+  componentWillUnmount() { cancelAnimationFrame(this.scrollRaf); clearTimeout(this.ovT); cancelAnimationFrame(this.glideRaf); (this.bootT || []).forEach(clearTimeout); clearTimeout(this.glideT); clearTimeout(this.settleT); removeEventListener('scroll', this.onAnyScroll, true); removeEventListener('resize', this.onAnyScroll); clearInterval(this.timer); removeEventListener('message', this.msg); removeEventListener('keydown', this.key); removeEventListener('resize', this.rs); }
   renderVals() {
     const s = this.state, mob = this.narrow(), L = true;
     const SHORT = { morgan: 'Morgan', frame: 'Agent Frame' };
@@ -333,19 +362,16 @@ class Component extends DCLogic {
       pickM: () => this.setState({ note: p.id, sheet: false }) });
     const by = (ids, dev) => ids.map(id => dec(this.find(id), dev)), get = id => id ? dec(this.find(id)) : null;
     const focus = get(s.focus), cur = get(s.m), note = cur && cur.id === 'notes' && s.note ? get(s.note) : null, id = cur && cur.id;
-    const mode = this.mode(), k = this.state.prog ?? 0; // k: 0 = phone fully up, 1 = monitor fully up (continuous modes)
-    const ease = { transition: 'transform .35s cubic-bezier(.2,.8,.2,1), opacity .35s' }, base = { display: 'flex', flexDirection: 'column', width: '100%', transformOrigin: '50% 0' };
+    const mode = this.mode(), k = this.prog || 0; // k: 0 = phone fully up, 1 = monitor fully up (continuous modes); written per frame by onScrollFrame
+    const ease = { transition: 'transform .35s cubic-bezier(.2,.8,.2,1), opacity .35s' }, base = { display: 'flex', flexDirection: 'column', width: '100%', transformOrigin: '50% 0', willChange: 'transform, opacity' };
     const dv = (on, dev) => {
-      const w = dev === 'ph' ? 1 - k : k; // how much this device is "up"
-      if (mode === 'parallax') return { ...base, transform: 'scale(' + (.86 + .14 * w) + ')', opacity: .4 + .6 * w };
-      if (mode === 'depth') return { ...base, transform: 'perspective(900px) translateZ(' + (-220 + 220 * w) + 'px) rotateX(' + ((dev === 'ph' ? -1 : 1) * 10 * (1 - w)) + 'deg)', opacity: .35 + .65 * w };
-      if (mode === 'focus') return { ...base, filter: 'blur(' + (6 * (1 - w)) + 'px) saturate(' + (.5 + .5 * w) + ')', opacity: .55 + .45 * w, transform: 'scale(' + (.94 + .06 * w) + ')' };
-      if (mode === 'sticky') return { ...base, position: 'sticky', top: dev === 'ph' ? 0 : 'auto', bottom: dev === 'mo' ? 0 : 'auto', zIndex: dev === 'ph' ? 1 : 2, transform: 'scale(' + (.88 + .12 * w) + ')', opacity: .45 + .55 * w, transformOrigin: dev === 'ph' ? '50% 0' : '50% 100%' };
-      return { ...base, ...ease, transform: on ? 'none' : 'scale(.9)', opacity: on ? 1 : .5 };
+      const st = this.devStyle(dev, k, mode);
+      if (mode === 'sticky') return { ...base, ...st, position: 'sticky', top: dev === 'ph' ? 0 : 'auto', bottom: dev === 'mo' ? 0 : 'auto', zIndex: dev === 'ph' ? 1 : 2, transformOrigin: dev === 'ph' ? '50% 0' : '50% 100%' };
+      return st ? { ...base, ...st } : { ...base, ...ease, transform: on ? 'none' : 'scale(.9)', opacity: on ? 1 : .5 };
     };
     const home = k => () => this.setState(st => ({ [k]: null, focus: st.focus === st[k] ? null : st.focus, drawer: false }));
     const vw = typeof innerWidth === 'number' ? innerWidth : 390, vh = typeof innerHeight === 'number' ? innerHeight : 844;
-    const PW = mob ? Math.min(vw - 12, Math.round((vh - 156) * 402 / 874)) : 0, phBar = mob && !s.ph ? 0 : 38; // 38 = the device's Home-screen bar; on phones it only takes room once an app is open
+    const PW = mob ? Math.min(vw - 12, Math.round((vh - 100) * 446 / 918)) : 0, phBar = mob && !s.ph ? 0 : 38; // 38 = the device's Home-screen bar; on phones it only takes room once an app is open
     const cq = (n, W) => (n / W * 100).toFixed(3) + 'cqw', fit = bar => ({ position: 'absolute', inset: '2px 2px ' + (bar + 2) + 'px', containerType: 'size', display: 'flex', alignItems: 'center', justifyContent: 'center' });
     const SPOTS = [[1200, 76], [980, 92], [760, 70], [540, 98], [320, 80], [1190, 318], [900, 300], [640, 326], [1050, 540], [380, 320]]; // same spots as OSDevice's desktop icons
     const phIds = mob ? this.PH : [...this.PH, 'notes'], moIds = mob ? this.MO : [...this.MO, 'notes'];
@@ -376,7 +402,7 @@ class Component extends DCLogic {
       togglePhWide: () => this.setState({ wide: s.wide === 'ph' ? null : 'ph' }), toggleMoWide: () => this.setState({ wide: s.wide === 'mo' ? null : 'mo' }),
       revealMore: () => this.act('mo'), backToPhone: () => this.act('ph'), showBack: false,
       barStyle: mob ? { display: 'none' } : { gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto minmax(0,1fr)', alignItems: 'center', gap: 12, padding: '10px 4px 0' },
-      phBox: mob ? { ...dv(s.act === 'ph', 'ph'), height: Math.round(PW * 874 / 402) + 6 + phBar, maxWidth: PW, margin: '0 auto' } : { width: '100%', height: '100%', minWidth: 0, display: s.wide === 'mo' ? 'none' : 'flex', flexDirection: 'column', gridColumn: s.wide === 'ph' ? '1 / -1' : 'auto', maxWidth: s.wide === 'ph' ? 560 : 'none', justifySelf: 'center' },
+      phBox: mob ? { ...dv(s.act === 'ph', 'ph'), height: Math.round(PW * 918 / 446) + 6 + phBar, maxWidth: PW, margin: '0 auto' } : { width: '100%', height: '100%', minWidth: 0, display: s.wide === 'mo' ? 'none' : 'flex', flexDirection: 'column', gridColumn: s.wide === 'ph' ? '1 / -1' : 'auto', maxWidth: s.wide === 'ph' ? 560 : 'none', justifySelf: 'center' },
       moBox: mob ? { ...dv(s.act === 'mo', 'mo'), order: 2, marginTop: 0, height: Math.round((innerWidth - 12) * 980 / 1468) + 92, minHeight: 300 } : { width: '100%', height: '100%', minWidth: 0, display: s.wide === 'ph' ? 'none' : 'flex', flexDirection: 'column' },
       // site only: the phone is narrower here than on the design canvas (nav above, agents strip below), so its title row spans the page and the title is never cut
       phFoot: { flex: '0 0 auto', padding: '0 4px', display: 'flex', flexWrap: 'nowrap', alignItems: 'center', gap: '6px 12px', minHeight: 0, ...(mob ? { width: vw - 12, marginLeft: 'calc(50% - ' + (vw - 12) / 2 + 'px)' } : {}) },

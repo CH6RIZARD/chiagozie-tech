@@ -706,7 +706,7 @@ body.simple>section,body.simple>footer,body.simple>.mindex{display:none!importan
     <li><span><b>Shipped a realm demo that did not earn its label.</b> Scrapped it. Status labels on this page mean exactly what they say.</span></li>
     <li><span><b>Held The Void's DMs until end-to-end encryption worked.</b> It cost weeks. I would do it again.</span></li>
     <li><span><b>Rewrote The Void's schema three times</b> after prekey lock contention and a spatial trigger bug. The current schema makes the location leak impossible by omission rather than by policy.</span></li>
-    <li><span><b>Spent a month getting iOS builds working from Windows.</b> Then wrote it up so the next person, or the next agent, does it in an afternoon.</span></li>
+    <li><span><b>Spent a month building iOS without a Mac: Swift cross-compiled in WSL2, signed, sideloaded.</b> Then wrote it up so the next person, or the next agent, does it in an afternoon.</span></li>
   </ol></div></div>
 </div></section>
 
@@ -887,11 +887,21 @@ addEventListener('pageshow', () => fetch(location.pathname, { method: 'HEAD', ca
     if (on) { prev = prev || r.dataset.theme; r.dataset.theme = 'dark'; } else if (prev) { r.dataset.theme = prev; prev = null; }
     document.body.classList.toggle('simple', on); os.hidden = !on; b.setAttribute('aria-pressed', on);
     b.setAttribute('aria-label', on ? 'Read less view on. Switch to scroll view' : 'Scroll view on. Switch to read less view');
-    if (on && !f) { f = document.createElement('iframe'); const sm = new URLSearchParams(location.search).get('scrollMode'); const src = 'OS.dc.html?v=20261112dark' + (sm ? '&scrollMode=' + encodeURIComponent(sm) : ''); f.title = 'Projects'; f.allow = 'fullscreen; pointer-lock; autoplay; clipboard-write'; os.append(f);
+    if (on && !f) { f = document.createElement('iframe'); const sm = new URLSearchParams(location.search).get('scrollMode'); const src = 'OS.dc.html?v=20261112ti' + (sm ? '&scrollMode=' + encodeURIComponent(sm) : ''); f.title = 'Projects'; f.allow = 'fullscreen; pointer-lock; autoplay; clipboard-write';
+      // invisible until the frame's own dark page exists (it posts chaze-homed from its <head>): its blank first document never paints white
+      f.style.visibility = 'hidden'; f.onload = () => { if (f.getAttribute('src')) show(); }; os.append(f);
       // The frame loads these without a version token: revalidate them first so a phone never runs a cached old build.
       Promise.allSettled([src, 'OSDevice.dc.html', 'support.js', 'image-slot.js', 'ios-frame.js?v=1'].map(u => fetch(u, { cache: 'no-cache' }).then(r => r.arrayBuffer()))).then(() => { f.src = src; }); }
+    else if (f) { if (on) home(); else f.contentWindow.postMessage({ type: 'chaze-home' }, '*'); }   // left on a project: back to the Home screen while hidden, so coming back never shows it
     if (on) scrollTo(0, 0);
   };
+  let showT = 0;
+  const show = () => { clearTimeout(showT); if (f) f.style.visibility = ''; };
+  const home = () => { f.style.visibility = 'hidden'; f.contentWindow.postMessage({ type: 'chaze-home' }, '*'); clearTimeout(showT); showT = setTimeout(show, 700); };
+  addEventListener('message', e => { if (f && e.source === f.contentWindow && e.data && e.data.type === 'chaze-homed') show(); });
+  // back from a build that opened in this tab: the page comes back from the back/forward cache with the frame as it was left
+  addEventListener('pagehide', () => { if (f) f.style.visibility = 'hidden'; });
+  addEventListener('pageshow', e => { if (f && f.getAttribute('src')) e.persisted ? home() : show(); });
   b.onclick = () => set(!document.body.classList.contains('simple'));
   document.querySelector('nav[aria-label="Sections"]').addEventListener('click', e => {
     const a = e.target.closest('a[href^="#"]'); if (!a || !document.body.classList.contains('simple')) return;
