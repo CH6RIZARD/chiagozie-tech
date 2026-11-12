@@ -4,7 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <script>/* iOS zooms the whole page in when a field rendered under 16px gets focus (the embedded apps sit scaled down inside their frames) and never zooms back out. Capping the scale stops that; pinch zoom still works on iOS. */
-if (/iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)) document.querySelector('meta[name=viewport]').content += ',maximum-scale=1';</script>
+if (/iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)) document.querySelector('meta[name=viewport]').content += ',maximum-scale=1';
+/* Every load opens at the top of the scroll home: no restored scroll position (a #hash in the URL still jumps). */
+history.scrollRestoration = 'manual';</script>
 <meta name="theme-color" content="#F4F3EE" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#161615" media="(prefers-color-scheme: dark)">
 <title>Chiagozie Oliver · Engineer</title>
@@ -882,7 +884,6 @@ addEventListener('pageshow', () => fetch(location.pathname, { method: 'HEAD', ca
       // The frame loads these without a version token: revalidate them first so a phone never runs a cached old build.
       Promise.allSettled([src, 'OSDevice.dc.html', 'support.js', 'image-slot.js', 'ios-frame.js?v=1'].map(u => fetch(u, { cache: 'no-cache' }).then(r => r.arrayBuffer()))).then(() => { f.src = src; }); }
     if (on) scrollTo(0, 0);
-    try { localStorage.setItem('chaze.mode', on ? 'simple' : 'scroll'); } catch {}
   };
   b.onclick = () => set(!document.body.classList.contains('simple'));
   document.querySelector('nav[aria-label="Sections"]').addEventListener('click', e => {
@@ -891,7 +892,10 @@ addEventListener('pageshow', () => fetch(location.pathname, { method: 'HEAD', ca
     if (MAP[id] && !a.classList.contains('proj')) { e.preventDefault(); e.stopPropagation(); f.contentWindow.postMessage({ type: 'chaze-open', id: MAP[id] }, '*'); }
     else set(false);
   }, true);
-  try { if (new URLSearchParams(location.search).get('scrollMode') || localStorage.getItem('chaze.mode') === 'simple') set(true); } catch {}
+  // Read less is never remembered: every load opens on the scroll home. Only an explicit ?scrollMode= opens it.
+  if (new URLSearchParams(location.search).get('scrollMode')) set(true);
+  // ?edit=1: private in-place copy editing, loaded only on request.
+  if (new URLSearchParams(location.search).get('edit') === '1') document.head.append(Object.assign(document.createElement('script'), { src: 'edit-mode.js?v=20261112a' }));
 })();
 </script>
 </body>
