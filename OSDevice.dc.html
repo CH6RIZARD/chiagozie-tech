@@ -16,18 +16,18 @@
         <x-import component-from-global-scope="IOSDevice" from="./ios-frame.js?v=1" dark="{{ true }}" hint-size="402px,874px">
           <div style="position:absolute;inset:0;background:#0b0b0c">
             <sc-if value="{{ pHome }}" hint-placeholder-val="{{ true }}">
-              
-              <div style="position:absolute;left:14px;right:14px;bottom:34px;height:76px;border-radius:30px;background:rgba(120,120,128,.2);backdrop-filter:blur(36px) saturate(180%);-webkit-backdrop-filter:blur(36px) saturate(180%);display:flex;align-items:center;justify-content:space-between;padding:0 24px">
+              <div style="position:absolute;inset:0;background:#15161a url(realms/wall-phone3.png) center/cover"></div>
+              <div style="position:absolute;left:14px;right:14px;bottom:30px;height:84px;border-radius:34px;background:linear-gradient(180deg,rgba(255,255,255,.16),rgba(255,255,255,.05) 55%,rgba(255,255,255,.08)),rgba(120,120,128,.16);backdrop-filter:blur(28px) saturate(190%) brightness(1.12);-webkit-backdrop-filter:blur(28px) saturate(190%) brightness(1.12);box-shadow:inset 0 1px 0 rgba(255,255,255,.34),inset 0 0 0 1px rgba(255,255,255,.1),inset 0 -10px 18px -8px rgba(0,0,0,.28),0 12px 30px rgba(0,0,0,.4);display:flex;align-items:center;justify-content:space-evenly">
                 <sc-for list="{{ dock }}" as="it" hint-placeholder-count="4">
-                  <button type="button" onClick="{{ it.pick }}" aria-label="{{ it.name }}" style="width:58px;height:58px;padding:0;border:0;border-radius:14px;cursor:pointer;background:#2c2c2e;background-size:cover;background-position:center;background-image:url({{ it.thumb }});display:grid;place-items:center;font:500 17px/1 'IBM Plex Mono',monospace;color:#ECEAE3">{{ it.dockGlyph }}</button>
+                  <button type="button" onClick="{{ it.pick }}" aria-label="{{ it.name }}" style="width:60px;height:60px;padding:0;border:0;border-radius:13.5px;box-shadow:0 2px 8px rgba(0,0,0,.35);cursor:pointer;background:#2c2c2e;background-size:cover;background-position:center;background-image:url({{ it.thumb }});display:grid;place-items:center;font:500 17px/1 'IBM Plex Mono',monospace;color:#ECEAE3">{{ it.dockGlyph }}</button>
                 </sc-for>
               </div>
               <span style="position:absolute;left:50%;bottom:10px;width:148px;height:5px;margin-left:-74px;border-radius:999px;background:rgba(255,255,255,.9)"></span>
               <div style="position:relative;display:grid;grid-template-columns:repeat(3,1fr);gap:30px 14px;padding:92px 30px 0">
                 <sc-for list="{{ items }}" as="it" hint-placeholder-count="6">
                   <button type="button" onClick="{{ it.pick }}" aria-label="{{ it.name }}" style="display:flex;flex-direction:column;align-items:center;gap:7px;padding:0;background:none;border:0;cursor:pointer;color:#fff">
-                    <sc-if value="{{ it.hasThumb }}" hint-placeholder-val="{{ false }}"><span style="width:84px;height:84px;border-radius:20px;background-size:cover;background-position:center;background-image:url({{ it.thumb }})"></span></sc-if>
-                    <sc-if value="{{ it.noThumb }}" hint-placeholder-val="{{ true }}"><span style="width:84px;height:84px;border-radius:20px;background:#1d1d1b;border:1px solid #3A3936;display:grid;place-items:center;font:500 19px/1 'IBM Plex Mono',monospace;color:#9A9890">{{ it.glyph }}</span></sc-if>
+                    <sc-if value="{{ it.hasThumb }}" hint-placeholder-val="{{ false }}"><span style="width:84px;height:84px;border-radius:19px;background-size:cover;background-position:center;background-image:url({{ it.thumb }})"></span></sc-if>
+                    <sc-if value="{{ it.noThumb }}" hint-placeholder-val="{{ true }}"><span style="width:84px;height:84px;border-radius:19px;background:#1d1d1b;border:1px solid #3A3936;display:grid;place-items:center;font:500 19px/1 'IBM Plex Mono',monospace;color:#9A9890">{{ it.glyph }}</span></sc-if>
                     <span style="font:400 15px/1.2 Inter,system-ui,sans-serif;text-align:center;max-width:108px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ it.short }}</span>
                   </button>
                 </sc-for>
@@ -216,6 +216,7 @@ class Component extends DCLogic {
   watch(src) { if (!src || this.ld[src] || this.pend[src]) return; this.pend[src] = setTimeout(() => this.mark(src), 8000); }
   renderVals() {
     const s = this.state, pr = this.props, phone = pr.kind === 'phone', o = pr.open || null, id = o && o.id, L = true;
+    const slim = phone && innerWidth <= 760; // phones: the Home-screen bar takes no room until an app is open, so the frame can be taller
     const LOCALHOST = /^(127\.0\.0\.1|localhost)$/.test(location.hostname), APP = LOCALHOST ? { void: 'http://127.0.0.1:8768/', ezer: 'http://127.0.0.1:8766/', morgan: 'http://127.0.0.1:8767/' } : { void: 'https://void-app-d35c.pages.dev/', ezer: 'https://ezer-demo.daniel4chigs.workers.dev/', morgan: 'https://morgan-demo.daniel4chigs.workers.dev/app/' };
     const WEB = { hugo: 'realms/hugo/index.html', revelation: 'https://revelati6n.com' };
     const notes = pr.notes || [], nCur = s.note === 'list' ? null : notes.find(n => n.id === (s.note || pr.note)) || null; // site fix kept: 'list' = "← Notes" pressed while the parent still pins a note
@@ -254,7 +255,7 @@ class Component extends DCLogic {
       pHome: phone && !o, pLive, pSrc, pSlot: phone && !!o && !!APP[id] && !L, pPlate: phone && !!o && !APP[id] && id !== 'notes',
       pNotes: phone && id === 'notes', pList: !nCur, pNote: !!nCur, noteList, cur: nCur || {}, noteBack: () => this.setState({ note: 'list' }),
       slotId: 'shot-' + id, slotText: 'Drop a portrait screenshot of ' + ((o && o.name) || 'the app'), name: (o && o.name) || '', status: (o && o.status) || '',
-      barStyle: { flex: '0 0 38px', height: 38, display: !!pr.home || !!pr.info ? 'flex' : 'none', alignItems: 'center', justifyContent: 'center', gap: 10, padding: '4px 0 0' },
+      barStyle: { flex: '0 0 38px', height: 38, display: (slim ? !!o && !!pr.home : !!pr.home) || !!pr.info ? 'flex' : 'none', alignItems: 'center', justifyContent: 'center', gap: 10, padding: '4px 0 0' },
       canHome: !!o && !!pr.home, goHome: () => { this.setState({ note: null }); pr.home && pr.home(); }, homeLabel: phone ? '← Home screen' : '← Desktop',
       canInfo: !!pr.info, goInfo: () => pr.info && pr.info(), infoLabel: 'Details for ' + ((o && o.name) || 'this project'),
       gates: [['pw', 'Power'], ['se', 'Sensors'], ['mo', 'Motor']].map(([key, name]) => ({ n: name, on: s[key], state: s[key] ? 'holding' : 'cut', toggle: () => this.setState({ [key]: !s[key] }) })),
