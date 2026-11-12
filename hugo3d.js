@@ -14,12 +14,19 @@ canvas.setAttribute('aria-hidden', 'true');
 // A small canvas that lives IN the page (position absolute, page coordinates) and travels with him. The browser scrolls
 // it with the content, so he never lags or jumps a frame behind the page the way a full-screen fixed overlay did.
 const BOX = Math.round(CFG.size * 2.6);
-Object.assign(canvas.style, { position: 'absolute', left: 0, top: 0, width: BOX + 'px', height: BOX + 'px', pointerEvents: 'none', zIndex: 9998, willChange: 'transform' });
+Object.assign(canvas.style, { position: 'absolute', left: 0, top: 0, width: BOX + 'px', height: BOX + 'px', pointerEvents: 'none', zIndex: 9998, willChange: 'transform', transition: 'opacity .2s' });
 // Both agents draw inside one page-sized layer that clips them, so a canvas near the bottom never makes the page taller
 // (it did: the page grew, the floor at the bottom moved down, and he kept falling).
 const layer = document.getElementById('agent-layer') || document.body.appendChild(Object.assign(document.createElement('div'), { id: 'agent-layer' }));
 Object.assign(layer.style, { position: 'absolute', left: 0, top: 0, right: 0, bottom: 0, overflow: 'clip', pointerEvents: 'none', zIndex: 9998 });
 layer.append(canvas);
+// Phones in Scroll view: he lives in a strip along the bottom of the screen, never out in the middle of the content. That strip
+// is drawn from a fixed layer, so it stays put while the page scrolls under it (an absolute canvas would trail the scroll a frame).
+const phoneQ = matchMedia('(max-width:760px)');
+const stripMode = () => phoneQ.matches && !document.body.classList.contains('simple');
+const groundY = () => stripMode() ? scrollY + innerHeight - 30 : document.documentElement.scrollHeight - 24;
+const fixedLayer = document.body.appendChild(document.createElement('div'));
+Object.assign(fixedLayer.style, { position: 'fixed', left: 0, top: 0, right: 0, bottom: 0, overflow: 'clip', pointerEvents: 'none', zIndex: 9998 });
 let renderer;
 try { renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true, powerPreference: 'low-power' }); }
 catch { canvas.remove(); throw new Error('Hugo needs WebGL; the page works without him.'); }
@@ -198,7 +205,7 @@ inner.add(model); inner.scale.setScalar(S); view.add(inner); scene.add(view);
 view.rotation.x = CFG.viewTilt * Math.PI / 180;
 
 // ---------- the world: floors and solids, in page coordinates ----------
-let floors = [], ink = [], dirty = true, scanAt = 0;
+let floors = [], ink = [], textInk = [], dirty = true, scanAt = 0;
 const skipSel = '#scion-hud,#scion-say,#scion-ask,#scion-dove,#agent-layer,script,style,svg,canvas,nav,.msheet';   // .msheet: the phone sheet is invisible until opened
 function scan() {
   floors = []; ink = [];
@@ -213,6 +220,7 @@ function scan() {
     if (parseFloat(cs.borderBottomWidth) > 0) floors.push({ y: r.bottom + scrollY, x1: r.left + scrollX, x2: r.right + scrollX, el: e });
     if (boxed && r.height > 30) ink.push({ l: r.left + scrollX, t: r.top + scrollY, r: r.right + scrollX, b: r.bottom + scrollY });   // boxes are solid
   }
+  const k0 = ink.length;
   const walk = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, { acceptNode: n =>
     n.textContent.trim() && !n.parentElement.closest(skipSel) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT });
   for (let n; (n = walk.nextNode());) {
@@ -222,7 +230,10 @@ function scan() {
       if (r.width > 120) floors.push({ y: r.top + scrollY, x1: r.left + scrollX, x2: r.right + scrollX, el: n.parentElement, text: true });
     }
   }
-  floors.push({ y: document.documentElement.scrollHeight - 24, x1: 0, x2: document.documentElement.scrollWidth, el: document.body, ground: true });
+  floors.push({ y: groundY(), x1: 0, x2: document.documentElement.scrollWidth, el: document.body, ground: true });
+  textInk = stripMode() ? ink.slice(k0) : [];
+  if (stripMode()) { floors = floors.slice(-1); ink = [];   // the strip is his whole world: no ledges, nothing in his way
+    if (st.floor && !st.floor.ground && !st.air && !st.held) { st.floor = floors[0]; st.y = st.floor.y; st.goal = null; st.climb = null; if (st.mode === 'climb' || st.mode === 'prep') st.mode = 'walk'; } }
   dirty = false; scanAt = performance.now();
 }
 // Can he occupy this spot? Body box must be clear of every word and box above the floor (standing or sitting height).
@@ -683,7 +694,7 @@ function born() {   // first appearance: a floor in view with standing room
 }
 function refloor(f) {   // the page reflows; keep the floor glued to its element
   if (f.screen) return true;
-  if (f.ground) { f.y = document.documentElement.scrollHeight - 24; f.x2 = document.documentElement.scrollWidth; return true; }
+  if (f.ground) { f.y = groundY(); f.x2 = document.documentElement.scrollWidth; return true; }
   if (!f.el.isConnected) return false;
   if (f.text) { const r = f.el.getBoundingClientRect(); const dy = (r.top + scrollY) - (f.elTop ?? (f.elTop = r.top + scrollY)); if (dy) { f.y += dy; f.elTop += dy; } return true; }
   const r = f.el.getBoundingClientRect(), top = r.top + scrollY, bottom = r.bottom + scrollY;
@@ -875,7 +886,11 @@ function frame(now) {
   st.vxw = st.mode === 'walk' && !st.air ? (st.amt < 0.05 ? 0 : 1) * st.dir * walkSpeed() * (0.35 + 0.65 * st.amt) * (st.spdK || 1) : st.vx;
   const sy = st.y - scrollY;
   if (sy < -CFG.size - 40 || sy > innerHeight + 60) { canvas.style.visibility = 'hidden'; hit.style.display = 'none'; hud.style.opacity = 0; return; }   // alive, just not in view
-  hit.style.display = ''; hit.style.transform = `translate3d(${Math.round(st.x - scrollX - HALF_W)}px,${Math.round(sy - CFG.size)}px,0)`;
+  // in the bottom strip the page scrolls under him: he fades out while words pass behind him, so he never covers text
+  const overText = stripMode() && !st.held && textInk.some(q => q.r > st.x - HALF_W && q.l < st.x + HALF_W && q.b > st.y - CFG.size && q.t < st.y);
+  canvas.style.opacity = overText ? '0' : '';
+  if (overText) { hit.style.display = 'none'; hud.style.opacity = 0; } else hit.style.display = '';
+  hit.style.transform = `translate3d(${Math.round(st.x - scrollX - HALF_W)}px,${Math.round(sy - CFG.size)}px,0)`;
   if (st.hover || st.held) {
     hud.style.opacity = 1; hud.style.transform = `translate(${Math.round(st.x - scrollX + HALF_W + 10)}px,${Math.round(sy - CFG.size)}px)`;
     const spd = Math.hypot(st.vx, st.vy);
@@ -929,7 +944,8 @@ function frame(now) {
   const W = pageW;
   const ox = Math.max(0, Math.min(W - BOX, Math.round(st.x - scrollX - BOX / 2))), oy = Math.round(sy - CFG.size * 0.5 - BOX / 2);
   camera.setViewOffset(innerWidth, innerHeight, ox, oy, BOX, BOX);
-  canvas.style.transform = `translate3d(${ox + scrollX}px,${oy + scrollY}px,0)`; if (canvas.style.visibility) canvas.style.visibility = '';
+  const fx = stripMode(), home = fx ? fixedLayer : layer; if (canvas.parentNode !== home) home.append(canvas);
+  canvas.style.transform = fx ? `translate3d(${ox}px,${oy}px,0)` : `translate3d(${ox + scrollX}px,${oy + scrollY}px,0)`; if (canvas.style.visibility) canvas.style.visibility = '';
   if (say.style.opacity === '1') say.style.transform = `translate(${Math.max(scrollX + 8, Math.min(scrollX + W - 250, st.x - 30))}px,${Math.max(scrollY + 4, st.y - CFG.size - say.offsetHeight - 6)}px)`;   // over his head, kept on screen
   renderer.render(scene, camera);
 }

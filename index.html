@@ -262,7 +262,10 @@ html{touch-action:manipulation}
   html,body,.msheet .panel{scrollbar-width:none}   /* phones: no scrollbars anywhere on the page or in the sheet */
   html::-webkit-scrollbar,body::-webkit-scrollbar,.msheet .panel::-webkit-scrollbar{display:none;width:0;height:0}
   /* phone top: the index below replaces the section links; the bar keeps the name and Hire, clear of the notch */
-  nav[aria-label="Sections"]{padding-top:env(safe-area-inset-top)}
+  /* locked to the top: fixed, not sticky (iOS rubber-band and toolbar collapse dragged the sticky bar down), no root bounce, page padded under it */
+  html,body{overscroll-behavior:none}
+  body{padding-top:calc(49px + env(safe-area-inset-top))}
+  nav[aria-label="Sections"]{position:fixed;left:0;right:0;top:0;padding-top:env(safe-area-inset-top)}
   nav[aria-label="Sections"] .wrap{padding-left:max(20px,env(safe-area-inset-left));padding-right:max(20px,env(safe-area-inset-right))}
   nav[aria-label="Sections"] a:not(:first-child):not(.cta){display:none}
   #mast .lede{font-size:18px;margin-top:18px}
@@ -866,7 +869,7 @@ const bootAgents = ext => {
   window.SCION_GLB = 'dove.glb' + ext;
   window.HUGO_CONFIG = { size: matchMedia('(max-width:760px)').matches ? 64 : 150, glb: 'realms/hugo/hugo.glb' + ext };
   const add = (src, type) => new Promise(r => { const s = document.createElement('script'); if (type) s.type = type; s.src = src; s.onload = r; s.onerror = r; document.head.append(s); });
-  add('bond.js?v=20261112frame').then(() => add('dove-agent.js?v=20261110q')).then(() => { add('dove3d.js?v=20261111s', 'module'); add('hugo3d.js?v=20261112frame', 'module'); });
+  add('bond.js?v=20261112frame').then(() => add('dove-agent.js?v=20261110q')).then(() => { add('dove3d.js?v=20261111s', 'module'); add('hugo3d.js?v=20261112strip', 'module'); });
 };
 fetch('dove.glb', { method: 'HEAD' }).then(r => bootAgents(r.ok ? '' : '.wasm')).catch(() => bootAgents('.wasm'));
 
