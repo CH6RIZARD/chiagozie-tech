@@ -265,7 +265,7 @@ class Component extends DCLogic {
   onAnyScroll = () => {
     const g = this.grid(); if (!g || !this.narrow()) return;
     const gr = g.getBoundingClientRect(), b = this.expRef.current, patch = {};
-    if (b) { const r = b.getBoundingClientRect(); const locked = r.top >= gr.top && r.bottom <= gr.bottom; if (locked !== !!this.state.expLocked) patch.expLocked = locked; }
+    if (b) { const r = b.getBoundingClientRect(); const locked = false; /* founder ask: the button stays pinned above the Hugo strip, it never rides up with the page */ if (locked !== !!this.state.expLocked) patch.expLocked = locked; }
     // scroll direction decides which device is "up": the one holding most of the viewport
     if (this.mode() !== 'snap') { // continuous: progress = how far the monitor has travelled into view
       const mo = this.moRef.current;
