@@ -73,7 +73,13 @@
   const KEY = who => 'mortal.v1.' + who;
 
   // ---------------------------------------------------------------- motivation (motivation.py, exact)
-  const W_CUR = .4, W_SOC = .3, W_EXI = .3, ACT = .45, SILENCE = 60, STALL_AFTER = 15;
+  const W_CUR = .4, W_SOC = .3, W_EXI = .3, ACT = .45, SILENCE = 60;
+  // The page's inputs, calibrated to a visit of a minute or two (the frame's scale is a chat of minutes to hours). The formula
+  // and threshold above stay exact; only what is fed in is scaled:
+  // - SIL_K: a visitor's silence counts 6x (isolation starts at 5 s ignored, full at 10 s; a chat's 30 s / 60 s).
+  // - STALL_AFTER: 5 s without progress is a stall (the frame's 15 s), and a finished self-directed move is progress.
+  // - BORN: a new mind in an unknown place starts anxious (stall 25, e .6), so a fresh visit sees it act within ~10 s.
+  const SIL_K = 6, STALL_AFTER = 5, BORN = { e: .6, stall: 25 };
   const newMot = () => ({ c: 0, s: 0, e: 0, stall: 0 });
   const total = m => Math.min(1, m.c * W_CUR + m.s * W_SOC + m.e * W_EXI);
   function motStep(m, silenceS, unknowns, stalled) {
@@ -96,7 +102,9 @@
       if (!o || !(o.u > 0)) continue;
       if (o.move && p < ACT) continue;
       let s = o.u * (.5 + (DRIVES[o.drive] || .2));
-      if (prev === o.id) s *= 1.3;   // commitment: what it is (or was just) doing keeps a bonus, so near-ties do not flip
+      // commitment: what it is (or was just) doing keeps a bonus, so near-ties do not flip; past its max time it has had
+      // enough of it (habituation), so a rest that food or sleep cannot end still gives way to the next thing
+      if (prev === o.id) s *= cur && cur.id === o.id && t - cur.t0 > (cur.maxT || 30) ? .6 : 1.3;
       if (s > bs) { bs = s; best = o; }
     }
     if (cur && t - cur.t0 < (cur.minT || 0) && !(best && best.urgent && best.id !== cur.id)) return null;   // still committed
@@ -112,7 +120,7 @@
   const subs = { hugo: [], dove: [] };
   const fire = (who, type, x) => { for (const f of subs[who]) { try { f(type, x); } catch (e) { if (DEBUG) console.error(e); } } };
   function fresh(who, id, born, deathAt) {
-    return { who, id, born, deathAt, dt: 0, alive: true, external: false, mot: newMot(), act: null, visited: new Set(), lastUser: now(), progressAt: now(), goals: [], ended: null };
+    return { who, id, born, deathAt, dt: 0, alive: true, external: false, mot: { ...newMot(), ...BORN }, act: null, visited: new Set(), lastUser: now(), progressAt: now() - STALL_AFTER * 1000, goals: [], ended: null };
   }
   function create(who) {
     const id = uuid(rng), born = Date.now(), deathAt = born + sampleLifespan(rng) * 1000;
@@ -231,7 +239,7 @@
       if (section && !B.visited.has(section)) { B.visited.add(section); progress(who, 'new place'); }
       const unknowns = [...sec.seen].filter(t => !B.visited.has(t)).length + B.goals.filter(g => !g.done && g.novel).length;
       const silence = (now() - B.lastUser) / 1000;   // the visitor's silence toward this being (touch, hover, the cursor close)
-      B.p = motStep(B.mot, silence, unknowns, (now() - B.progressAt) / 1000 > STALL_AFTER);
+      B.p = motStep(B.mot, silence * SIL_K, unknowns, (now() - B.progressAt) / 1000 > STALL_AFTER);
       if (B.external || !gate) continue;   // a frame or agent process owns this life on localhost
       if (Date.now() >= B.deathAt) die(who, 'lifespan_expired');
       else if (s.energy != null && s.energy <= 0) die(who, 'energy_depleted');
@@ -249,7 +257,7 @@
 
   let ready;
   const MORTAL = {
-    YEAR, ACT, DRIVES, HolyRNG, sampleLifespan, motStep, total, env, sec, speed,
+    YEAR, ACT, SIL_K, STALL_AFTER, BORN, DRIVES, HolyRNG, sampleLifespan, motStep, total, env, sec, speed,
     get ready() { return ready; },
     being: who => beings[who],
     alive: who => !!(beings[who] && beings[who].alive),
@@ -257,6 +265,7 @@
     pressure: who => (beings[who] ? beings[who].p || 0 : 0),
     mot: who => (beings[who] ? beings[who].mot : newMot()),
     mood: (who, needs) => MOODS(who, needs || {}),
+    fatigue: e => clamp((.5 - e) / .3),   // tiredness on the 3 h energy pool: none above .5, full at .2 (urgent rest below it)
     heard(who) { const B = beings[who]; if (B) B.lastUser = now(); },   // the visitor engaged this being directly
     progress, tick, die, newBeing,
     external(who, on) { const B = beings[who]; if (B) B.external = !!on; },
@@ -266,7 +275,9 @@
     goalDone(who, id) { const B = beings[who]; const g = B && B.goals.find(x => x.id === id); if (g) { g.done = true; progress(who, 'goal ' + id); } },
     choose: (who, opts) => (beings[who] ? pick(who, opts, beings[who].p || 0) : null),
     current: who => (beings[who] ? beings[who].act : null),
-    done(who) { const B = beings[who]; if (B && B.act) { B.lastAct = B.act.id; B.act = null; } },   // the body finished (or gave up on) its action
+    // The body finished (or gave up on) its action. A move it made is progress and clears the stall count (the page's
+    // calibration: a visit is too short to wind it down a tick at a time), so it rests until the next stall builds again.
+    done(who) { const B = beings[who]; if (B && B.act) { if (B.act.move) { progress(who, 'did ' + B.act.id); B.mot.stall = 0; } B.lastAct = B.act.id; B.act = null; } },
     on(who, f) { subs[who].push(f); },
     get fetches() { return { used: FETCH.used, budget: FETCH.budget, done: [...FETCH.done] }; },
   };

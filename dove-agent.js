@@ -313,7 +313,21 @@ window.SCION_BOOT = R => {
     const d = scrollY - lastSY; lastSY = scrollY;
     if (a && a.mode === 'fly') a.y += (1 - depthScale(a.z)) * d;
   }, { passive: true });
-  addEventListener('scroll', () => { if (performance.now() - surfAt > 600) surfAt = 0; }, { passive: true });
+  // Scroll end (150 ms still): look again, and a flight whose perch went off screen (or that has none) picks one in view now,
+  // so a fast scroll never leaves it hovering with nowhere to land.
+  let scrollEndT = 0;
+  addEventListener('scroll', () => { if (performance.now() - surfAt > 600) surfAt = 0; clearTimeout(scrollEndT); scrollEndT = setTimeout(scrollEnd, 150); }, { passive: true });
+  function scrollEnd() {
+    surfAt = 0;
+    if (!a || a.held || a.target?.hand || a.target?.pass) return;
+    // A screen or more away (the page flew past it): it comes in from the edge you scrolled past instead of crossing the page.
+    const off = a.y < scrollY - 150 ? -1 : a.y > scrollY + innerHeight + 150 ? 1 : 0;
+    if (off) { if (a.mode === 'perch') takeOff(null, 'scrolled out of view: back in'); a.y = off < 0 ? scrollY - 40 : scrollY + innerHeight + 40; a.vy = -off * 200; a.target = null; }
+    else if (a.mode === 'perch' && (a.y < scrollY + 40 || a.y > scrollY + innerHeight + 10)) takeOff(null, 'scrolled out of view: back in');   // just past the edge: back in now, not after the 1.2 s grace
+    const T = a.mode === 'fly' ? a.target : null; if (a.mode !== 'fly' || T?.follow) return;
+    const p = T?.spot && spotPos(T.spot); if (p && p.y > scrollY + 60 && p.y < scrollY + innerHeight - 20) return;
+    const sp = landingNear(a.x, a.y + 80) || landingNear(scrollX + innerWidth / 2, scrollY + innerHeight / 2); if (sp) a.target = { spot: sp };
+  }
   // a carousel swipe scrolls an element, not the window (capture: element scrolls do not bubble): its text moved, look again
   document.addEventListener('scroll', e => { if (e.target !== document && performance.now() - surfAt > 300) surfAt = 0; }, { capture: true, passive: true });
 
@@ -520,15 +534,16 @@ window.SCION_BOOT = R => {
     if (performance.now() - touchedAt < 2500) return { do: 'watch_visitor', why: 'touched', source: 'reflex', minT: 3 };
     const n = REL.needs('dove'), mo = M.mot('dove'), g = M.goal('dove');
     const fresh = M.unvisitedInView('dove').filter(t => headings().some(h => titleOf(h) === t));
-    const perched = a.mode === 'perch' ? (performance.now() - (a.perchSince || performance.now())) / 1000 : 0;
+    if (a.mode === 'perch') a.perchSince ??= performance.now();   // its first perch (placed, not landed) counts from now
+    const perched = a.mode === 'perch' ? (performance.now() - a.perchSince) / 1000 : 0;
     const c = M.choose('dove', [
       fresh.length && { id: 'visit', drive: 'curiosity', u: Math.min(1, 0.3 + mo.c), move: true, minT: 8, target: fresh[0] },
       g && g.title && { id: 'goal', drive: 'curiosity', u: g.pri, move: true, minT: 10, target: g.title, goal: g.id },
       mouse && gateOpen() && { id: 'approach_visitor', drive: 'consequence', u: mo.s, move: true, minT: 6 },
-      { id: 'explore', drive: 'curiosity', u: Math.min(1, 0.2 + perched / 90), move: true, minT: 6 },
+      { id: 'explore', drive: 'curiosity', u: Math.min(1, 0.2 + perched / 30), move: true, minT: 6 },   // restless after a few seconds on one perch (moves still wait for pressure)
       window.DEPTH?.at(a.y).lanes.includes(-1) && { id: 'hide', drive: 'curiosity', u: Math.min(1, 0.1 + 0.6 * mo.c), move: true, minT: 8 },   // w: this part of the page has a back lane right now
-      { id: 'rest', drive: 'survival', u: Math.min(1, (1 - n.energy) * 0.9 + M.env.sleepy), move: false, minT: 9, urgent: n.energy < 0.2 },
-      { id: 'preen', drive: 'coherence', u: 0.3, move: false, minT: 2.5 },
+      { id: 'rest', drive: 'survival', u: Math.min(1, M.fatigue(n.energy) * 0.9 + M.env.sleepy * 0.5), move: false, minT: 9, maxT: 15, urgent: n.energy < 0.2 },
+      { id: 'preen', drive: 'coherence', u: 0.3, move: false, minT: 2.5, maxT: 8 },
       mouse && gateOpen() && { id: 'watch_visitor', drive: 'consequence', u: 0.15 + 0.4 * (stillFor() > 4 ? 1 : 0), move: false, minT: 4 },
     ]);
     if (!c) return null;
@@ -987,15 +1002,18 @@ window.SCION_BOOT = R => {
         else { const sp = landingNear(a.x, a.y + 120); a.target = sp ? { spot: sp } : null; }
       }
     }
-    else if (!a.target && !(a.flee > 0)) { const sp = landingNear(a.x, a.y + 80) || landingNear(scrollX + rand(80, innerWidth - 80), scrollY + rand(160, innerHeight - 60)); a.target = sp ? { spot: sp } : { wander: true }; }
+    else if ((!a.target || ('spot' in a.target && !a.target.spot && !(a.target.follow && mouse))) && !(a.flee > 0)) { const sp = landingNear(a.x, a.y + 80) || landingNear(scrollX + rand(80, innerWidth - 80), scrollY + rand(160, innerHeight - 60)); a.target = sp ? { spot: sp } : { wander: true }; }
     if (a.target?.wander && (a.target.wt = (a.target.wt || 0) + dt) > 2) a.target = null;   // after a couple of seconds' drift, look again for somewhere to land
     if (a.target?.follow && mouse) {
       // Land beside the cursor on its own side, not under it.
       if (!a.target.spot || now - (a.target.at || 0) > 400) { a.target.spot = landingNear(mouse.x + 70 * Math.sign(a.x - mouse.x || 1), mouse.y + 10); a.target.at = now; }
       landing = a.target.spot;
       if (landing && Math.hypot(landing.x - mouse.x, landing.y - mouse.y) > 200) landing = null;
-      if (!landing && (a.target.hover = (a.target.hover || 0) + 1 / 60) > 5) a.target = { spot: landingNear(a.x, a.y + 80) };   // nowhere near you: settle
-    } else if (a.target?.spot) landing = a.target.spot;
+      if (!landing && (a.target.hover = (a.target.hover || 0) + dt) > 2) a.target = null;   // nowhere near you: settle (the next frame finds a perch) within ~2 s
+    } else if (a.target?.spot) {
+      landing = a.target.spot; const lp = spotPos(landing);   // a perch off screen (the page moved, or it was picked out of view): after 1 s, one in view instead
+      if (lp && (lp.y < scrollY + 20 || lp.y > scrollY + innerHeight + 20) && (a.target.outT = (a.target.outT || 0) + dt) > 1) { a.target = null; landing = null; }
+    }
     if (!a.target?.hand && !a.target?.pass) if (landing) {
       const pos = spotPos(landing); if (!pos) { a.target = null; return; }
       goal = { x: pos.x, y: pos.y - R.bodyAbove };

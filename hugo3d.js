@@ -755,7 +755,9 @@ function pickToward(dir) {
 }
 const onFloor = (f, x) => x - HALF_W >= f.x1 && x + HALF_W <= f.x2;
 // Stepping off a ledge: never a drop that ends a screen or more down at the page bottom (he vanished from view for good)
-const dropTo = (x, y) => { const f = landingBelow(x, y), ok = f && !(f.ground && f.y - y > innerHeight * 0.8); st.dropF = ok && phone() ? f : null; return ok ? f : null; };   // never a drop to the page bottom a screen away (the rules that used to catch him are seams now)
+// Every screen: only onto a real ledge that ends inside the view (or above it, on the way back to it), and that ledge catches
+// him (dropF), so he never falls past it to the page bottom.
+const dropTo = (x, y) => { const f = landingBelow(x, y), ok = f && !f.screen && !(f.ground && f.y - y > innerHeight * 0.8) && f.y <= scrollY + innerHeight - 10; st.dropF = ok ? f : null; return ok ? f : null; };
 function landingBelow(x, y, vis) {   // nearest floor under (x, y) within a screen and a half; vis: a drop, so it must be one you can see
   let best = null;
   const visBottom = scrollY + innerHeight - 30, lim = vis && visBottom > y + 2 ? visBottom : Infinity;
@@ -863,7 +865,7 @@ function autonomy(f) {
     st.z === 0 && st.lanes.includes(-1) && { id: 'behind', drive: 'curiosity', u: Math.min(1, 0.15 + 0.7 * mo.c), move: true, minT: 6 },   // w: the back lane is open here now
     gh && { id: 'goal', drive: 'curiosity', u: g.pri, move: true, minT: 6 },
     pointer.in && { id: 'visitor', drive: 'consequence', u: mo.s, move: true, minT: 6 },
-    { id: 'rest', drive: 'survival', u: Math.min(1, (1 - n.energy) * 0.9 + env.sleepy), move: false, minT: 8, urgent: n.energy < 0.2 },
+    { id: 'rest', drive: 'survival', u: Math.min(1, M.fatigue(n.energy) * 0.9 + env.sleepy * 0.5), move: false, minT: 8, maxT: 15, urgent: n.energy < 0.2 },
     { id: 'stay', drive: 'coherence', u: 0.25, move: false, minT: 3 },
   ]);
   if (!c) return;
@@ -945,14 +947,14 @@ function step(dt) {
     swingLimbs(dt, (st.vx - lastVx) / dt, (st.vy - lastVy) / dt + G, 0.7); lastVx = st.vx; lastVy = st.vy;
     st.tilt += ((st.vx * 0.0005) - st.tilt) * Math.min(1, dt * 4);
     let f = landingBelow(st.x, py - 1, !st.hop && !st.pounce);
-    if (st.dropF && (!f || f.y > st.dropF.y)) f = st.dropF;   // phones: the ledge he chose to step down to catches him
+    if (st.dropF && (!f || f.y > st.dropF.y)) f = st.dropF;   // the ledge he chose to step down to catches him
     if (f && st.y >= f.y && st.vy > 0) { if (f === st.dropF) st.x = Math.max(f.x1 + HALF_W, Math.min(f.x2 - HALF_W, st.x)); st.dropF = null; st.y = f.y; st.floor = f; st.air = false; st.vy = 0; st.vx = 0; st.land = st.hop ? 0.2 : 0.35; st.hop = false; st.mode = 'walk'; st.tilt = 0;
       if (st.pounce) { window.REL?.ev('hugo', 'pounceLand', 'dove', 0, { x: st.x, y: st.y }); st.pounce = null; relEnd('ok'); st.mode = 'idle'; st.idleUntil = t + 0.8; }
       else if (gest && gest.rel) st.mode = 'idle';
       if ((st.shaken || 0) > 0.35) { window.REL?.ev('hugo', 'fell', null, Math.min(0.8, st.shaken), { x: st.x, y: st.y }); poke('landed hard'); }
       if ((st.shaken || 0) > 0.35) { st.mode = 'idle'; st.idleUntil = t + 2.5 + st.shaken * 5; gest = { name: st.shaken > 0.65 ? 'breathe' : pickOf(['dust', 'breathe', 'look']), t0: t, dur: 2.5 + st.shaken * 5, side: Math.random() < 0.5 ? -1 : 1, amp: 0.7 + st.shaken * 0.5, f: 1 }; }
       st.shaken = 0; st.stress = (st.stress || 0) * 0.5; for (const L of Object.values(limbs)) { L[0] = 0; L[1] = 0; } }
-    else if (phone() && !st.hop && !st.pounce && st.y > scrollY + innerHeight + CFG.size) { st.air = false; st.floor = null; }   // phones: a drop with nothing in view to catch it: he comes back in view rather than falling for pages
+    else if (!st.hop && !st.pounce && st.y > scrollY + innerHeight + CFG.size) { st.air = false; st.floor = null; }   // a drop with nothing in view to catch it: he comes back in view rather than falling for pages (never to the page bottom)
     else if (st.y > document.documentElement.scrollHeight + 400) { st.air = false; st.floor = null; st.pounce = null; relEnd('interrupted'); }   // fell off the world: born again
     return;
   }
@@ -1041,7 +1043,7 @@ function step(dt) {
       if (!st.goal && !st.relBusy && st.z === 0 && r < 0.5 && laneHop(-1)) return;   // the end of a rule is a seam: he steps behind the page
       if (!st.goal && !st.relBusy && r < 0.3 && clear(st.x, f.y, SIT_H + 4)) { st.mode = 'sit'; st.idleUntil = t + 6 + Math.random() * 14; return; }
       if (!st.goal && !st.relBusy && r < 0.5) { st.mode = 'idle'; st.idleUntil = t + 2 + Math.random() * 2; gest = { name: 'peer', t0: t, dur: 2 + Math.random() * 2, side: st.dir, amp: 1, f: 1 }; st.dir = -st.dir; return; }
-      if (dropTo(nx, f.y)) { st.air = true; st.hop = true; st.vx = st.dir * (phone() ? 20 : walkSpeed() * 0.8); st.vy = -160; st.x = nx; return; }   // phones: nearly straight down, onto the ledge he looked at, not past it
+      if (dropTo(nx, f.y)) { st.air = true; st.hop = true; st.vx = st.dir * 20; st.vy = -160; st.x = nx; return; }   // nearly straight down, onto the ledge he looked at, not past it
       st.dir = -st.dir; st.mode = 'idle'; st.idleUntil = t + 0.8 + Math.random() * 1.5; return;
     }
     if (clear(nx + st.dir * 10, f.y, CFG.size + 4)) { st.x = nx; st.ph += dt * sty.cadence * go * k; st.amt = Math.min(1, st.amt + dt * 2.2); }   // legs keep pace, so feet never slide
@@ -1088,11 +1090,11 @@ function frame(now) {
     if (hb.hits !== st.hitsSeen) {
       st.hitsSeen = hb.hits; const s = hb.lastHit ? hb.lastHit.sev : 0.3, d = window.__scion;
       st.shaken = Math.max(st.shaken || 0, s); st.stress = Math.min(1, (st.stress || 0) + 0.3 * s);
-      if (phone() && st.floor && !st.held && st.mode !== 'climb') {   // phones: his ledges are narrow; a hit is a flinch where he stands, never a fall off it
+      // A hit (a peck, a dive) is a flinch where he stands, never a fall off his ledge; whatever he was winding up for is off.
+      // (The bird never pounces him: pounce is his move, so no hit here is one that should launch him.)
+      if (st.floor && !st.held && st.mode !== 'climb') {
         relEnd('interrupted'); st.prep = null; st.goal = null; st.mode = 'idle'; st.amt = 0; st.land = 0.25; st.idleUntil = t + 1 + s * 2;
         gest = { name: s > 0.5 ? 'cover' : 'rub', t0: t, dur: 1 + s * 2, side: Math.sign((d ? d.x : st.x + st.dir) - st.x) || 1, amp: 1, f: 1 };
-      } else if (st.floor && !st.held && st.mode !== 'climb') {   // knocked back a step, off his feet if it was a hard one; whatever he was winding up for is off
-        relEnd('interrupted'); st.prep = null; st.air = true; st.hop = s < 0.4; st.floor = null; st.mode = 'walk'; st.vx = -(Math.sign((d ? d.x : st.x + st.dir) - st.x) || 1) * 80 * s; st.vy = -150;
       }
     }
   }

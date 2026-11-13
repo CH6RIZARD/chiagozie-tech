@@ -1675,6 +1675,7 @@
     if (DOM && !SIM) renderFood();
   }
   // Drives and spot ownership, 1 Hz.
+  const DRAIN = 1 / (3 * 3600);   // energy per embodied second: full -> empty in 3 h with no food (the frame's ~.0001/s)
   function drives(dt, h, d) {
     for (const w of AG) {
       const D = S.drv[w];
@@ -1685,14 +1686,16 @@
         if (w === 'dove') D.hunger = clamp(D.hunger + .002 * dt);
         if (a) { const moving = w === 'hugo' ? (a.mode === 'walk' && Math.abs(+a.vxw || +a.vx || 0) > 5) || a.air : a.mode === 'fly'; D.energy = clamp(D.energy + (moving ? (w === 'hugo' ? -.002 : -.004) : .01) * dt); }
       } else {
-        // runtime_state.py's one energy pool: moving and speaking cost, rest gives a little back only when not hungry,
-        // food is the real refill (digested over the next seconds), starving drains. Hunger: the dove empties in ~90 s, Hugo in ~4 min.
+        // runtime_state.py's one energy pool on the frame's own scale (will_config ENERGY_DRAIN_PER_SEC ~3 h, regen half that):
+        // a full pool with no food lasts ~3 h of embodied time at rest (moving costs a little more), rest gives a little back
+        // only when not hungry, food is the real refill (digested over the next seconds). Hunger stays quick (felt within a
+        // minute or two: the dove empties in ~90 s, Hugo in ~4 min) so the food behaviour is visible; it no longer kills fast.
         const k = dt * ((G.MORTAL && G.MORTAL.speed) || 1);
         D.hunger = clamp(D.hunger + (w === 'hugo' ? .004 : .011) * k);
         const dig = Math.min(S.dig[w], .06 * dt); S.dig[w] -= dig;
         if (a) {
           const moving = w === 'hugo' ? (a.mode === 'walk' && Math.abs(+a.vxw || +a.vx || 0) > 5) || a.air : a.mode === 'fly';
-          D.energy = clamp(D.energy + ((moving ? (w === 'hugo' ? -.002 : -.004) : D.hunger < .6 ? .004 : 0) - .0005 - (D.hunger >= .9 ? .001 : 0)) * k + dig);
+          D.energy = clamp(D.energy + (-DRAIN * (1 + (moving ? .15 : 0)) + (!moving && D.hunger < .6 ? DRAIN / 2 : 0)) * k + dig);
         }
       }
       // spot keys and ownership: whoever stays in a key for 20 s owns it
@@ -2038,7 +2041,7 @@
     bite: (who, id, frac) => { if (!S) return 0; const it = S.food.find(x => x.id === id); return bite(who, it, frac); },
     foodBlock(who, id, s) { if (S && S.block[who]) S.block[who][id] = S.t + (s || 20); },
     needs: who => { if (!S) return { hunger: 0, energy: 1 }; const D = S.drv[who], p = S.pt[PT[who]]; return { hunger: D.hunger, energy: D.energy, meal: S.meal[who], aff: p.aff, aro: p.aro }; },
-    spend(who, e) { if (S && S.drv[who]) S.drv[who].energy = clamp(S.drv[who].energy - e); },   // speech and effort cost energy
+    spend(who, e) { if (S && S.drv[who]) S.drv[who].energy = clamp(S.drv[who].energy - e * .05); },   // speech and effort cost energy, on the 3 h pool's scale (a word ~1 s of living)
     takeFed(who) { if (!S) return 0; const f = S.fedOut[who]; S.fedOut[who] = 0; return +f.toFixed(3); },   // nutrition since the last report (the frame's regen)
     get P() { return S ? S.P : null; },
     get t() { return S ? S.t : 0; },
