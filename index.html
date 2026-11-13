@@ -374,14 +374,14 @@ html{touch-action:manipulation}
 #mast .wrap{min-height:calc(100dvh - 48px - clamp(40px,8vh,96px) - clamp(28px,4vw,48px));display:flex;flex-direction:column;align-items:center;justify-content:center}
 #mast h1{margin:0;max-width:none;text-align:center;font-size:clamp(44px,7vw,100px);line-height:.95;letter-spacing:-.035em}
 .where{display:flex;flex-wrap:wrap;justify-content:center;gap:12px 40px;margin-top:34px;font-size:15px;color:var(--ink)}
-.loc{position:relative;display:inline-flex;align-items:center;gap:12px;border-radius:4px;cursor:default;white-space:nowrap}
+.loc{position:relative;display:inline-flex;align-items:center;gap:16px;border-radius:4px;cursor:default;white-space:nowrap}
 .loc em{margin-left:2px;font:normal 400 10px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
 .pin{position:relative;flex:0 0 auto;width:10px;height:10px;border-radius:50%;transition:transform .2s}
 .pin.now{background:#4ADE80;box-shadow:0 0 10px 2px rgba(74,222,128,.55)}
 .pin.now::after{content:"";position:absolute;inset:-4px;border-radius:50%;border:2px solid #4ADE80;animation:ping 1.6s cubic-bezier(0,0,.2,1) infinite}
 .pin.dfw{background:#FF2D55;box-shadow:0 0 6px 0 rgba(255,45,85,.35);opacity:.85}
 .loc:hover .pin,.loc:focus-visible .pin{transform:scale(1.4)}
-@keyframes ping{0%{transform:scale(.6);opacity:1}80%,100%{transform:scale(2.4);opacity:0}}
+@keyframes ping{0%{transform:scale(.6);opacity:1}80%,100%{transform:scale(1.6);opacity:0}}   /* ring (18px box) peaks at 29px: clears the 16px gap to the text, even at hover scale 1.4 */
 @keyframes breathe{50%{opacity:.3;box-shadow:0 0 4px 1px rgba(74,222,128,.3)}}
 @media (prefers-reduced-motion:reduce){.pin.now::after{animation:none;transform:scale(1.4);opacity:.5}.pin.now{animation:breathe 2.4s ease-in-out infinite}.pin{transition:none}}
 #mast .ctas{margin-top:36px;justify-content:center}
@@ -515,7 +515,7 @@ body.simple>section,body.simple>footer,body.simple>.mindex{display:none!importan
 <section class="realm" id="void"><div class="wrap">
   <div class="top">
     <div><div class="kicker"><span class="st live">Live cams</span><span class="st">Mobile · social</span></div><h2>THE VOID</h2></div>
-    <div><p class="about">Designed as a physiological ranking algorithm rather than standard behavior modeling. On-device sensing reads camera pulse (rPPG), fingertip heart rate and HRV, Bluetooth heart-rate straps, facial expression, touch dynamics and hand tremor, scores each against your own baseline and maps it to arousal, attention and valence on the media the user engages with. An on-device model learns from that behavior and serves more of what moves you, mixed by a fusion ranker (social, interest, behavioral, physio-affinity and controversy signals, Thompson-sampling weights) into an almost addictive feed. Built as a mobile app on Supabase Postgres with PostGIS and row-level security, HLS live streams and libsignal end-to-end encrypted DMs. Wrapped in the UI of international news, niche live streams, reels and feeds, and a unique polls and discussion module.</p><p class="how">Tap a nation · live rooms, polls and the feed · anonymous by default</p></div>
+    <div><p class="about">A physiological ranking algorithm rather than standard behavior modeling. On-device sensing reads camera pulse (rPPG), fingertip heart rate and HRV, Bluetooth heart-rate straps, facial expression, touch dynamics and hand tremor, scores each against your own baseline and maps it to arousal, attention and valence on the media the user engages with. An on-device model learns from that behavior and serves more of what moves you, mixed by a fusion ranker (social, interest, behavioral, physio-affinity and controversy signals, Thompson-sampling weights) into an almost addictive feed. Built as a mobile app on Supabase Postgres with PostGIS and row-level security, HLS live streams and libsignal end-to-end encrypted DMs. Wrapped in the UI of international news, niche live streams, reels and feeds, and a unique polls and discussion module.</p><p class="how">Tap a nation · live rooms, polls and the feed · anonymous by default</p></div>
   </div>
   <div class="split with-phone">
     <div class="aside">
@@ -867,7 +867,7 @@ const bootAgents = ext => {
   window.SCION_GLB = 'dove.glb' + ext;
   window.HUGO_CONFIG = { size: matchMedia('(max-width:760px)').matches ? 64 : 150, glb: 'realms/hugo/hugo.glb' + ext };
   const add = (src, type) => new Promise(r => { const s = document.createElement('script'); if (type) s.type = type; s.src = src; s.onload = r; s.onerror = r; document.head.append(s); });
-  add('bond.js?v=20261112frame').then(() => add('dove-agent.js?v=20261110q')).then(() => { add('dove3d.js?v=20261111s', 'module'); add('hugo3d.js?v=20261112land', 'module'); });
+  add('bond.js?v=20261112frame').then(() => add('dove-agent.js?v=20261112food')).then(() => { add('dove3d.js?v=20261111s', 'module'); add('hugo3d.js?v=20261112land', 'module'); });
 };
 fetch('dove.glb', { method: 'HEAD' }).then(r => bootAgents(r.ok ? '' : '.wasm')).catch(() => bootAgents('.wasm'));
 

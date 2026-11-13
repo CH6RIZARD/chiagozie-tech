@@ -53,7 +53,7 @@ window.SCION_BOOT = R => {
 
   const css = document.createElement('style');
   css.textContent = `
-    #scion-dove{position:absolute;left:0;top:0;width:64px;height:${CFG.size}px;z-index:10001;cursor:grab;transform-origin:0 0}
+    #scion-dove{position:absolute;left:0;top:0;width:64px;height:${CFG.size}px;z-index:10001;cursor:grab;transform-origin:0 0;touch-action:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}   /* touch-action:none: a finger press grabs the bird instead of scrolling (else iOS cancels the pointer) */
     #scion-dove::before{content:'';position:absolute;inset:-18px -10px}   /* a bigger target than the bird: easy to catch */
     #scion-dove.gone{pointer-events:none}
     #scion-shadow{position:absolute;left:0;top:0;z-index:9998;width:60px;height:8px;margin:-4px 0 0 -30px;pointer-events:none;
@@ -530,7 +530,8 @@ window.SCION_BOOT = R => {
     const onFloorAt = y => a.mode === 'perch' && a.spot.s.kind !== 'hugo' && Math.abs(a.y - y) < 12;
     const fly = (x, y, why, panic) => {
       let sp = landingNear(x, y, null, true); const H = window.__hugo;
-      if (H && Math.abs(y - H.y) < 2 && (!sp || Math.abs(sp.y - H.y) > 12)) sp = hugoFloorSpot(H, x) || sp;   // beside him means on his ledge
+      if (o.ex === 'food' && foodAt.sp && Math.abs(foodAt.sp.y - y) < 12) sp = foodAt.sp;   // the ledge the crumb fell on, even if Hugo has walked off it or it sits at the screen edge
+      else if (H && Math.abs(y - H.y) < 2 && (!sp || Math.abs(sp.y - H.y) > 12)) sp = hugoFloorSpot(H, x) || sp;   // beside him means on his ledge
       if (sp) takeOff({ spot: sp, label: sp.label }, why, panic); return !!sp; };
     const toward = (x, y, k) => { if (onFloorAt(y) && Math.abs(a.x - x) < 260) a.walk = { to: x, k }; else if (Math.abs(a.x - x) > 14 || Math.abs(a.y - y) > 12) fly(x, y, null); };
     const beside = (gap, k) => { const H = window.__hugo; if (H) toward(H.x + (Math.sign(a.x - H.x) || 1) * Math.max(20, gap), H.y, k); };   // on its own side of him
@@ -553,10 +554,12 @@ window.SCION_BOOT = R => {
           if (a.mode !== 'perch' || a.walk || R0.st === 'done') return;
           const H = window.__hugo, looking = gazeOn(H), away = H ? Math.sign(a.x - H.x) || 1 : a.face;
           if (R0.st === 'wait') { a.watchHugo = 0.3; if (!looking) { R0.st = 'go'; toward(o.x, o.y); } return; }
+          const cf = REL.crumb, off = cf ? Math.hypot(cf.x - a.x, cf.y - a.y) : 0;
+          if (o.why === 'food' && off > 30 && !R0.tries) { R0.tries = 1; a.walk = { to: cf.x }; return; }   // landed or stopped short: one walk to the crumb
           R0.st = 'done';
           if (o.do === 'steal' && looking) { R0.busy = false; fly(a.x + away * rand(220, 360), a.y - rand(40, 160), 'caught looking'); return; }
           a.peckT = 0.9;   // the peck is the eating: report it now, before the head comes down, so a theft is told as one
-          const c = REL.crumb; if (c && Math.hypot(c.x - a.x, c.y - a.y) < 30) REL.ev('dove', 'fed', c.by, 0.2, { steal: o.do === 'steal' ? 1 : 0 });
+          const c = REL.crumb; if (c && Math.hypot(c.x - a.x, c.y - a.y) < (o.why === 'food' ? 70 : 30)) REL.ev('dove', 'fed', c.by, 0.2, { steal: o.do === 'steal' ? 1 : 0 });
           setTimeout(() => {
             R0.busy = false; if (!a || a.mode !== 'perch') return;
             peckWord();
@@ -658,6 +661,7 @@ window.SCION_BOOT = R => {
     REL.done('dove', R0.id, 'ok', { stayed: d < 300, won });
     if (R0.end) R0.end(d, won);
   }
+  let foodAt = {};
   function relStep(now) {
     const B = REL.body('dove');
     if (B.hits !== a.hitsSeen) {   // struck: feathers fly, it jumps, and it is shaken (never more than that)
@@ -682,13 +686,18 @@ window.SCION_BOOT = R => {
       }
     }
     if (a.held && a.heldBy !== 'hugo') return;   // in the visitor's hand nothing else matters
+    const cr = REL.crumb, ck = cr && cr.x + ',' + cr.y;   // a new crumb: remember its ledge while Hugo still stands on it
+    if (ck !== foodAt.k) foodAt = { k: ck, sp: cr ? hugoFloorSpot(window.__hugo, cr.x + (Math.sign(cr.x - (window.__hugo?.x ?? cr.x)) || 1) * 18) : null };
     const r = REL.reflex('dove');
     if (r) { doveDo({ ...r, ex: r.do, id: r.id || 'rx' + now }); return; }   // REL already limits reflexes to one a second
     if (a.held || B.dazed > 0) return;   // dazed: no plans, only the reflex flight
     if (now > (a.relAt || 0)) {
       a.relAt = now + 750;
-      const o = REL.want('dove');
+      const c = REL.crumb, food = c && 'food' + c.x + ',' + c.y;   // food on the floor beats any plan: fly to it and peck it up
+      if (c && window.__hugo && a.mode === 'perch' && a.rel?.id !== food && !(a.wary > now)) { doveDo({ id: food, ex: 'food', do: 'take', x: c.x + (Math.sign(c.x - window.__hugo.x) || 1) * 18, y: c.y, why: 'food' }); return; }   // lands on the far side of the crumb from Hugo, never into him
+      const o = c && a.rel?.id === food && !a.rel.fin ? null : REL.want('dove');   // on its way to the food: no other plan
       if (o && o.id !== a.rel?.id) doveDo(o);
+      else if (c && a.rel?.id === food) { /* keep the food order */ }
       else if (!o && a.rel && !(a.rel.rx && !a.rel.fin)) a.rel = null;
     }
     relCheck(now);
