@@ -330,7 +330,7 @@ function gesture(dt, sitting, still) {
   else if (st.dazed) { if (!gest || gest.name !== 'breathe') gest = { name: 'breathe', t0: t, dur: 2, side: 1, amp: 1, f: 1 }; }
   else {   // what passes between him and the dove is REL's call: its order's gesture replaces whatever he was doing
     const o = st.relOrder;
-    if (o && o.gesture && !o.gDone && (!gest || gest.rel !== o.id) && !(gest && (gest.name === 'throw' || gest.name === 'lift'))) {
+    if (o && o.gesture && !o.gDone && (!gest || gest.rel !== o.id) && !(gest && (gest.name === 'throw' || gest.name === 'lift' || gest.name === 'mad'))) {   // a tantrum plays out first
       const g = o.gesture, live = Math.sign((dv ? dv.x : st.x + st.dir) - st.x) || 1;
       gest = { ...g, t0: t, f: 1, amp: g.amp || 1, rel: o.id, side: o.ex === 'protect' || o.ex === 'keepaway' ? g.side || live : live };
       if (g.name === 'curious' && dv) st.interest = { x: dv.x, y: dv.y - 10, what: 'dove' };
@@ -353,7 +353,8 @@ function gesture(dt, sitting, still) {
   const S1 = sd > 0 ? 'R' : 'L';   // the arm on the gesture's side
   const T1 = (sd > 0) === (st.dir > 0) ? 'R' : 'L';   // the arm toward that side, whichever way he faces
   // an offer: halfway through crouching to it, a crumb appears by his hand
-  if (gest.rel && st.relOrder && st.relOrder.drop && !st.relOrder.dropped && u > 0.5 && st.floor) { st.relOrder.dropped = true; window.REL.ev('hugo', 'drop', 'dove', 0, { x: st.x + sd * 24, y: st.y }); }
+  if (gest.rel && st.relOrder && st.relOrder.drop && !st.relOrder.dropped && u > 0.5 && st.floor) { st.relOrder.dropped = true; const food = { x: st.x + sd * 24, y: st.y, t: performance.now() }; window.REL.ev('hugo', 'drop', 'dove', 0, food);
+    window.__hugoFood = food; dispatchEvent(new CustomEvent('hugo:food', { detail: food })); }   // the crumb, page coordinates: anything (the bird) can find it
   switch (gest.name) {
     case 'look': lookGoal = sd * 0.8 * Math.sin(ph * 1.3) * A; break;
     case 'hips': armMix('L', [0.75, -0.6, -0.2], [-0.85, -0.35, 0.15], w); armMix('R', [0.75, -0.6, -0.2], [-0.85, -0.35, 0.15], w); break;
@@ -418,6 +419,10 @@ function gesture(dt, sitting, still) {
       mix(B.thighL, -0.3, 0, 0, w); mix(B.thighR, -0.3, 0, 0, w); mix(B.shinL, 0.5, 0, 0, w); mix(B.shinR, 0.5, 0, 0, w); break;
     case 'rub': armMix(S1, [0.55, 0.55, 0.35], [-0.55, 0.75 + Math.sin(ph * 10) * 0.2, -0.15], w); mix(B.head, 0.15, 0, sd * 0.15, w); lookGoal = -sd * 0.3; break;   // rubbing the sore spot
     case 'mimicBob': { const b = Math.max(0, Math.sin(ph * 6)); mix(B.chest, 0.05 + 0.12 * b, 0, 0, w); mix(B.head, 0.15 * b, 0, 0, w); lookGoal = sd * 0.7; break; }   // nodding like the bird
+    case 'mad': { const b = Math.sin(ph * 9), s = Math.max(0, Math.sin(ph * 6)), s2 = Math.max(0, -Math.sin(ph * 6));   // stomping in place, fists up and shaking, head down and shaking
+      mix(B.thighL, -0.4 * s, 0, 0, w); mix(B.shinL, 0.6 * s, 0, 0, w); mix(B.thighR, -0.4 * s2, 0, 0, w); mix(B.shinR, 0.6 * s2, 0, 0, w);
+      armMix('L', [0.35, 0.2, 0.55], [0.15, 0.95 + b * 0.18, 0.35], w); armMix('R', [0.35, 0.2, 0.55], [0.15, 0.95 - b * 0.18, 0.35], w);
+      mix(B.chest, 0.22, 0, 0, w); mix(B.head, 0.2, Math.sin(ph * 11) * 0.25, 0, w); lookGoal = sd * 0.5; break; }
     case 'stomp': { const s = Math.max(0, Math.sin(ph * 5)); mix(sd > 0 ? B.thighR : B.thighL, -0.35 * s, 0, 0, w); mix(sd > 0 ? B.shinR : B.shinL, 0.5 * s, 0, 0, w);
       armMix('L', [0.75, -0.6, -0.2], [-0.85, -0.35, 0.15], w); armMix('R', [0.75, -0.6, -0.2], [-0.85, -0.35, 0.15], w); lookGoal = sd * 0.8; break; }
     case 'stare': mix(B.head, -0.4, 0, 0, w); lookGoal = dv ? Math.max(-1, Math.min(1, (dv.x - st.x) / 120)) : sd * 0.8;   // up at the bird he cannot reach, and a jump or two at it
@@ -433,7 +438,7 @@ function gesture(dt, sitting, still) {
 }
 
 window.__hugo = st;   // read-only peek for debugging
-if (/[?&]debug/.test(location.search)) window.__hugoDbg = { get floors() { return floors; }, get t() { return t; } };
+if (/[?&]debug/.test(location.search)) window.__hugoDbg = { get floors() { return floors; }, get t() { return t; }, get gest() { return gest && gest.name; }, miss: why => missed(why) };
 st.dims = { THIGH, ARMLEN, SPINE, PITCH, CRAWL_H, size: CFG.size };
 // Hit area follows him; the canvas itself never takes the pointer.
 const hit = document.createElement('div'); hit.id = 'hugo-hit'; hit.setAttribute('aria-label', 'Hugo. Press to pick him up, let go to drop him.');
@@ -579,6 +584,16 @@ window.__hugoSay = text => { text = String(text || '').replace(/\s+/g, ' ').trim
 // Something happened to him: his mind (the frame, or hugo-mind, via bond.js) thinks again right away instead of at its next beat.
 let pokes = 0, pokeWhy = '';
 function poke(why) { pokes++; pokeWhy = why; }
+// Failing at the same thing again and again gets to him: three misses in 25 s and he loses his temper for a moment, stomping
+// and shaking his fists at it, then lets it go. Desktop and phones alike.
+const misses = [];
+function missed(why) {
+  misses.push(t); while (misses.length && t - misses[0] > 25) misses.shift();
+  if (misses.length < 3 || st.air || st.held || st.dead || st.mode === 'sit' || (gest && gest.rel)) return;
+  misses.length = 0; poke('fed up: ' + why); window.REL?.ev('hugo', 'gesture', null, 0, { name: 'mad' });
+  st.goal = null; st.mode = 'idle'; st.amt = 0; st.idleUntil = t + 3.2;
+  gest = { name: 'mad', t0: t, dur: 3, side: st.dir, amp: 1, f: 1 }; gestAt = t + 6;
+}
 // A wall ahead (words or a box he cannot walk or crawl under). A person does not walk into it over and over: he gets on
 // top of it if he can, lets go of a goal that lies past it, and remembers it; boxed in on both sides, he climbs out or
 // sits it out instead of pacing.
@@ -595,7 +610,7 @@ function blocked(f) {
   }
   const wantsPast = st.goal && Math.sign(st.goal.x - st.x) === st.dir;
   if (up && (wantsPast || Math.random() < 0.6)) { const dh = f.y - up.q.y; st.mode = 'prep'; st.amt = 0; st.prep = { f: up.q, dh, until: t + 0.18 + Math.random() * 0.14, climb: dh > CFG.size * 1.2, over: up.ux }; return; }
-  if (wantsPast) { const g = st.goal; st.goal = null; if (g.rel) relEnd('fail'); else avoid.set(g.f, t + 60 + Math.random() * 60); }   // no way past: not there, not now
+  if (wantsPast) { const g = st.goal; st.goal = null; if (g.rel) relEnd('fail'); else avoid.set(g.f, t + 60 + Math.random() * 60); missed('no way past'); }   // no way past: not there, not now
   if (walls.some(w => w.f === f && w.dir === -st.dir && t - w.t < 30)) {   // walls both ways lately: hemmed in
     const g = pickToward(-1);
     if (g) { st.goal = { f: g.f, x: g.x, until: t + 20 }; return; }
@@ -798,7 +813,7 @@ function step(dt) {
     if (!st.goal && !st.relBusy && Math.random() < dt / 5) { const g = pickFloor(true); if (g) st.goal = { f: g.f, x: g.x, until: t + 30 }; }
     if (st.goal) {
       const g = st.goal;
-      if (!refloor(g.f) || t > g.until) { if (t > g.until && !g.rel) avoid.set(g.f, t + 45 + Math.random() * 45); st.goal = null; if (g.rel) relEnd('fail'); }   // could not get there: try elsewhere for a while
+      if (!refloor(g.f) || t > g.until) { if (t > g.until && !g.rel) { avoid.set(g.f, t + 45 + Math.random() * 45); missed('never got there'); } st.goal = null; if (g.rel) relEnd('fail'); }   // could not get there: try elsewhere for a while
       else if (g.f === f) {
         if (Math.abs(g.x - st.x) < 8) {
           st.goal = null;
@@ -817,7 +832,7 @@ function step(dt) {
           let nb = null;   // none right above him: walk to the nearest one he could climb, then climb it
           for (const c of floors) if (c !== f && !c.ground && c.y < f.y - 8 && c.y >= f.y - reach && c.x2 - c.x1 > 2 * HALF_W + 24 && (!nb || Math.min(Math.abs(st.x - c.x1), Math.abs(st.x - c.x2)) < Math.min(Math.abs(st.x - nb.x1), Math.abs(st.x - nb.x2)))) nb = c;
           if (nb && !g.rel) { st.goal = { f: nb, x: Math.max(nb.x1 + HALF_W + 10, Math.min(nb.x2 - HALF_W - 10, st.x)), until: t + 30, mind: 'step up' }; return; }
-          st.goal = null; if (g.rel) relEnd('fail');   // nothing to step up on
+          st.goal = null; if (g.rel) relEnd('fail'); missed('too high');   // nothing to step up on
         }
         else if (under) { st.mode = 'prep'; st.prep = { f: g.f, dh, until: t + 0.18 + Math.random() * 0.14, climb: dh > CFG.size * 1.2 }; st.amt = 0; return; }   // wind up first
         else st.dir = Math.sign(Math.max(g.f.x1 + HALF_W + 6, Math.min(g.f.x2 - HALF_W - 6, st.x)) - st.x) || st.dir;
@@ -840,7 +855,7 @@ function step(dt) {
       st.dir = -st.dir; st.mode = 'idle'; st.idleUntil = t + 0.8 + Math.random() * 1.5; return;
     }
     if (clear(nx + st.dir * 10, f.y, CFG.size + 4)) { st.x = nx; st.ph += dt * sty.cadence * go * k; st.amt = Math.min(1, st.amt + dt * 2.2); }   // legs keep pace, so feet never slide
-    else if (!st.relBusy && clear(nx + st.dir * 10, f.y, CRAWL_H + 4) && clear(st.x, f.y, CRAWL_H + 4)) { st.mode = 'crawl'; st.crawlT = t; st.amt = 0; }   // too low to walk under, room to crawl: down on his hands and knees
+    else if (!st.relBusy && clear(nx + st.dir * 10, f.y, CRAWL_H + 4) && clear(st.x, f.y, CRAWL_H + 4) && !walls.some(w => w.crawl && w.f === f && w.dir === st.dir && t - w.t < 30)) { st.mode = 'crawl'; st.crawlT = t; st.amt = 0; }   // too low to walk under, room to crawl: down on his hands and knees
     else {
       st.amt = Math.max(0, st.amt - dt * 4);
       if (st.amt === 0) blocked(f);
@@ -862,7 +877,7 @@ function step(dt) {
     const past = st.dir > 0 ? nx + HALF_W * 0.4 > f.x2 : nx - HALF_W * 0.4 < f.x1;
     if (past) { if (landingBelow(nx, f.y)) { st.air = true; st.hop = true; st.vx = st.dir * 60; st.vy = -60; st.x = nx; st.mode = 'walk'; } else st.dir = -st.dir; return; }
     if (clear(nx + st.dir * 10, f.y, CRAWL_H + 4)) { st.x = nx; st.ph += dt * 0.85 * k; }
-    else { st.dir = -st.dir; st.crawlT = t; poke('a dead end, even crawling'); }   // too tight even on all fours: back out the way he came
+    else { walls.push({ f, dir: st.dir, t, crawl: true }); st.dir = -st.dir; st.crawlT = t; poke('a dead end, even crawling'); missed('dead end'); }   // remembered, so he does not crawl straight back in   // too tight even on all fours: back out the way he came
   } else if (st.mode === 'idle') { st.amt = Math.max(0, st.amt - dt * 4); if (t > st.idleUntil) { st.mode = 'walk'; restyle(); } }
   else if (st.mode === 'sit') {
     st.swingV += (-st.swing * 9 - st.swingV * 1.6) * dt; st.swing += st.swingV * dt;
@@ -907,7 +922,7 @@ function frame(now) {
   canvas.style.opacity = overText ? '0' : '';
   if (overText) { hit.style.display = 'none'; hud.style.opacity = 0; } else hit.style.display = '';
   hit.style.transform = `translate3d(${Math.round(st.x - scrollX - HALF_W)}px,${Math.round(sy - CFG.size)}px,0)`;
-  if (st.hover || st.held) {
+  if ((st.hover || st.held) && !phone()) {   // phones: the readout covered the page and ran off the edge
     hud.style.opacity = 1; hud.style.transform = `translate(${Math.round(st.x - scrollX + HALF_W + 10)}px,${Math.round(sy - CFG.size)}px)`;
     const spd = Math.hypot(st.vx, st.vy);
     hud.textContent = `hugo · ${st.held ? `held by the ${st.flip ? 'legs' : st.grip > 0.7 ? 'head' : 'body'} · ${(st.stress || 0) < 0.2 ? 'calm' : (st.stress || 0) < 0.45 ? 'uneasy' : (st.stress || 0) < 0.72 ? 'scared' : 'panicking'}` : st.air ? 'falling' : st.mode}\nv ${(spd / 100).toFixed(2)} m/s   tilt ${(st.tilt * 57.3).toFixed(0)}°\narm ${(limbs.armL[0] * 57.3).toFixed(0)}°/${(limbs.armR[0] * 57.3).toFixed(0)}°   leg ${(limbs.thighL[0] * 57.3).toFixed(0)}°/${(limbs.thighR[0] * 57.3).toFixed(0)}°${window.REL ? '\nwith the dove: ' + window.REL.describe('hugo') : ''}\n${st.held ? 'let go to drop · flick to toss' : 'press to pick up'}`;
