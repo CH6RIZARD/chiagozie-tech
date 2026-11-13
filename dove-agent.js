@@ -344,14 +344,24 @@ window.SCION_BOOT = R => {
   // real element (its top or bottom edge, or the text line) and read live, like every other perch: a frozen copy left
   // the bird sitting in empty space once he walked off or the page moved. Never the invisible ground at the page bottom.
   const hugoFloorSpot = (H, x) => (H && !H.air ? floorSpot(H.floor, x) : null);
-  function floorSpot(f, x) {   // a perch on one of Hugo's scanned ledges (his own, or the one the food settled on)
+  function floorSpot(f, x, back) {   // a perch on one of Hugo's scanned ledges (his own, or the one the food settled on); back: a seam, behind the words
     if (!f || f.ground || f.x2 - f.x1 < 60) return null;
     const el = f.el; if (!el || !el.isConnected || el === document.body || el === document.documentElement) return null;
     const r = el.getBoundingClientRect(); if (!r.width || !r.height) return null;
     const top = r.top + scrollY, bottom = r.bottom + scrollY;
     const edge = f.text ? 'text' : Math.abs(f.y - bottom) < Math.abs(f.y - top) ? 'bottom' : 'top';
-    const fx = clamp(x, f.x1 + 20, f.x2 - 20); if (covers(fx, f.y)) return null;
-    return { s: { kind: 'floor', el, edge, off: f.y - top, w: f.x2 - f.x1, lx: f.x1 - (r.left + scrollX) }, dx: fx - f.x1, x: fx, y: f.y, label: 'by Hugo' };
+    const fx = clamp(x, f.x1 + 20, f.x2 - 20); if (!back && covers(fx, f.y)) return null;   // behind the content it may sit under words: they hide it
+    return { s: { kind: 'floor', el, edge, off: f.y - top, w: f.x2 - f.x1, lx: f.x1 - (r.left + scrollX) }, dx: fx - f.x1, x: fx, y: f.y, label: back ? 'behind' : 'by Hugo', z: back ? -1 : 0 };
+  }
+  // A perch in the back lane: a hairline seam in view whose section has its back lane open now (w in range).
+  function seamNear(x, y) {
+    const D = window.DEPTH; if (!D) return null; let best = null, bd = Infinity;
+    for (const f of D.scene.seams) {
+      if (f.y < scrollY + 90 || f.y > scrollY + innerHeight - 20 || f.x2 - f.x1 < 80 || !D.at(f.y).lanes.includes(-1)) continue;
+      const fx = clamp(x, Math.max(f.x1 + 24, scrollX + 16), Math.min(f.x2 - 24, scrollX + innerWidth - 16)), d = Math.hypot(fx - x, f.y - y);
+      if (d < bd) { const sp = floorSpot(f, fx, true); if (sp) { bd = d; best = sp; } }
+    }
+    return best;
   }
   const spotPos = sp => {
     if (sp.s.kind === 'floor') {   // live from its element; gone or hidden: no perch (the bird takes off)
@@ -378,33 +388,34 @@ window.SCION_BOOT = R => {
   const depthScale = z => CFG.perspective / (CFG.perspective - clamp(z, -600, CFG.perspective * 0.6));
   // yaw/view in 15 degree steps: 0 = side-on toward `face`, +6 = facing you, -6 = flying straight away.
   const heading = (v, face) => face > 0 ? -v * 15 : 180 + v * 15;
+  // Perched depth: a bird on a back-lane seam stays behind the content (smaller, and the words and cards in front of it hide it)
   function drawPerch(fx, fy, yaw, face, row, breath = 0, walkPh = 0) {
-    R.set({ mode: 'perch', x: fx, y: fy, z: 0, heading: heading(yaw, face), pitch: 0, roll: 0, row, walkPh, breath, opacity: 1, clip: '' });
+    const back = !!(a && a.mode === 'perch' && a.spot && a.spot.z < 0), want = back ? window.DEPTH.SCALE[-1] : 1;
+    const ps = a ? (a.ps = (a.ps ?? want) + (want - (a.ps ?? want)) * 0.12) : 1;   // eased per frame toward the lane's scale
+    const clip = back ? behindCards({ l: fx - CFG.size, r: fx + CFG.size, t: fy - CFG.size * 1.3, b: fy + 4 }) : '';
+    R.set({ mode: 'perch', x: fx, y: fy, z: 0, scale: ps, heading: heading(yaw, face), pitch: 0, roll: 0, row, walkPh, breath, opacity: 1, clip });
     el.style.transform = `translate(${fx - 32}px,${fy - CFG.size}px)`;
-    shadow.style.transform = `translate(${fx}px,${fy}px)`; shadow.style.opacity = 0.9;
+    shadow.style.transform = `translate(${fx}px,${fy}px) scale(${ps.toFixed(2)})`; shadow.style.opacity = clip ? 0 : 0.9;
     placeBubble(fx, fy - CFG.size);
   }
   function drawFly(bx, by, z, view, face, flapPh, glide, pitch, roll, groundY) {
     const s = depthScale(z);
-    R.set({ mode: 'fly', x: bx, y: by, z, heading: heading(view, face), pitch, roll, flapPh, glide,
-      opacity: z < 0 ? clamp(1 + z / 500, 0.7, 1) : 1, clip: z < -4 ? behindCards() : '' });
+    const clip = z < -4 ? behindCards({ l: bx - CFG.size * 1.6 * s, r: bx + CFG.size * 1.6 * s, t: by - CFG.size * s, b: by + CFG.size * 0.6 * s }) : '';
+    R.set({ mode: 'fly', x: bx, y: by, z, scale: 1, heading: heading(view, face), pitch, roll, flapPh, glide,
+      opacity: z < 0 ? clamp(1 + z / 500, 0.7, 1) : 1, clip });
     el.style.transform = `translate(${bx - 32 * s}px,${by - CFG.size / 2 * s}px) scale(${s})`;
     // Shadow on the page plane: smaller and fainter the higher (and nearer to you) it is.
     const gap = groundY - by + Math.max(z, 0) * 0.6;
     shadow.style.transform = `translate(${bx}px,${groundY}px) scale(${clamp(1 - gap / 320, 0.25, 1)})`;
-    shadow.style.opacity = z < -4 ? 0 : clamp(1 - gap / 280, 0, 0.75);
+    shadow.style.opacity = z < -4 && clip ? 0 : clamp(1 - gap / 280, 0, 0.75);
     placeBubble(bx, by - 60 * s);
   }
   // WebGL cannot see the page: "behind a card" means cutting the cards' shapes out of the canvas (even-odd clip).
-  function behindCards() {
-    const rects = [];   // viewport rects of the cards in front of it; dove3d cuts them out of its own canvas
-    for (const s of surfaces) {
-      if (s.kind !== 'card' || !s.occluder) continue;
-      const q = s.el.getBoundingClientRect();
-      if (q.bottom < 0 || q.top > innerHeight) continue;
-      rects.push(q);
-    }
-    return rects.length ? rects : '';
+  // Only what is in front of its lane and overlaps its body (page coords, from the scene depth.js shares; no layout read here):
+  // behind a card while it crosses it, never behind every card on the screen at once.
+  function behindCards(box) {
+    const occ = window.DEPTH ? window.DEPTH.occluders(box, -1) : [];
+    return occ.length ? occ.map(q => ({ left: q.l - scrollX, top: q.t - scrollY, right: q.r - scrollX, bottom: q.b - scrollY })) : '';   // viewport rects for dove3d
   }
   function placeBubble(x, top) {
     const bx = clamp(x - 40, scrollX + 12, scrollX + innerWidth - 260), by = Math.max(scrollY + 12, top - 52);
@@ -494,6 +505,7 @@ window.SCION_BOOT = R => {
         a.watchT = 5; break;
       case 'visit_hugo': { const h = window.__hugo;   // the mind asked for it outside a moment with him (inside one it is only a bias)
         if (h && h.floor) { go(landingNear(h.x + (Math.random() < 0.5 ? -1 : 1) * rand(40, 160), h.y), 'to Hugo'); REL.ev('dove', 'approach', 'hugo', 0.1); } break; }
+      case 'hide': go(seamNear(scrollX + rand(80, innerWidth - 80), scrollY + rand(160, innerHeight - 60)), 'behind the page'); break;
       case 'rest': a.restT = rand(7, 11); break;
       case 'preen': if (a.mode === 'perch') a.preenT = rand(1.6, 2.6); break;
       case 'peck': if (a.mode === 'perch' && a.spot.s.range) { a.peckT = 0.9; setTimeout(() => a && a.mode === 'perch' && peckWord(), 450); } break;
@@ -514,6 +526,7 @@ window.SCION_BOOT = R => {
       g && g.title && { id: 'goal', drive: 'curiosity', u: g.pri, move: true, minT: 10, target: g.title, goal: g.id },
       mouse && gateOpen() && { id: 'approach_visitor', drive: 'consequence', u: mo.s, move: true, minT: 6 },
       { id: 'explore', drive: 'curiosity', u: Math.min(1, 0.2 + perched / 90), move: true, minT: 6 },
+      window.DEPTH?.at(a.y).lanes.includes(-1) && { id: 'hide', drive: 'curiosity', u: Math.min(1, 0.1 + 0.6 * mo.c), move: true, minT: 8 },   // w: this part of the page has a back lane right now
       { id: 'rest', drive: 'survival', u: Math.min(1, (1 - n.energy) * 0.9 + M.env.sleepy), move: false, minT: 9, urgent: n.energy < 0.2 },
       { id: 'preen', drive: 'coherence', u: 0.3, move: false, minT: 2.5 },
       mouse && gateOpen() && { id: 'watch_visitor', drive: 'consequence', u: 0.15 + 0.4 * (stillFor() > 4 ? 1 : 0), move: false, minT: 4 },
@@ -855,6 +868,7 @@ window.SCION_BOOT = R => {
     const pos = spotPos(a.spot), cb = a.spot.s.clip;
     if (!pos || pos.r.width === 0) return takeOff(null, 'perch vanished');
     if (cb && (pos.x < cb.l + 8 || pos.x > cb.r - 8)) return takeOff(null, 'perch swiped away');   // its card left the carousel's view
+    if (a.spot.z < 0 && window.DEPTH && !window.DEPTH.at(pos.y).lanes.includes(-1)) { const sp = landingNear(a.x, a.y, a.spot); return takeOff(sp ? { spot: sp } : null, 'the back lane closed'); }   // w left its range
     a.x = pos.x; a.y = pos.y;
     const dazed = REL.body('dove').dazed > 0, rel = a.rel && !a.rel.fin ? a.rel : null;
     for (const k of ['watchHugo', 'displayT', 'seenT', 'bobT', 'wingT']) a[k] = (a[k] || 0) - dt;
@@ -988,7 +1002,7 @@ window.SCION_BOOT = R => {
       const d0 = Math.hypot(goal.x - a.x, goal.y - a.y);
       // Long flights arc in depth (toward you, or back behind the cards), and come in from above on a
       // downward curve, settling to the page plane only for the last stretch.
-      zGoal = d0 > 90 ? (a.arc ?? CFG.arcZ) * Math.min(1, d0 / 320) : 0;
+      zGoal = d0 > 90 ? (a.arc ?? CFG.arcZ) * Math.min(1, d0 / 320) : landing.z < 0 ? -60 : 0;   // a back-lane perch is approached from behind the content
       if (d0 > 90) goal.y -= Math.min(70, d0 * 0.25);
     } else if (mouse && a.target?.follow) { goal = { x: mouse.x - 80 * Math.sign(mouse.x - a.x || 1), y: mouse.y - 70 }; zGoal = CFG.hoverZ; }   // only when it chose to approach
     else { goal = { x: a.x + Math.sin(now / 1700) * 60, y: a.y + Math.cos(now / 2300) * 30 }; zGoal = 60; }   // its own drift, not the cursor
@@ -1053,8 +1067,8 @@ window.SCION_BOOT = R => {
     let ground = a.y + 260;
     if (landing) { const pp = spotPos(landing); if (pp) ground = pp.y; }
 
-    if (landing && ((dist < 22 && speed < 260 && Math.abs(a.z) < 25) || (live && phys.st.perched && landPos && Math.hypot(a.x - landPos.x, a.y - landPos.y) < 90))) {
-      a.z = a.vz = 0; a.yaw = clamp(a.view, 0, 6);
+    if (landing && ((dist < 22 && speed < 260 && Math.abs(a.z - (landing.z < 0 ? -60 : 0)) < 25) || (live && phys.st.perched && landPos && Math.hypot(a.x - landPos.x, a.y - landPos.y) < 90))) {
+      a.ps = depthScale(a.z); a.z = a.vz = 0; a.yaw = clamp(a.view, 0, 6);
       landOn(landing); a.target = null; return drawPerch(a.x, a.y, a.yaw, a.face, 'look');
     }
     drawFly(a.x, a.y - bob, a.z, a.view, a.face, a.phase % 1, a.glide, pitch, a.roll * a.face, ground);

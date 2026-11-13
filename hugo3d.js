@@ -205,7 +205,7 @@ inner.add(model); inner.scale.setScalar(S); view.add(inner); scene.add(view);
 view.rotation.x = CFG.viewTilt * Math.PI / 180;
 
 // ---------- the world: floors and solids, in page coordinates ----------
-let floors = [], ink = [], textInk = [], seams = [], dirty = true, scanAt = 0;
+let floors = [], ink = [], textInk = [], seams = [], cards = [], dirty = true, scanAt = 0;   // textInk: lines of text; cards: boxes that hide what is behind them (depth.js)
 // Overflow clips (phone carousels): every scanned rect keeps its raw x (u1, u2) and its scroller's box, and shows only the
 // part inside it. A swipe shifts the raw x by the scroller's scrollLeft change at once; the next scan re-measures.
 const scrollers = new Map();   // scroller element -> { l, r, t, b, sl } in page coords, sl = scrollLeft at the scan
@@ -229,7 +229,7 @@ function capInset(el) {
   return capPx;
 }
 function scan() {
-  floors = []; ink = []; textInk = []; seams = []; scrollers.clear();
+  floors = []; ink = []; textInk = []; seams = []; cards = []; scrollers.clear();
   const vh = innerHeight, near = r => r.bottom > -vh * 1.5 && r.top < vh * 2.5, memo = new Map();
   // Phones in Read less: the page is one frame (OS.dc.html), so its cards, monitor and words are his world, not a solid wall.
   const os = phone() && document.body.classList.contains('simple') && document.querySelector('#os iframe');
@@ -255,6 +255,7 @@ function scan() {
       // A 1px rule with nothing behind it is a seam, not a shelf: no standing on it (support:false), food falls past it too.
       if ((bt > 0 || boxed) && !wrapper) { const sup = card || bt >= 2; add(sup ? floors : seams, { y: r.top + oy, x1: r.left + ox, x2: r.right + ox, el: e, fr, support: sup }, sc); }
       if (bb > 0 && !wrapper) { const sup = card || bb >= 2; add(sup ? floors : seams, { y: r.bottom + oy, x1: r.left + ox, x2: r.right + ox, el: e, fr, support: sup }, sc); }
+      if (card && r.height > 30 && !wrapper && r.width < pageW * 0.9) add(cards, { l: r.left + ox, t: r.top + oy, r: r.right + ox, b: r.bottom + oy }, sc);   // what hides the back lane
       if (boxed && r.height > 30 && !wrapper) add(ink, { l: r.left + ox, t: r.top + oy, r: r.right + ox, b: (fr ? Math.min(r.bottom, view.innerHeight) : r.bottom) + oy }, sc);   // boxes are solid
     }
     const walk = (fr ? fr.contentDocument : document).createTreeWalker(root, NodeFilter.SHOW_TEXT, { acceptNode: n =>
@@ -265,7 +266,7 @@ function scan() {
       const sc = clipFor(n);
       for (const r of range.getClientRects()) if (r.width > 0 && near(fo ? { top: r.top + fo.top, bottom: r.bottom + fo.top } : r)) {
         const q = add(ink, { l: r.left + ox, t: r.top + oy + cap, r: r.right + ox, b: r.bottom + oy }, sc); if (!q) continue;
-        if (phone()) textInk.push(q);
+        textInk.push(q);
         if (r.width > 120 || cap > 0) add(floors, { y: r.top + oy + cap, x1: r.left + ox, x2: r.right + ox, el: n.parentElement, text: true, fr, name: cap > 0, support: true }, sc);
       }
     }
@@ -278,6 +279,7 @@ function scan() {
   if (phone()) { floors.forEach(fit); seams.forEach(fit);   // phones: only ledges with standing room somewhere along them (no climbing into a gap and crawling there)
     floors = floors.filter(f => f.ground || f.x2 - f.x1 < 2 * HALF_W || [0, 1, 2, 3, 4, 5, 6, 7, 8].some(i => clear(f.x1 + HALF_W + (f.x2 - f.x1 - 2 * HALF_W) * i / 8, f.y, CFG.size + 4))); }
   allFloors = floors.concat(seams);
+  window.DEPTH?.publish({ cards, text: textInk, floors, seams });   // one measured scene for both agents (page coords)
   dirty = false; scanAt = performance.now();
 }
 let allFloors = [];
@@ -310,7 +312,7 @@ function pickFloor(furniture) {   // furniture: anywhere he can stand on purpose
 // He is his own being: he walks the floors, steps off ledges and falls to the next floor, turns at text, sits when boxed in.
 // He never teleports and never follows the visitor. Off screen he keeps living; we just do not draw him.
 const G = 1400;   // px/s2, page gravity
-const st = { floor: null, x: 0, y: 0, vx: 0, vy: 0, air: false, dir: 1, mode: 'walk', ph: 0, amt: 0, swing: 0, swingV: 0, idleUntil: 0, land: 0,
+const st = { z: 0, zs: 0, w: 0.5, lanes: [0], par: 0, hopY: 0, floor: null, x: 0, y: 0, vx: 0, vy: 0, air: false, dir: 1, mode: 'walk', ph: 0, amt: 0, swing: 0, swingV: 0, idleUntil: 0, land: 0,
   held: false, hover: false, px: 0, py: 0, tilt: 0, spdK: 1, crouch: 0, headH: CFG.size, look: 0, gestName: null, vxw: 0, hand: null, hitsSeen: 0, relOrder: null };
 // Limbs as damped pendulums: each has an angle and angular velocity and is driven by the body's acceleration.
 const limbs = { thighL: [0, 0], thighR: [0, 0], shinL: [0, 0], shinR: [0, 0], armL: [0, 0], armR: [0, 0], foreL: [0, 0], foreR: [0, 0] };
@@ -622,6 +624,12 @@ window.__hugoAct = (act, target) => {
 // The Mortal Agent Frame's life (bond.js): ENDED = the body goes limp where it is, the next BIRTH stands it up again.
 window.__hugoLife = alive => { if (!alive === !!st.dead) return; st.dead = !alive; st.deadAt = t; gest = null; if (st.dead) { relEnd('interrupted'); st.prep = null; } else st.idleUntil = t + 0.6; };
 // What he says aloud (the frame's "say", or its reply to the visitor). The bubble lives in the agent layer, so nobody stands on it.
+// Contact shadow (depth cue): his own element in the agents' layer, never the page. Touching his feet it reads as standing;
+// during a lane hop it stays on the floor and shrinks (lifted), and behind the content it slides up and back (receding).
+const shade = layer.appendChild(document.createElement('div')); let shadeCss = '';
+Object.assign(shade.style, { position: 'absolute', left: 0, top: 0, width: '64px', height: '12px', margin: '-6px 0 0 -32px', borderRadius: '50%', pointerEvents: 'none',
+  background: 'radial-gradient(closest-side, rgba(0,0,0,.34), rgba(0,0,0,0))', opacity: 0 });
+let clipCss = '', clipOcc = [], clipAt = '';   // the canvas clip-path is rebuilt only when what is in front of him changes
 const say = layer.appendChild(document.createElement('div')); let sayTimer;
 Object.assign(say.style, { position: 'absolute', left: 0, top: 0, maxWidth: '240px', padding: '9px 12px', font: '13px/1.4 system-ui,sans-serif', color: '#15171C', background: '#fff',
   border: '1px solid #D8D8D2', borderRadius: '14px', boxShadow: '0 8px 24px rgba(21,23,28,.16)', opacity: 0, transition: 'opacity .35s' });   // the dove's bubble (#scion-say), same look
@@ -1036,12 +1044,16 @@ function frame(now) {
   st.look = look; st.gestName = gest ? gest.name : null; st.headH = Math.min(CFG.size + (SIT_H - CFG.size) * sitE, CFG.size + (CRAWL_H - CFG.size) * crawlE);   // H1: what the dove and REL read off him
   st.vxw = st.mode === 'walk' && !st.air ? (st.amt < 0.05 ? 0 : 1) * st.dir * walkSpeed() * (0.35 + 0.65 * st.amt) * (st.spdK || 1) : st.vx;
   const sy = st.y - scrollY;
-  if (sy < -CFG.size - 40 || sy > innerHeight + 60) { canvas.style.visibility = 'hidden'; hit.style.display = 'none'; hud.style.opacity = 0; return; }   // alive, just not in view
+  const DP = window.DEPTH, here = DP ? DP.at(st.y, { noFront: phone() }) : { w: 0.5, lanes: [0] };   // his section's phase w and the lanes it has now
+  st.w = here.w; st.lanes = here.lanes;
+  if (st.mode !== 'lane') st.zs += (st.z - st.zs) * Math.min(1, dt * 8);   // displayed depth eases to his lane (a hop drives it itself)
+  st.par *= Math.exp(-dt * (st.air || st.mode === 'lane' ? 3 : 14));   // scroll parallax fades; standing on something he is glued to it
+  if (sy < -CFG.size - 40 || sy > innerHeight + 60) { canvas.style.visibility = 'hidden'; hit.style.display = 'none'; hud.style.opacity = 0; if (shadeCss) { shade.style.opacity = 0; shadeCss = ''; } return; }   // alive, just not in view
   // phones: a jump or fall across words fades him out, so he never covers text or takes its taps
   const over = phone() && !st.held && textInk.some(q => q.r > st.x - HALF_W && q.l < st.x + HALF_W && q.b > st.y - (st.air ? CFG.size : st.mode === 'sit' ? SIT_H : st.mode === 'crawl' ? CRAWL_H : CFG.size) && q.t < st.y - 2);   // his body as it is now: sitting or crawling he is shorter
   st.overN = over ? Math.min(6, (st.overN || 0) + 1) : Math.max(0, (st.overN || 0) - 1);   // a few frames either way before he fades, so a word grazing his edge does not leave him flickering half-seen
   const overText = over ? st.overN >= 4 || !!st.faded : st.overN > 2 && !!st.faded; st.faded = overText;
-  canvas.style.opacity = overText ? '0' : '';
+  // phones: a jump across words no longer fades him out; the words are in front of him (lane -1 occlusion, below)
   if (overText) { hit.style.display = 'none'; hud.style.opacity = 0; } else hit.style.display = '';
   hit.style.transform = `translate3d(${Math.round(st.x - scrollX - HALF_W)}px,${Math.round(sy - CFG.size)}px,0)`;
   if ((st.hover || st.held) && !phone()) {   // phones: the readout covered the page and ran off the edge
@@ -1087,7 +1099,9 @@ function frame(now) {
   const bob = st.mode === 'walk' && !st.air ? (1 - Math.cos(4 * Math.PI * st.ph)) * 0.5 * CFG.size * 0.022 * st.amt : 0;
   const crouch = st.land > 0 ? -st.land * 20 : 0;
   view.rotation.z = st.held || st.air ? -st.tilt : -st.dir * PITCH * crawlE;   // leans into the motion; crawling, his back tips forward over his hands
-  view.position.set(st.x - scrollX - innerWidth / 2, innerHeight / 2 - sy + bob + crouch + THIGH * crawlE, 0);
+  const vy = sy - (st.hopY || 0) + st.par, lsc = DP ? DP.scaleOf(st.zs) : 1;   // vy: drawn height (lane-hop arc, parallax); lsc: lane scale
+  view.scale.setScalar(lsc);
+  view.position.set(st.x - scrollX - innerWidth / 2, innerHeight / 2 - vy + bob + crouch + THIGH * crawlE, 0);
   { const d = window.__scion; let best = null;   // H1: his hand (the one nearer the bird) in page coords
     for (const b of [B.handL || B.foreL, B.handR || B.foreR]) { if (!b) continue; b.getWorldPosition(_hv);
       const x = _hv.x + innerWidth / 2 + scrollX, y = innerHeight / 2 - _hv.y + scrollY;
@@ -1095,10 +1109,23 @@ function frame(now) {
     st.hand = best; }
   // Render only the BOX around him: same camera, cropped with a view offset, and the canvas parked there in page coords.
   const W = pageW;
-  const ox = Math.max(0, Math.min(W - BOX, Math.round(st.x - scrollX - BOX / 2))), oy = Math.round(sy - CFG.size * 0.5 - BOX / 2);
+  const ox = Math.max(0, Math.min(W - BOX, Math.round(st.x - scrollX - BOX / 2))), oy = Math.round(vy - CFG.size * 0.5 - BOX / 2);
   camera.setViewOffset(innerWidth, innerHeight, ox, oy, BOX, BOX);
   canvas.style.transform = `translate3d(${ox + scrollX}px,${oy + scrollY}px,0)`; if (canvas.style.visibility) canvas.style.visibility = '';
   if (say.style.opacity === '1') say.style.transform = `translate(${Math.max(scrollX + 8, Math.min(scrollX + W - 250, st.x - 30))}px,${Math.max(scrollY + 4, st.y - CFG.size - say.offsetHeight - 6)}px)`;   // over his head, kept on screen
+  // Occlusion: behind the content (lane -1, or a phone jump across words) the cards and lines of text in front of him are cut
+  // out of his own canvas. The page is not touched; only rects that overlap him count.
+  { const behind = st.zs < -0.3 || overText, hh = (st.headH || CFG.size) * lsc, py = st.y - (st.hopY || 0) + st.par;
+    const box = { l: st.x - HALF_W * 1.7 * lsc, r: st.x + HALF_W * 1.7 * lsc, t: py - hh - 18, b: py + 8 };
+    const occ = behind && DP ? DP.occluders(box, -1) : [], at = ox + ',' + (oy + scrollY);
+    if (occ.length !== clipOcc.length || occ.some((q, i) => q !== clipOcc[i]) || (occ.length && at !== clipAt)) {
+      clipOcc = occ; clipAt = at; const c = DP ? DP.clipPath(occ, ox + scrollX, oy + scrollY, BOX) : '';
+      if (c !== clipCss) canvas.style.clipPath = clipCss = c; }
+    // contact shadow under his feet
+    const fy = st.floor ? st.floor.y : st.y, lift = (st.hopY || 0) + (st.air ? 1e3 : 0), k = Math.max(0, 1 - lift / 90);
+    const sx = st.x - st.zs * 6, sy2 = fy + st.zs * 4 + st.par, hidden = st.held || k <= 0 || overText || (st.zs < -0.3 && occ.length > 0) || st.mode === 'climb';
+    const css = hidden ? '' : `translate(${Math.round(sx)}px,${Math.round(sy2)}px) scale(${(lsc * (0.55 + 0.45 * k)).toFixed(2)},${(lsc * (0.55 + 0.45 * k)).toFixed(2)})|${(0.85 * k).toFixed(2)}`;
+    if (css !== shadeCss) { shadeCss = css; if (css) { const [tr, op] = css.split('|'); shade.style.transform = tr; shade.style.opacity = op; } else shade.style.opacity = 0; } }
   renderer.render(scene, camera);
 }
 let scrolledAt = 0;
@@ -1110,8 +1137,9 @@ document.addEventListener('scroll', e => {
   dirty = true; scrolledAt = performance.now();
   const c = scrollers.get(sc); if (!c) return;
   const d = sc.scrollLeft - c.sl; if (!d) return; c.sl += d;
-  const f = st.floor, items = new Set([...floors, ...seams, ...ink]); if (f) items.add(f);
+  const f = st.floor, items = new Set([...floors, ...seams, ...ink, ...cards]); if (f) items.add(f);
   for (const q of items) if (q.sc === sc) { q.u1 -= d; q.u2 -= d; clipX(q); if (phone() && 'y' in q) fit(q); }
+  window.DEPTH?.publish({ cards, text: textInk, floors, seams });
   if (f && f.sc === sc && !st.air && !st.held && st.mode !== 'climb') {
     st.x -= d;
     if (!onFloor(f, st.x)) {   // his card is sliding out of view: onto the next card at the same height, else to its last visible stretch, else he hops off

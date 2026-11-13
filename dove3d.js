@@ -104,7 +104,8 @@ function frame(now) {
   view.position.set(st.x - scrollX - innerWidth / 2, innerHeight / 2 - (st.y - scrollY), st.z);
   view.rotation.x = CFG.viewTilt * D2R;
   group.rotation.set(st.roll * D2R, st.heading * D2R, -st.pitch * D2R);
-  group.scale.set((1 - st.breath * 0.4) * (1 + 0.12 * st.puff), 1 + st.breath, (1 - st.breath * 0.4) * (1 + 0.12 * st.puff));
+  const k = st.scale || 1;   // perched lane scale (depth.js): smaller on a back-lane seam, about its feet
+  group.scale.set((1 - st.breath * 0.4) * (1 + 0.12 * st.puff) * k, (1 + st.breath) * k, (1 - st.breath * 0.4) * (1 + 0.12 * st.puff) * k);
 
   const W = pageW, sy = st.y - scrollY;
   const ox = Math.max(0, Math.min(W - BOX, Math.round(st.x - scrollX - BOX / 2))), oy = Math.round(sy - 20 - BOX / 2);
