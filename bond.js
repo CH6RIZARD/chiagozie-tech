@@ -1701,7 +1701,7 @@
       else if (!K0 || K0.key !== k) S.inKey[w] = { key: k, since: S.t };
       else if (S.t - K0.since >= 20 && !S.M.own[k]) S.M.own[k] = { who: w, since: K0.since };
     }
-    if (G.MORTAL && !SIM) G.MORTAL.tick(dt, { hugo: { energy: S.drv.hugo.energy, y: h ? h.y : null }, dove: { energy: S.drv.dove.energy, y: d ? d.y : null } });
+    if (G.MORTAL && !SIM) G.MORTAL.tick(dt, { hugo: { energy: S.drv.hugo.energy, y: h ? h.y : null, lane: h ? h.z || 0 : 0, w: h ? h.w : null }, dove: { energy: S.drv.dove.energy, y: d ? d.y : null, lane: d ? (d.z < -4 ? -1 : d.z > 40 ? 1 : 0) : 0 } });   // lane and w (depth.js): what part of the page's hidden depth each body is in
   }
 
   // ---------------------------------------------------------------- 13. sim: a toy world driven through the same calls

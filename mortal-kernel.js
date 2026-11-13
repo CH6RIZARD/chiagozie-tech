@@ -226,6 +226,7 @@
       const B = beings[who], s = (sig && sig[who]) || {};
       if (!B || !B.alive) continue;
       if (gate) B.dt += dt;
+      B.lane = s.lane || 0; B.w = s.w ?? null;   // the body's depth lane and its section's scroll phase (depth.js), for drives that weigh it
       const section = s.section || (s.y != null ? sectionAt(s.y) : null);
       if (section && !B.visited.has(section)) { B.visited.add(section); progress(who, 'new place'); }
       const unknowns = [...sec.seen].filter(t => !B.visited.has(t)).length + B.goals.filter(g => !g.done && g.novel).length;

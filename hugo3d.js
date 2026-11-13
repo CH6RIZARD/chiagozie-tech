@@ -273,18 +273,24 @@ function scan() {
   };
   pass(document.body, null);
   const bar = phone() && document.querySelector('nav[aria-label="Sections"]');   // phones: the bar is locked over the page; nothing stands under it
-  if (bar) { const r = bar.getBoundingClientRect(); ink.push({ l: r.left + scrollX, t: r.top + scrollY - 400, r: r.right + scrollX, b: r.bottom + scrollY }); }
+  if (bar) { const r = bar.getBoundingClientRect(); ink.push({ l: r.left + scrollX, t: r.top + scrollY - 400, r: r.right + scrollX, b: r.bottom + scrollY, bar: true }); }
   if (od) pass(od, os);
   if (!od) floors.push({ y: groundY(), x1: 0, x2: document.documentElement.scrollWidth, el: document.body, ground: true, support: true });   // phones, Read less: the page bottom is under the monitor and its caption, not a floor
   if (phone()) { floors.forEach(fit); seams.forEach(fit);   // phones: only ledges with standing room somewhere along them (no climbing into a gap and crawling there)
     floors = floors.filter(f => f.ground || f.x2 - f.x1 < 2 * HALF_W || [0, 1, 2, 3, 4, 5, 6, 7, 8].some(i => clear(f.x1 + HALF_W + (f.x2 - f.x1 - 2 * HALF_W) * i / 8, f.y, CFG.size + 4))); }
+  // The back lane's own floor: each section's bottom edge (support:false, so food never settles there)
+  const secs = window.DEPTH ? window.DEPTH.sections : [];
+  secs.forEach((sec, i) => { if (sec.top + sec.h < scrollY - vh * 1.5 || sec.top + sec.h > scrollY + vh * 2.5) return;
+    const q = { y: sec.top + sec.h, x1: 0, x2: pageW, el: secs[i + 1] ? secs[i + 1].el : sec.el, support: false, section: true }; if (phone()) fit(q); seams.push(q); });   // el: the edge it is glued to (the next section's top)
   allFloors = floors.concat(seams);
   window.DEPTH?.publish({ cards, text: textInk, floors, seams });   // one measured scene for both agents (page coords)
   dirty = false; scanAt = performance.now();
 }
 let allFloors = [];
 // Can he occupy this spot? Body box must be clear of every word and box above the floor (standing or sitting height).
-const clear = (x, y, h) => !ink.some(q => q.r > x - HALF_W && q.l < x + HALF_W && q.b > y - h && q.t < y - 2);
+// Lane-filtered (Fez rule: collision stays flat 2D, per lane): behind or in front of the content, words and boxes are scenery,
+// not walls (only the phone's locked bar still is). z defaults to the lane he is in.
+const clear = (x, y, h, z = st.z) => !ink.some(q => (z === 0 || q.bar) && q.r > x - HALF_W && q.l < x + HALF_W && q.b > y - h && q.t < y - 2);
 // Where he has been: coarse cells with the last time he was there. New places are more interesting than ones he just
 // left, so he spreads out instead of wearing a groove into one corner.
 const seenAt = new Map(), avoid = new Map();
@@ -593,7 +599,7 @@ function floorNear(x, y) {   // somewhere he can stand at or just under (x, y), 
 // The mind's wish, carried out with his own body. Never while he is held, airborne, climbing, crawling, mid-jump or busy
 // with the dove (REL leads there); a wish he cannot carry out is just dropped.
 window.__hugoAct = (act, target) => {
-  if (!act || st.dead || st.held || st.air || st.relOrder || (gest && gest.name === 'mad') || ['climb', 'prep', 'crawl'].includes(st.mode) || (st.crawlK || 0) > 0.05) return 'busy';
+  if (!act || st.dead || st.held || st.air || st.relOrder || (gest && gest.name === 'mad') || ['climb', 'prep', 'crawl', 'lane'].includes(st.mode) || (st.crawlK || 0) > 0.05) return 'busy';
   const p = target && target !== 'cursor' ? places.find((q, i) => 'p' + (i + 1) === target) : null;
   const cp = { x: pointer.cx + scrollX, y: pointer.cy + scrollY };
   const stand = (name, dur) => { if (st.mode === 'sit') return; st.mode = 'idle'; st.amt = 0; st.idleUntil = t + dur; gest = { name, t0: t, dur, side: Math.random() < 0.5 ? -1 : 1, amp: 0.8 + Math.random() * 0.3, f: 0.8 + Math.random() * 0.5 }; };
@@ -612,7 +618,8 @@ window.__hugoAct = (act, target) => {
       st.pendGest = { name: 'nap', dur: 15 + Math.random() * 10 }; return 'ok';
     case 'dance': case 'stretch': stand(act, act === 'dance' ? 5 + Math.random() * 4 : 3 + Math.random() * 2); return 'ok';
     case 'look_around': stand('look', 3 + Math.random() * 3); return 'ok';
-    case 'wander': { const g = pickFloor(true) || pickToward(Math.random() < 0.5 ? 1 : -1); if (!g) return 'nowhere new'; st.goal = { f: g.f, x: g.x, until: t + 30 }; st.mode = 'walk'; return 'ok'; }
+    case 'wander': { const g = pickFloor(true) || pickToward(Math.random() < 0.5 ? 1 : -1); if (!g) return 'nowhere new'; routeTo(g.f, g.x, {}); return 'ok'; }
+    case 'behind': return laneHop(-1) ? 'ok' : 'no back lane here';
     case 'eat': { const R = window.REL, fs = R ? R.foods.filter(it => it.st !== 'gone' && (it.holder === 'hugo' || (it.settled && it.ledge))) : [];   // the frame's food moves
       if (!fs.length) return 'no food'; const it = fs.reduce((a, b) => Math.hypot(b.x - st.x, b.y - st.y) < Math.hypot(a.x - st.x, a.y - st.y) ? b : a);
       st.food = { id: it.id, tries: 0, miss: 0, forced: true }; return 'ok'; }
@@ -676,6 +683,7 @@ function blocked(f) {
     if (onFloor(q, ux) && clear(ux, q.y, CFG.size + 4) && (!up || q.y > up.q.y)) up = { q, ux };   // the lowest top he can stand on
   }
   const wantsPast = st.goal && Math.sign(st.goal.x - st.x) === st.dir;
+  if (st.z === 0 && !st.relBusy && (wantsPast || Math.random() < 0.6) && laneHop(-1)) return;   // words in the way: he passes behind them
   if (up && (wantsPast || Math.random() < 0.6)) { const dh = f.y - up.q.y; st.mode = 'prep'; st.amt = 0; st.prep = { f: up.q, dh, until: t + 0.18 + Math.random() * 0.14, climb: dh > CFG.size * 1.2, over: up.ux }; return; }
   if (wantsPast) { const g = st.goal; st.goal = null; if (g.rel) relEnd('fail'); else avoid.set(g.f, t + 60 + Math.random() * 60); missed('no way past'); }   // no way past: not there, not now
   if (walls.some(w => w.f === f && w.dir === -st.dir && t - w.t < 30)) {   // walls both ways lately: hemmed in
@@ -687,6 +695,48 @@ function blocked(f) {
     return;
   }
   st.dir = -st.dir; st.mode = 'idle'; st.idleUntil = t + 0.8 + Math.random() * 1.8;   // turns away from it, after a moment
+}
+// A lane change is an event, never a silent swap (DKC barrel, Fez rotation): a short hop with the scale easing over ~0.4 s,
+// his other decisions paused, and he turns through profile on the way. Out to the content only where he fits on it.
+function laneHop(to) {
+  const f = st.floor;
+  if (to === st.z || !f || st.air || st.held || st.dead || st.mode === 'climb' || st.mode === 'lane' || (st.sitK || 0) > 0.04 || (st.crawlK || 0) > 0.05) return false;
+  if (to !== 0 && !st.lanes.includes(to)) return false;   // w: this section has no such lane right now
+  if (to === 0 && (f.support === false || !clear(st.x, f.y, CFG.size + 4, 0))) return false;
+  st.hopL = { from: st.zs, to, t0: t, dur: 0.38 + Math.random() * 0.12 }; st.mode = 'lane'; st.amt = 0; gest = null;
+  window.DEPTH?.hop('hugo', st.z, to, st.x, st.y); poke(to < 0 ? 'stepped behind the page' : 'stepped back out onto the page');
+  return true;
+}
+function backOut(f) {   // in the back lane with the lane closing (or time to come out): walk to the nearest spot he fits on the content
+  if (f.support !== false) for (let k = 0; k < 40; k++) for (const s of [1, -1]) { const x = st.x + s * k * 16;
+    if (x - HALF_W >= f.x1 && x + HALF_W <= f.x2 && clear(x, f.y, CFG.size + 4, 0)) { if (k) goTo(f, x, { exit: 1 }); return k === 0; } }
+  const p = pickFloor(true); if (p) goTo(p.f, p.x, { exit: 1 }); return false;
+}
+// ---------- routes: a small graph (walk, fall, jump and depth links) and A* over it (depth.js) ----------
+// Cheap to step behind a card, dear to walk a hairline, a little cost jitter per plan so the routes vary. Targets are floors
+// (elements), not coordinates, so a reflow re-snaps the route instead of breaking it.
+function plan(f, x) {
+  const D = window.DEPTH, cur = st.floor; if (!D || !cur || st.air) return null;
+  const near = q => q.y > scrollY - innerHeight * 0.5 && q.y < scrollY + innerHeight * 1.5, fl = floors.filter(near), sm = seams.filter(near);
+  if (!(fl.includes(cur) || sm.includes(cur)) || !fl.includes(f)) return null;
+  const seed = [[cur, st.x, st.z], [f, x, 0]]; if (cur.support !== false) seed.push([cur, st.x, st.z ? 0 : -1]);
+  const g = D.buildGraph(fl, sm, { half: HALF_W, reach: CFG.size * 2.2, vh: innerHeight, seed, clear: (x, y, z) => clear(x, y, CFG.size + 4, z), lanes: y => D.at(y, { noFront: true }).lanes });
+  const a = g.node(cur, st.x, st.z), b = g.node(f, x, 0);
+  const p = D.astar(g, a, n => n === b, n => Math.abs(n.x - b.x) * 0.5 + Math.abs(n.y - b.y) * 0.3);
+  if (!p) return null;
+  const legs = p.slice(1).filter((n, i, L) => !(L[i + 1] && L[i + 1].f === n.f && L[i + 1].z === n.z && n.z === (i ? L[i - 1].z : st.z)));   // straight runs on one floor: one leg
+  st.routeKinds = p.kinds;
+  return legs;
+}
+function routeTo(f, x, extra) {   // by the graph when it has a way (lanes included), else straight there the old way
+  const r = plan(f, x); if (r && r.length) { st.route = r; if (nextLeg()) return; }
+  st.route = null; goTo(f, x, extra);
+}
+function nextLeg() {
+  const r = st.route; if (!r || !r.length) { st.route = null; return false; }
+  const n = r.shift();
+  if (n.z !== st.z) { if (laneHop(n.z)) return true; st.route = null; return false; }
+  goTo(n.f, n.x, { auto: 1, leg: 1 }); return true;
 }
 // One step toward the visitor's view: dir 1 = the view is below him (any floor lower down, he will step off a ledge
 // to reach it), dir -1 = above (the highest floor he can hop up to from here).
@@ -711,7 +761,7 @@ function landingBelow(x, y, vis) {   // nearest floor under (x, y) within a scre
   const visBottom = scrollY + innerHeight - 30, lim = vis && visBottom > y + 2 ? visBottom : Infinity;
   // The bottom of the page always catches him, words or not; otherwise he fell straight through it and out of the world.
   // Phones: not behind words (Read less: the monitor and its caption sit on it); past it he falls out of the world and is born again in view.
-  for (const f of floors) if (f.y > y + 2 && f.y <= lim && (f.ground || f.y < y + innerHeight * 1.5) && onFloor(f, x) && ((f.ground && !phone()) || clear(x, f.y, CFG.size + 4)) && (!best || f.y < best.y)) best = f;
+  for (const f of (st.z < 0 ? allFloors : floors)) if (f.y > y + 2 && f.y <= lim && (f.ground || f.y < y + innerHeight * 1.5) && onFloor(f, x) && ((f.ground && !phone()) || clear(x, f.y, CFG.size + 4)) && (!best || f.y < best.y)) best = f;
   // Dropped over a dense page, almost no ledge has a body-sized gap above it. If the strict search found nothing near, he lands on
   // the nearest ledge below him anyway, standing in front of the words, as a small figure on a page would.
   if (!phone() && (!best || (best.ground && best.y > y + innerHeight * 0.9))) {   // phones: never in front of words
@@ -810,6 +860,7 @@ function autonomy(f) {
   const gh = g && g.title ? [...document.querySelectorAll('h1,h2,h3')].find(h => h.textContent.replace(/\s+/g, ' ').trim().slice(0, 60) === g.title && h.getClientRects().length) : null;
   const c = M.choose('hugo', [
     { id: 'wander', drive: 'curiosity', u: Math.min(1, 0.25 + 1.2 * mo.c * (1 - novelty(st.x, st.y))), move: true, minT: 4 },
+    st.z === 0 && st.lanes.includes(-1) && { id: 'behind', drive: 'curiosity', u: Math.min(1, 0.15 + 0.7 * mo.c), move: true, minT: 6 },   // w: the back lane is open here now
     gh && { id: 'goal', drive: 'curiosity', u: g.pri, move: true, minT: 6 },
     pointer.in && { id: 'visitor', drive: 'consequence', u: mo.s, move: true, minT: 6 },
     { id: 'rest', drive: 'survival', u: Math.min(1, (1 - n.energy) * 0.9 + env.sleepy), move: false, minT: 8, urgent: n.energy < 0.2 },
@@ -817,7 +868,8 @@ function autonomy(f) {
   ]);
   if (!c) return;
   const fail = () => M.done('hugo');
-  if (c.id === 'wander') { const p = pickFloor(true) || pickToward(st.dir); if (p) goTo(p.f, p.x, { auto: 1 }); else fail(); }
+  if (c.id === 'wander') { const p = pickFloor(true) || pickToward(st.dir); if (!p) fail(); else routeTo(p.f, p.x, { auto: 1 }); }
+  else if (c.id === 'behind') { if (!laneHop(-1)) fail(); }
   else if (c.id === 'goal') { const r = gh.getBoundingClientRect(), p = floorNear(r.left + scrollX + Math.min(r.width, 300) / 2, r.top + scrollY);
     if (p && (g.tries = (g.tries || 0) + 1) <= 3) goTo(p.f, p.x, { auto: 1, goalId: g.id }); else { M.goalDone('hugo', g.id); fail(); } }   // three tries, then it lets that goal go
   else if (c.id === 'visitor') { const p = floorNear(pointer.cx + scrollX, pointer.cy + scrollY); if (p) goTo(p.f, p.x, { auto: 1 }); else fail(); }
@@ -923,6 +975,17 @@ function step(dt) {
   if (!f.ground && st.mode !== 'prep' && !room() && !(phone() && performance.now() - scanAt > 100 && (scan(), room()))) { st.air = true; st.vx = 0; st.vy = 0; st.floor = null; st.mode = 'walk'; return; }   // phones: a stale scan (the hero settling a few px) is no reason to fall; look again first
   if ((st.markAt || 0) < t) { seenAt.set(cell(st.x, st.y), t); st.markAt = t + 1; }
   if (!st.anchor || Math.hypot(st.x - st.anchor.x, st.y - st.anchor.y) > 160) st.anchor = { x: st.x, y: st.y, t };
+  if (st.mode === 'lane') {   // mid-hop between lanes: nothing else happens until he lands in the new one
+    const H = st.hopL, u = Math.min(1, (t - H.t0) / H.dur), e = u * u * (3 - 2 * u);
+    st.zs = H.from + (H.to - H.from) * e; st.hopY = Math.sin(Math.PI * u) * CFG.size * 0.16;
+    if (u >= 1) { st.z = H.to; st.zs = H.to; st.hopY = 0; st.hopL = null; st.mode = 'walk'; st.land = 0.12; st.backUntil = t + 8 + Math.random() * 12;
+      if (!(st.route && st.route.length && nextLeg()) && !st.goal) { st.mode = 'idle'; st.idleUntil = t + 0.6; } }
+    return;
+  }
+  // in the back lane: out again once its time is up or the section's w closes the lane (where he fits on the content)
+  if (st.z !== 0 && !(st.route && st.route.length) && (t > (st.backUntil || 0) || !st.lanes.includes(st.z)) && st.mode !== 'prep' && st.mode !== 'crawl' && (st.sitK || 0) < 0.04 && !st.relBusy) {
+    if (!laneHop(0) && !st.goal && (st.backTry || 0) < t) { st.backTry = t + 3; backOut(f); }
+  }
   if (st.mode !== 'prep') relStep(f);
   if (st.dazed && st.mode === 'walk') { st.mode = 'idle'; st.idleUntil = t + 0.5; }   // seeing stars: he stands where he is
   if (st.mode === 'walk') {
@@ -936,10 +999,11 @@ function step(dt) {
     if (!st.goal) { st.mode = 'idle'; st.idleUntil = t + 0.75; return; }
     if (st.goal) {
       const g = st.goal;
-      if (!refloor(g.f) || t > g.until) { if (t > g.until && !g.rel) { avoid.set(g.f, t + 45 + Math.random() * 45); missed('never got there'); } st.goal = null; if (g.rel) relEnd('fail'); }   // could not get there: try elsewhere for a while
+      if (!refloor(g.f) || t > g.until) { st.route = null; if (t > g.until && !g.rel) { avoid.set(g.f, t + 45 + Math.random() * 45); missed('never got there'); } st.goal = null; if (g.rel) relEnd('fail'); }   // could not get there: try elsewhere for a while
       else if (g.f === f) {
         if (Math.abs(g.x - st.x) < 8) {
           st.goal = null;
+          if (g.leg && nextLeg()) return;   // a waypoint: on to the next leg
           if (g.rel) { relArrive(f); return; }
           if (g.food) { st.mode = 'idle'; st.idleUntil = t + 0.4; return; }   // the next beat leans in for the bite
           const M = window.MORTAL; if (M) { if (g.goalId) M.goalDone('hugo', g.goalId); if (g.auto || g.toView) M.done('hugo'); }
@@ -974,6 +1038,7 @@ function step(dt) {
     const past = st.dir > 0 ? nx + HALF_W * 0.4 > f.x2 : nx - HALF_W * 0.4 < f.x1;
     if (past) {   // a ledge: sit on it with his legs over, peer down, step off, or turn back
       const r = Math.random();
+      if (!st.goal && !st.relBusy && st.z === 0 && r < 0.5 && laneHop(-1)) return;   // the end of a rule is a seam: he steps behind the page
       if (!st.goal && !st.relBusy && r < 0.3 && clear(st.x, f.y, SIT_H + 4)) { st.mode = 'sit'; st.idleUntil = t + 6 + Math.random() * 14; return; }
       if (!st.goal && !st.relBusy && r < 0.5) { st.mode = 'idle'; st.idleUntil = t + 2 + Math.random() * 2; gest = { name: 'peer', t0: t, dur: 2 + Math.random() * 2, side: st.dir, amp: 1, f: 1 }; st.dir = -st.dir; return; }
       if (dropTo(nx, f.y)) { st.air = true; st.hop = true; st.vx = st.dir * (phone() ? 20 : walkSpeed() * 0.8); st.vy = -160; st.x = nx; return; }   // phones: nearly straight down, onto the ledge he looked at, not past it
@@ -1047,7 +1112,7 @@ function frame(now) {
   const DP = window.DEPTH, here = DP ? DP.at(st.y, { noFront: phone() }) : { w: 0.5, lanes: [0] };   // his section's phase w and the lanes it has now
   st.w = here.w; st.lanes = here.lanes;
   if (st.mode !== 'lane') st.zs += (st.z - st.zs) * Math.min(1, dt * 8);   // displayed depth eases to his lane (a hop drives it itself)
-  st.par *= Math.exp(-dt * (st.air || st.mode === 'lane' ? 3 : 14));   // scroll parallax fades; standing on something he is glued to it
+  st.par *= Math.exp(-dt * (free() ? 2.5 : 14));   // scroll parallax fades; standing on something he is glued to it
   if (sy < -CFG.size - 40 || sy > innerHeight + 60) { canvas.style.visibility = 'hidden'; hit.style.display = 'none'; hud.style.opacity = 0; if (shadeCss) { shade.style.opacity = 0; shadeCss = ''; } return; }   // alive, just not in view
   // phones: a jump or fall across words fades him out, so he never covers text or takes its taps
   const over = phone() && !st.held && textInk.some(q => q.r > st.x - HALF_W && q.l < st.x + HALF_W && q.b > st.y - (st.air ? CFG.size : st.mode === 'sit' ? SIT_H : st.mode === 'crawl' ? CRAWL_H : CFG.size) && q.t < st.y - 2);   // his body as it is now: sitting or crawling he is shorter
@@ -1066,6 +1131,7 @@ function frame(now) {
   look += (lookGoal - look) * Math.min(1, dt * 2.5);
   if (st.held || (st.air && !st.hop)) { poseRag(); inner.position.copy(feet).multiplyScalar(-S); }   // in your hand: physics only, limbs swing with how you move him
   else if (st.air) { poseHop(st.vy); inner.position.copy(feet).multiplyScalar(-S); }   // his own jump: tucked, arms out for balance
+  else if (st.mode === 'lane') { poseHop(st.hopL && t - st.hopL.t0 < st.hopL.dur / 2 ? -1 : 260); inner.position.copy(feet).multiplyScalar(-S); }   // a little hop into the other lane
   else if (st.mode === 'prep') { posePrep(st.prep.t0 != null ? (t - st.prep.t0) / (st.prep.until - st.prep.t0) : (t - (st.prep.until - 0.25)) / 0.25); inner.position.copy(feet).multiplyScalar(-S); }
   else if (st.mode === 'climb') { poseClimb(st.climb); inner.position.copy(feet).multiplyScalar(-S); }
   else if (sitE > 0.999) { poseLean = 0; poseSit(st.swing); inner.position.copy(seat).multiplyScalar(-S); }
@@ -1093,7 +1159,8 @@ function frame(now) {
     else armMix((sd > 0) === (st.dir > 0) ? 'R' : 'L', [0.3, -0.1, 0.9], [0.2, 0.2, 1], 1);   // held out at arm's length
   }
   applyPose(dt, st.held || st.air ? 30 : 12); applyArms(dt, st.held || st.air ? 30 : 10);
-  const yawGoal = st.mode === 'climb' ? Math.PI : crawlE > 0.3 ? (st.dir > 0 ? Math.PI / 2 : -Math.PI / 2) :(st.mode === 'sit' || sitE > 0.5) && !st.air ? -0.35 : st.dir > 0 ? Math.PI / 2 - 0.45 : -Math.PI / 2 + 0.45;
+  const yawGoal = st.mode === 'lane' && st.hopL ? (st.hopL.to < 0 ? st.dir * (Math.PI / 2 + 0.7) : st.dir * (Math.PI / 2 - 0.9)) :   // into the page or out of it, through profile
+    st.mode === 'climb' ? Math.PI : crawlE > 0.3 ? (st.dir > 0 ? Math.PI / 2 : -Math.PI / 2) :(st.mode === 'sit' || sitE > 0.5) && !st.air ? -0.35 : st.dir > 0 ? Math.PI / 2 - 0.45 : -Math.PI / 2 + 0.45;
   let dyaw = yawGoal - (st.yaw ?? yawGoal); dyaw = Math.atan2(Math.sin(dyaw), Math.cos(dyaw));
   st.yaw = (st.yaw ?? yawGoal) + dyaw * Math.min(1, dt * 7); inner.rotation.y = st.yaw;   // turns take a moment, like a person turning
   const bob = st.mode === 'walk' && !st.air ? (1 - Math.cos(4 * Math.PI * st.ph)) * 0.5 * CFG.size * 0.022 * st.amt : 0;
@@ -1129,6 +1196,10 @@ function frame(now) {
   renderer.render(scene, camera);
 }
 let scrolledAt = 0;
+// Scroll parallax (depth through motion): only while he is free (mid-hop, airborne, or on a back-lane section floor) does he
+// lag the page by his lane; standing on something visible he stays glued to it. The lag fades out over time (dt-based, frame()).
+const free = () => st.air || st.mode === 'lane' || (st.z < 0 && st.floor && st.floor.section);
+addEventListener('scroll', () => { if (free() && st.zs) st.par += (scrollY - curSY) * 0.12 * -st.zs; }, { passive: true });
 addEventListener('scroll', () => { if (Math.abs(scrollY - curSY) > 120) { lastSY = curSY; jumpAt = performance.now(); } curSY = scrollY; dirty = true; scrolledAt = performance.now(); }, { passive: true });
 // Phone carousels scroll an element, not the window (element scroll events do not bubble: listen in the capture phase).
 // The swiped cards' ledges and ink shift at once, he rides the card under him, and a full re-measure follows once it settles.

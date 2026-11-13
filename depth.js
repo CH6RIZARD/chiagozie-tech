@@ -59,7 +59,7 @@
   // lane -1 walks supports and seams (the hairlines: where a back-lane floor meets the content plane) and ignores ink, because
   // there he is behind the words. Depth links step between lanes where both exist. The graph is never more permissive than his
   // body: every walk edge is sampled with the same clear() test the body uses.
-  // opts: { half, reach, clear(x, y, z) -> bool, lanes(y) -> [z...], cost jitter rnd() in 0..1, jitter }
+  // opts: { half, reach, vh, clear(x, y, z) -> bool, lanes(y) -> [z...], seed: [[floor, x, z]...] extra nodes, rnd() 0..1 and jitter for cost jitter }
   function buildGraph(floors, seams, o) {
     const half = o.half || 26, reach = o.reach || 330, rnd = o.rnd || Math.random, J = o.jitter ?? 0.15;
     const nodes = [], byKey = new Map(), edges = new Map();
@@ -74,6 +74,7 @@
       const n = Math.max(1, Math.ceil((f.x2 - f.x1) / 160));
       for (let i = 0; i <= n; i++) node(f, f.x1 + half + (f.x2 - f.x1 - 2 * half) * i / n, z);
     }
+    for (const [f, x, z] of o.seed || []) if (f.x2 - f.x1 >= 2 * half + 4) node(f, x, z);   // where he stands and where he is going
     // fall and jump links from each end and each sample point, in the same lane
     for (const a of [...nodes]) {
       for (const [f] of plat) {
@@ -145,7 +146,10 @@
     let lastW = 0, lastH = 0;
     const measure = () => {
       D.sections = [...document.querySelectorAll('section[id],header[id],footer[id]')].filter(e => !e.parentElement.closest('section[id],header[id],footer[id]'))
-        .map(e => { const r = e.getBoundingClientRect(); return { el: e, id: e.id, top: r.top + scrollY, h: r.height }; }).filter(s => s.h > 0);
+        .map(e => { const r = e.getBoundingClientRect(); return { el: e, id: e.id, top: r.top + scrollY, h: r.height }; }).filter(s => s.h > 0).sort((a, b) => a.top - b.top);
+      // a part of the page between two sections (the phone project list) belongs to the one above it: every y has a section
+      D.sections.forEach((s, i) => { const nx = D.sections[i + 1]; s.h = (nx ? nx.top : document.documentElement.scrollHeight) - s.top; });
+      if (D.sections[0]) { D.sections[0].h += D.sections[0].top; D.sections[0].top = 0; }
       lastW = innerWidth; lastH = innerHeight;
     };
     const touch = matchMedia('(pointer:coarse)').matches;
