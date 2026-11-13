@@ -253,8 +253,10 @@ function scan() {
     }
   };
   pass(document.body, null);
+  const bar = phone() && document.querySelector('nav[aria-label="Sections"]');   // phones: the bar is locked over the page; nothing stands under it
+  if (bar) { const r = bar.getBoundingClientRect(); ink.push({ l: r.left + scrollX, t: r.top + scrollY - 400, r: r.right + scrollX, b: r.bottom + scrollY }); }
   if (od) pass(od, os);
-  floors.push({ y: groundY(), x1: 0, x2: document.documentElement.scrollWidth, el: document.body, ground: true });
+  if (!od) floors.push({ y: groundY(), x1: 0, x2: document.documentElement.scrollWidth, el: document.body, ground: true });   // phones, Read less: the page bottom is under the monitor and its caption, not a floor
   if (phone()) { floors.forEach(fit);   // phones: only ledges with standing room somewhere along them (no climbing into a gap and crawling there)
     floors = floors.filter(f => f.ground || f.x2 - f.x1 < 2 * HALF_W || [0, 1, 2, 3, 4, 5, 6, 7, 8].some(i => clear(f.x1 + HALF_W + (f.x2 - f.x1 - 2 * HALF_W) * i / 8, f.y, CFG.size + 4))); }
   dirty = false; scanAt = performance.now();
@@ -447,7 +449,7 @@ function gesture(dt, sitting, still) {
 }
 
 window.__hugo = st;   // read-only peek for debugging
-if (/[?&]debug/.test(location.search)) window.__hugoDbg = { get floors() { return floors; }, get t() { return t; }, get gest() { return gest && gest.name; }, miss: why => missed(why) };
+if (/[?&]debug/.test(location.search)) window.__hugoDbg = { get floors() { return floors; }, get t() { return t; }, get gest() { return gest && gest.name; }, miss: why => missed(why), clear: (x, y, h) => clear(x, y, h), get ink() { return ink; } };
 st.dims = { THIGH, ARMLEN, SPINE, PITCH, CRAWL_H, size: CFG.size };
 // Hit area follows him; the canvas itself never takes the pointer.
 const hit = document.createElement('div'); hit.id = 'hugo-hit'; hit.setAttribute('aria-label', 'Hugo. Press to pick him up, let go to drop him.');
@@ -717,11 +719,12 @@ function relStep(f) {
   else if (st.relGap != null && st.goal && st.goal.rel === o.id && d && (d.mode === 'perch' || o.ex === 'chase')) relGoal(o, { x: d.x - (Math.sign(d.x - st.x) || 1) * st.relGap, y: d.y });   // the bird moved: after it
   const ph = R.phase; st.relBusy = !!(st.relOrder && ph && ph.stage !== 'resolve');
 }
-let bornTries = 0;
+let bornTries = 0, lastSY = 0, curSY = 0, jumpAt = -1e9;   // lastSY: the scroll before the latest jump, to keep him put on screen across a view switch
 function born() {   // first appearance: a floor in view with standing room
   const spots = inView => { const c = [];
     for (const f of floors) if ((!inView || (f.y > scrollY && f.y < scrollY + innerHeight)) && f.x2 - f.x1 > 160 && (inView || !f.ground)) {
-      for (let i = 1; i < 8; i++) { const x = f.x1 + (f.x2 - f.x1) * i / 8; if (onFloor(f, x) && clear(x, f.y, CFG.size + 4)) c.push({ f, x }); }
+      const n = phone() ? Math.ceil((f.x2 - f.x1) / 6) : 8;   // phones: small clear gaps are often all there is, so look along the whole ledge
+      for (let i = 1; i < n; i++) { const x = f.x1 + (f.x2 - f.x1) * i / n; if (onFloor(f, x) && clear(x, f.y, CFG.size + 4)) c.push({ f, x }); }
     }
     return c; };
   // First appearance on a wide screen: sitting on the end of the hero's grey divider, legs over the edge.
@@ -743,7 +746,8 @@ function born() {   // first appearance: a floor in view with standing room
 }
 function refloor(f) {   // the page reflows; keep the floor glued to its element
   if (f.screen) return true;
-  if (f.ground) { f.y = groundY(); f.x2 = document.documentElement.scrollWidth; if (phone()) fit(f); return true; }
+  if (f.fr && (!document.body.classList.contains('simple') || !f.fr.getClientRects().length)) return false;   // a ledge in the Read less frame is gone once the frame is
+  if (f.ground) { if (phone() && document.body.classList.contains('simple')) return false; f.y = groundY(); f.x2 = document.documentElement.scrollWidth; if (phone()) fit(f); return true; }
   if (!f.el.isConnected || (phone() && !f.el.getClientRects().length)) return false;   // phones: its element was hidden (a view switch): the floor is gone, he falls
   const fo = f.fr ? f.fr.getBoundingClientRect() : null, ox = scrollX + (fo ? fo.left : 0), oy = scrollY + (fo ? fo.top : 0);   // fo: a floor inside the Read less frame
   if (f.text) { const r = f.el.getBoundingClientRect(); const dy = (r.top + oy) - (f.elTop ?? (f.elTop = r.top + oy)); if (dy) { f.y += dy; f.elTop += dy; } return true; }
@@ -780,6 +784,7 @@ function step(dt) {
       if ((st.shaken || 0) > 0.35) { window.REL?.ev('hugo', 'fell', null, Math.min(0.8, st.shaken), { x: st.x, y: st.y }); poke('landed hard'); }
       if ((st.shaken || 0) > 0.35) { st.mode = 'idle'; st.idleUntil = t + 2.5 + st.shaken * 5; gest = { name: st.shaken > 0.65 ? 'breathe' : pickOf(['dust', 'breathe', 'look']), t0: t, dur: 2.5 + st.shaken * 5, side: Math.random() < 0.5 ? -1 : 1, amp: 0.7 + st.shaken * 0.5, f: 1 }; }
       st.shaken = 0; st.stress = (st.stress || 0) * 0.5; for (const L of Object.values(limbs)) { L[0] = 0; L[1] = 0; } }
+    else if (phone() && !st.hop && !st.pounce && st.y > scrollY + innerHeight + CFG.size) { st.air = false; st.floor = null; }   // phones: a drop with nothing in view to catch it: he comes back in view rather than falling for pages
     else if (st.y > document.documentElement.scrollHeight + 400) { st.air = false; st.floor = null; st.pounce = null; relEnd('interrupted'); }   // fell off the world: born again
     return;
   }
@@ -795,10 +800,11 @@ function step(dt) {
     return;
   }
   const f = st.floor; if (!f) return;
-  if (!refloor(f)) { st.floor = null; return; }
+  if (!refloor(f)) { st.floor = null; if (phone()) { if (performance.now() - jumpAt < 800) st.y += scrollY - lastSY; jumpAt = -1e9; st.air = true; st.hop = false; st.vx = 0; st.vy = 0; st.mode = 'walk'; } return; }   // phones (a view switch): same spot on screen, then he drops into the new page
   st.y = f.y;
   // the page shifted under him (an app loaded, a block grew): if his spot now runs through words, step off and fall to a clear floor
-  if (!f.ground && st.mode !== 'prep' && !clear(st.x, f.y, (st.mode === 'sit' ? SIT_H : st.mode === 'crawl' || (st.crawlK || 0) > 0.05 ? CRAWL_H : CFG.size) + 4)) { st.air = true; st.vx = 0; st.vy = 0; st.floor = null; st.mode = 'walk'; return; }
+  const room = () => clear(st.x, f.y, (st.mode === 'sit' ? SIT_H : st.mode === 'crawl' || (st.crawlK || 0) > 0.05 ? CRAWL_H : CFG.size) + 4);
+  if (!f.ground && st.mode !== 'prep' && !room() && !(phone() && performance.now() - scanAt > 100 && (scan(), room()))) { st.air = true; st.vx = 0; st.vy = 0; st.floor = null; st.mode = 'walk'; return; }   // phones: a stale scan (the hero settling a few px) is no reason to fall; look again first
   if ((st.markAt || 0) < t) { seenAt.set(cell(st.x, st.y), t); st.markAt = t + 1; }
   if (!st.anchor || Math.hypot(st.x - st.anchor.x, st.y - st.anchor.y) > 160) st.anchor = { x: st.x, y: st.y, t };
   const bored = t - st.anchor.t > (st.boredAfter ??= 35 + Math.random() * 40) && st.mode !== 'sit';
@@ -918,7 +924,10 @@ function frame(now) {
     if (hb.hits !== st.hitsSeen) {
       st.hitsSeen = hb.hits; const s = hb.lastHit ? hb.lastHit.sev : 0.3, d = window.__scion;
       st.shaken = Math.max(st.shaken || 0, s); st.stress = Math.min(1, (st.stress || 0) + 0.3 * s);
-      if (st.floor && !st.held && st.mode !== 'climb') {   // knocked back a step, off his feet if it was a hard one; whatever he was winding up for is off
+      if (phone() && st.floor && !st.held && st.mode !== 'climb') {   // phones: his ledges are narrow; a hit is a flinch where he stands, never a fall off it
+        relEnd('interrupted'); st.prep = null; st.goal = null; st.mode = 'idle'; st.amt = 0; st.land = 0.25; st.idleUntil = t + 1 + s * 2;
+        gest = { name: s > 0.5 ? 'cover' : 'rub', t0: t, dur: 1 + s * 2, side: Math.sign((d ? d.x : st.x + st.dir) - st.x) || 1, amp: 1, f: 1 };
+      } else if (st.floor && !st.held && st.mode !== 'climb') {   // knocked back a step, off his feet if it was a hard one; whatever he was winding up for is off
         relEnd('interrupted'); st.prep = null; st.air = true; st.hop = s < 0.4; st.floor = null; st.mode = 'walk'; st.vx = -(Math.sign((d ? d.x : st.x + st.dir) - st.x) || 1) * 80 * s; st.vy = -150;
       }
     }
@@ -938,7 +947,9 @@ function frame(now) {
   const sy = st.y - scrollY;
   if (sy < -CFG.size - 40 || sy > innerHeight + 60) { canvas.style.visibility = 'hidden'; hit.style.display = 'none'; hud.style.opacity = 0; return; }   // alive, just not in view
   // phones: a jump or fall across words fades him out, so he never covers text or takes its taps
-  const overText = phone() && !st.held && textInk.some(q => q.r > st.x - HALF_W && q.l < st.x + HALF_W && q.b > st.y - (st.air ? CFG.size : st.mode === 'sit' ? SIT_H : st.mode === 'crawl' ? CRAWL_H : CFG.size) && q.t < st.y - 2);   // his body as it is now: sitting or crawling he is shorter
+  const over = phone() && !st.held && textInk.some(q => q.r > st.x - HALF_W && q.l < st.x + HALF_W && q.b > st.y - (st.air ? CFG.size : st.mode === 'sit' ? SIT_H : st.mode === 'crawl' ? CRAWL_H : CFG.size) && q.t < st.y - 2);   // his body as it is now: sitting or crawling he is shorter
+  st.overN = over ? Math.min(6, (st.overN || 0) + 1) : Math.max(0, (st.overN || 0) - 1);   // a few frames either way before he fades, so a word grazing his edge does not leave him flickering half-seen
+  const overText = over ? st.overN >= 4 || !!st.faded : st.overN > 2 && !!st.faded; st.faded = overText;
   canvas.style.opacity = overText ? '0' : '';
   if (overText) { hit.style.display = 'none'; hud.style.opacity = 0; } else hit.style.display = '';
   hit.style.transform = `translate3d(${Math.round(st.x - scrollX - HALF_W)}px,${Math.round(sy - CFG.size)}px,0)`;
@@ -1000,7 +1011,7 @@ function frame(now) {
   renderer.render(scene, camera);
 }
 let scrolledAt = 0;
-addEventListener('scroll', () => { dirty = true; scrolledAt = performance.now(); }, { passive: true });
+addEventListener('scroll', () => { if (Math.abs(scrollY - curSY) > 120) { lastSY = curSY; jumpAt = performance.now(); } curSY = scrollY; dirty = true; scrolledAt = performance.now(); }, { passive: true });
 // the agents rewrite their own transforms every frame: those mutations are not page changes and must not trigger a rescan
 new MutationObserver(ms => { if (ms.some(m => m.target !== hit && m.target !== hud && !(m.target.closest && m.target.closest(skipSel)))) dirty = true; }).observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class', 'open', 'style'] });
 requestAnimationFrame(frame);
