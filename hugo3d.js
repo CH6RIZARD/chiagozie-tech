@@ -205,7 +205,14 @@ inner.add(model); inner.scale.setScalar(S); view.add(inner); scene.add(view);
 view.rotation.x = CFG.viewTilt * Math.PI / 180;
 
 // ---------- the world: floors and solids, in page coordinates ----------
-let floors = [], ink = [], textInk = [], dirty = true, scanAt = 0;
+let floors = [], ink = [], textInk = [], seams = [], dirty = true, scanAt = 0;
+// Overflow clips (phone carousels): every scanned rect keeps its raw x (u1, u2) and its scroller's box, and shows only the
+// part inside it. A swipe shifts the raw x by the scroller's scrollLeft change at once; the next scan re-measures.
+const scrollers = new Map();   // scroller element -> { l, r, t, b, sl } in page coords, sl = scrollLeft at the scan
+const clipX = q => { const c = q.sc && scrollers.get(q.sc); if (!c) return q;
+  const a = Math.max(q.u1, c.l), b = Math.min(q.u2, c.r);
+  if ('y' in q) { q.x1 = a; q.x2 = b; } else if (b > a) { q.l = a; q.r = b; } else q.l = q.r = -1e9;   // ink scrolled out of its box is not there
+  return q; };
 const skipSel = '#scion-hud,#scion-say,#scion-ask,#scion-dove,#agent-layer,script,style,svg,canvas,nav:not(.mindex),.msheet';   // .msheet: the phone sheet is invisible until opened; .mindex: the phone project list is content, not chrome (hidden on desktop)
 // phones: faded-out layers (a view mid-switch, a panel at opacity 0) are not there for him
 const hidden = e => (e.checkVisibility ? !e.checkVisibility({ opacityProperty: true, visibilityProperty: true }) : false) || covered(e);
@@ -222,33 +229,44 @@ function capInset(el) {
   return capPx;
 }
 function scan() {
-  floors = []; ink = []; textInk = [];
-  const vh = innerHeight, near = r => r.bottom > -vh * 1.5 && r.top < vh * 2.5;
+  floors = []; ink = []; textInk = []; seams = []; scrollers.clear();
+  const vh = innerHeight, near = r => r.bottom > -vh * 1.5 && r.top < vh * 2.5, memo = new Map();
   // Phones in Read less: the page is one frame (OS.dc.html), so its cards, monitor and words are his world, not a solid wall.
   const os = phone() && document.body.classList.contains('simple') && document.querySelector('#os iframe');
   let od = null; try { od = os && os.contentDocument && os.contentDocument.body; } catch {}
   const pass = (root, fr) => {
     const fo = fr ? fr.getBoundingClientRect() : null, ox = scrollX + (fo ? fo.left : 0), oy = scrollY + (fo ? fo.top : 0), view = fr && fr.contentWindow;
+    const clipFor = n => { const sc = window.DEPTH ? window.DEPTH.clipOf(n, memo) : null;
+      if (sc && !scrollers.has(sc)) { const r = sc.getBoundingClientRect(); scrollers.set(sc, { l: r.left + ox, r: r.right + ox, t: r.top + oy, b: r.bottom + oy, sl: sc.scrollLeft }); }
+      return sc; };
+    const add = (arr, q, sc) => {   // only the part its scroller shows; vertically outside it: not there at all
+      if (sc) { const c = scrollers.get(sc), fl = 'y' in q; if ((fl ? q.y : q.b) < c.t - 1 || (fl ? q.y : q.t) > c.b + 1) return null; q.sc = sc; q.u1 = fl ? q.x1 : q.l; q.u2 = fl ? q.x2 : q.r; clipX(q); }
+      arr.push(q); return q; };
     for (const e of root.querySelectorAll('*')) {
       if (e.closest(skipSel)) continue;
       const r = e.getBoundingClientRect(); if (!near(fo ? { top: r.top + fo.top, bottom: r.bottom + fo.top } : r) || r.width < 160 || (fr && (r.top >= view.innerHeight || r.bottom <= 0))) continue;   // in the frame: only what its window shows
       const cs = getComputedStyle(e);
       if (cs.display === 'none' || cs.visibility === 'hidden' || (phone() && hidden(e))) continue;
+      const bt = parseFloat(cs.borderTopWidth), bb = parseFloat(cs.borderBottomWidth);
       const boxed = cs.backgroundColor !== 'rgba(0, 0, 0, 0)' || e.tagName === 'IMG' || e.tagName === 'IFRAME';
+      const card = boxed || (bt > 0 && bb > 0 && parseFloat(cs.borderLeftWidth) > 0 && parseFloat(cs.borderRightWidth) > 0);   // a box, not a rule
       const wrapper = od && (fr ? r.width > view.innerWidth - 4 && r.height > view.innerHeight * 0.8 : e.contains(os));   // the frame and its page-sized wrappers: not walls, and their edge-to-edge tops are traps, not ledges
-      if ((parseFloat(cs.borderTopWidth) > 0 || boxed) && !wrapper) floors.push({ y: r.top + oy, x1: r.left + ox, x2: r.right + ox, el: e, fr, support: true });
-      if (parseFloat(cs.borderBottomWidth) > 0 && !wrapper) floors.push({ y: r.bottom + oy, x1: r.left + ox, x2: r.right + ox, el: e, fr, support: true });
-      if (boxed && r.height > 30 && !wrapper) ink.push({ l: r.left + ox, t: r.top + oy, r: r.right + ox, b: (fr ? Math.min(r.bottom, view.innerHeight) : r.bottom) + oy });   // boxes are solid
+      const sc = clipFor(e);
+      // A 1px rule with nothing behind it is a seam, not a shelf: no standing on it (support:false), food falls past it too.
+      if ((bt > 0 || boxed) && !wrapper) { const sup = card || bt >= 2; add(sup ? floors : seams, { y: r.top + oy, x1: r.left + ox, x2: r.right + ox, el: e, fr, support: sup }, sc); }
+      if (bb > 0 && !wrapper) { const sup = card || bb >= 2; add(sup ? floors : seams, { y: r.bottom + oy, x1: r.left + ox, x2: r.right + ox, el: e, fr, support: sup }, sc); }
+      if (boxed && r.height > 30 && !wrapper) add(ink, { l: r.left + ox, t: r.top + oy, r: r.right + ox, b: (fr ? Math.min(r.bottom, view.innerHeight) : r.bottom) + oy }, sc);   // boxes are solid
     }
     const walk = (fr ? fr.contentDocument : document).createTreeWalker(root, NodeFilter.SHOW_TEXT, { acceptNode: n =>
       n.textContent.trim() && !n.parentElement.closest(skipSel) && !(phone() && hidden(n.parentElement)) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT });
     for (let n; (n = walk.nextNode());) {
       const range = n.ownerDocument.createRange(); range.selectNodeContents(n);
       const cap = phone() && !fr ? capInset(n.parentElement) : 0;   // phones, the hero name: its ledge is the tops of the letters, not the line box
+      const sc = clipFor(n);
       for (const r of range.getClientRects()) if (r.width > 0 && near(fo ? { top: r.top + fo.top, bottom: r.bottom + fo.top } : r)) {
-        const q = { l: r.left + ox, t: r.top + oy + cap, r: r.right + ox, b: r.bottom + oy };
-        ink.push(q); if (phone()) textInk.push(q);
-        if (r.width > 120 || cap > 0) floors.push({ y: r.top + oy + cap, x1: r.left + ox, x2: r.right + ox, el: n.parentElement, text: true, fr, name: cap > 0, support: true });
+        const q = add(ink, { l: r.left + ox, t: r.top + oy + cap, r: r.right + ox, b: r.bottom + oy }, sc); if (!q) continue;
+        if (phone()) textInk.push(q);
+        if (r.width > 120 || cap > 0) add(floors, { y: r.top + oy + cap, x1: r.left + ox, x2: r.right + ox, el: n.parentElement, text: true, fr, name: cap > 0, support: true }, sc);
       }
     }
   };
@@ -257,10 +275,12 @@ function scan() {
   if (bar) { const r = bar.getBoundingClientRect(); ink.push({ l: r.left + scrollX, t: r.top + scrollY - 400, r: r.right + scrollX, b: r.bottom + scrollY }); }
   if (od) pass(od, os);
   if (!od) floors.push({ y: groundY(), x1: 0, x2: document.documentElement.scrollWidth, el: document.body, ground: true, support: true });   // phones, Read less: the page bottom is under the monitor and its caption, not a floor
-  if (phone()) { floors.forEach(fit);   // phones: only ledges with standing room somewhere along them (no climbing into a gap and crawling there)
+  if (phone()) { floors.forEach(fit); seams.forEach(fit);   // phones: only ledges with standing room somewhere along them (no climbing into a gap and crawling there)
     floors = floors.filter(f => f.ground || f.x2 - f.x1 < 2 * HALF_W || [0, 1, 2, 3, 4, 5, 6, 7, 8].some(i => clear(f.x1 + HALF_W + (f.x2 - f.x1 - 2 * HALF_W) * i / 8, f.y, CFG.size + 4))); }
+  allFloors = floors.concat(seams);
   dirty = false; scanAt = performance.now();
 }
+let allFloors = [];
 // Can he occupy this spot? Body box must be clear of every word and box above the floor (standing or sitting height).
 const clear = (x, y, h) => !ink.some(q => q.r > x - HALF_W && q.l < x + HALF_W && q.b > y - h && q.t < y - 2);
 // Where he has been: coarse cells with the last time he was there. New places are more interesting than ones he just
@@ -268,10 +288,10 @@ const clear = (x, y, h) => !ink.some(q => q.r > x - HALF_W && q.l < x + HALF_W &
 const seenAt = new Map(), avoid = new Map();
 const cell = (x, y) => `${Math.round(x / 140)}:${Math.round(y / 90)}`;
 const novelty = (x, y) => { const l = seenAt.get(cell(x, y)); return l === undefined ? 1 : 1 - Math.exp(-(t - l) / 75); };
-function pickFloor(furniture) {   // furniture: dividers and box tops only, the places he goes on purpose
+function pickFloor(furniture) {   // furniture: anywhere he can stand on purpose (box tops and lines of text), never the page bottom
   const top = scrollY + 40, bot = scrollY + innerHeight - 40, c = [];
   for (const f of floors) {
-    if (f.y < top || f.y > bot || f.x2 - f.x1 < 120 || (furniture && (f.text || f.ground))) continue;
+    if (f.y < top || f.y > bot || f.x2 - f.x1 < 120 || (furniture && f.ground)) continue;
     // sample a few x along the rule; keep the floors that have standing room
     const xs = []; for (let i = 0; i < 9; i++) { const x = f.x1 + HALF_W + 8 + (f.x2 - f.x1 - 2 * HALF_W - 16) * i / 8; if (clear(x, f.y, CFG.size + 4)) xs.push(x); }
     if (xs.length) c.push({ f, xs });
@@ -456,7 +476,7 @@ function gesture(dt, sitting, still) {
 }
 
 window.__hugo = st;   // read-only peek for debugging
-window.__hugoFloors = () => floors;   // the ledges he scans are the food's colliders too (bond.js)
+window.__hugoFloors = () => allFloors;   // the ledges he scans are the food's colliders too (bond.js skips support:false seams)
 if (/[?&]debug/.test(location.search)) window.__hugoDbg = { get floors() { return floors; }, get t() { return t; }, get gest() { return gest && gest.name; }, miss: why => missed(why), clear: (x, y, h) => clear(x, y, h), get ink() { return ink; } };
 st.dims = { THIGH, ARMLEN, SPINE, PITCH, CRAWL_H, size: CFG.size };
 // Hit area follows him; the canvas itself never takes the pointer.
@@ -676,8 +696,8 @@ function pickToward(dir) {
   return c[0] || null;
 }
 const onFloor = (f, x) => x - HALF_W >= f.x1 && x + HALF_W <= f.x2;
-// Stepping off a ledge: phones never take a drop that ends a screen or more down at the page bottom (he vanished from view for good)
-const dropTo = (x, y) => { const f = landingBelow(x, y), ok = f && !(phone() && f.ground && f.y - y > innerHeight * 0.8); st.dropF = ok && phone() ? f : null; return ok ? f : null; };
+// Stepping off a ledge: never a drop that ends a screen or more down at the page bottom (he vanished from view for good)
+const dropTo = (x, y) => { const f = landingBelow(x, y), ok = f && !(f.ground && f.y - y > innerHeight * 0.8); st.dropF = ok && phone() ? f : null; return ok ? f : null; };   // never a drop to the page bottom a screen away (the rules that used to catch him are seams now)
 function landingBelow(x, y, vis) {   // nearest floor under (x, y) within a screen and a half; vis: a drop, so it must be one you can see
   let best = null;
   const visBottom = scrollY + innerHeight - 30, lim = vis && visBottom > y + 2 ? visBottom : Infinity;
@@ -816,7 +836,7 @@ function born() {   // first appearance: a floor in view with standing room
     }
     return c; };
   // First appearance on a wide screen: sitting on the end of the hero's grey divider, legs over the edge.
-  const ledge = floors.find(f => !f.text && f.el.matches && f.el.matches('#mast .facts') && f.y > scrollY && f.y < scrollY + Math.max(innerHeight, 900));
+  const ledge = allFloors.find(f => !f.text && f.el.matches && f.el.matches('#mast .facts') && f.y > scrollY && f.y < scrollY + Math.max(innerHeight, 900));
   if (ledge && !bornTries) {
     for (let x = ledge.x2 - HALF_W * 0.4 - 2; x > ledge.x1 + HALF_W; x -= 8)   // the clear spot nearest the end
       if (clear(x, ledge.y, SIT_H + 4)) { st.floor = ledge; st.x = x; st.y = ledge.y; st.dir = -1; st.mode = 'sit'; st.sitK = 1; st.idleUntil = t + 14 + Math.random() * 10; return true; }
@@ -840,7 +860,7 @@ function refloor(f) {   // the page reflows; keep the floor glued to its element
   const fo = f.fr ? f.fr.getBoundingClientRect() : null, ox = scrollX + (fo ? fo.left : 0), oy = scrollY + (fo ? fo.top : 0);   // fo: a floor inside the Read less frame
   if (f.text) { const r = f.el.getBoundingClientRect(); const dy = (r.top + oy) - (f.elTop ?? (f.elTop = r.top + oy)); if (dy) { f.y += dy; f.elTop += dy; } return true; }
   const r = f.el.getBoundingClientRect(), top = r.top + oy, bottom = r.bottom + oy;
-  f.x1 = r.left + ox; f.x2 = r.right + ox; if (phone()) fit(f); f.y = Math.abs(f.y - bottom) < Math.abs(f.y - top) ? bottom : top; return true;
+  f.x1 = f.u1 = r.left + ox; f.x2 = f.u2 = r.right + ox; clipX(f); if (phone()) fit(f); f.y = Math.abs(f.y - bottom) < Math.abs(f.y - top) ? bottom : top; return true;
 }
 function step(dt) {
   if (st.held) {   // he hangs from the hand: a stiff spring to the pointer, so the body lags and swings a little
@@ -1083,6 +1103,25 @@ function frame(now) {
 }
 let scrolledAt = 0;
 addEventListener('scroll', () => { if (Math.abs(scrollY - curSY) > 120) { lastSY = curSY; jumpAt = performance.now(); } curSY = scrollY; dirty = true; scrolledAt = performance.now(); }, { passive: true });
+// Phone carousels scroll an element, not the window (element scroll events do not bubble: listen in the capture phase).
+// The swiped cards' ledges and ink shift at once, he rides the card under him, and a full re-measure follows once it settles.
+document.addEventListener('scroll', e => {
+  const sc = e.target; if (sc === document || !sc.getBoundingClientRect) return;
+  dirty = true; scrolledAt = performance.now();
+  const c = scrollers.get(sc); if (!c) return;
+  const d = sc.scrollLeft - c.sl; if (!d) return; c.sl += d;
+  const f = st.floor, items = new Set([...floors, ...seams, ...ink]); if (f) items.add(f);
+  for (const q of items) if (q.sc === sc) { q.u1 -= d; q.u2 -= d; clipX(q); if (phone() && 'y' in q) fit(q); }
+  if (f && f.sc === sc && !st.air && !st.held && st.mode !== 'climb') {
+    st.x -= d;
+    if (!onFloor(f, st.x)) {   // his card is sliding out of view: onto the next card at the same height, else to its last visible stretch, else he hops off
+      const tw = floors.find(q => q !== f && Math.abs(q.y - f.y) < 6 && onFloor(q, st.x));
+      if (tw) st.floor = tw;
+      else if (f.x2 - f.x1 >= 2 * HALF_W) st.x = Math.max(f.x1 + HALF_W, Math.min(f.x2 - HALF_W, st.x));
+      else { st.air = true; st.hop = true; st.floor = null; st.vx = 0; st.vy = -160; st.mode = 'walk'; }
+    }
+  }
+}, { capture: true, passive: true });
 // the agents rewrite their own transforms every frame: those mutations are not page changes and must not trigger a rescan
 new MutationObserver(ms => { if (ms.some(m => m.target !== hit && m.target !== hud && !(m.target.closest && m.target.closest(skipSel)))) dirty = true; }).observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class', 'open', 'style'] });
 requestAnimationFrame(frame);

@@ -277,6 +277,10 @@ window.SCION_BOOT = R => {
   let surfaces = [], ink = [], surfAt = 0;   // ink: every piece of visible text, for the never-cover rule
   function scanSurfaces() {
     const out = [], inkOut = [], vh = innerHeight, near = r => r.bottom > -vh && r.top < vh * 2 && r.width > 50;
+    // the box a phone carousel (any overflow clip) shows: page coords, so landings and ink outside it are not there
+    const memo = new Map(), boxes = new Map(), clipBox = n => { const c = window.DEPTH ? window.DEPTH.clipOf(n, memo) : null; if (!c) return null;
+      if (!boxes.has(c)) { const r = c.getBoundingClientRect(); boxes.set(c, { l: r.left + scrollX, r: r.right + scrollX, t: r.top + scrollY, b: r.bottom + scrollY }); }
+      return boxes.get(c); };
     for (const e of document.body.querySelectorAll('*')) {
       if (e.closest('#scion-hud,#scion-say,script,style,svg,#agent-layer,.msheet:not(.on)')) continue;   // the closed phone sheet waits invisibly below the screen: not a ledge
       const r = e.getBoundingClientRect();
@@ -284,18 +288,20 @@ window.SCION_BOOT = R => {
       const cs = getComputedStyle(e);
       if (cs.visibility === 'hidden' || cs.display === 'none' || cs.opacity === '0') continue;
       const boxed = parseFloat(cs.borderTopWidth) > 0 || (cs.backgroundColor !== 'rgba(0, 0, 0, 0)' && e !== document.body);
-      if (boxed && r.width > 120 && r.height > 30) out.push({ el: e, kind: 'card', occluder: parseFloat(cs.borderTopWidth) > 0 && r.width < innerWidth * 0.9 });
+      if (boxed && r.width > 120 && r.height > 30) out.push({ el: e, kind: 'card', occluder: parseFloat(cs.borderTopWidth) > 0 && r.width < innerWidth * 0.9, clip: clipBox(e) });
     }
     // Every line of visible text on the page.
     const walk = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, { acceptNode: n =>
       n.textContent.trim() && !n.parentElement.closest('#scion-hud,#scion-say,script,style,.msheet:not(.on)') ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT });
     for (let n; (n = walk.nextNode());) {
-      const e = n.parentElement, range = document.createRange(); range.selectNodeContents(n);
-      for (const r of range.getClientRects()) if (r.width > 0 && r.bottom > -innerHeight && r.top < innerHeight * 2)
-        inkOut.push({ l: r.left + scrollX, t: r.top + scrollY, r: r.right + scrollX, b: r.bottom + scrollY });
+      const e = n.parentElement, range = document.createRange(), clip = clipBox(n); range.selectNodeContents(n);
+      for (const r of range.getClientRects()) if (r.width > 0 && r.bottom > -innerHeight && r.top < innerHeight * 2) {
+        const l = Math.max(r.left + scrollX, clip ? clip.l : -1e9), rr = Math.min(r.right + scrollX, clip ? clip.r : 1e9);
+        if (rr > l) inkOut.push({ l, t: r.top + scrollY, r: rr, b: r.bottom + scrollY });   // text scrolled out of its carousel is not ink
+      }
       if (!near(e.getBoundingClientRect())) continue;
       const kind = e.closest('h1,h2,h3,h4') ? 'heading' : 'text';
-      [...range.getClientRects()].forEach((r, line) => { if (r.width > 40) out.push({ range, line, el: e, kind,
+      [...range.getClientRects()].forEach((r, line) => { if (r.width > 40) out.push({ range, line, el: e, kind, clip,
         abs: { l: r.left + scrollX, t: r.top + scrollY, r: r.right + scrollX, b: r.bottom + scrollY } }); });
     }
     surfaces = out; ink = inkOut; surfAt = performance.now();
@@ -308,6 +314,8 @@ window.SCION_BOOT = R => {
     if (a && a.mode === 'fly') a.y += (1 - depthScale(a.z)) * d;
   }, { passive: true });
   addEventListener('scroll', () => { if (performance.now() - surfAt > 600) surfAt = 0; }, { passive: true });
+  // a carousel swipe scrolls an element, not the window (capture: element scrolls do not bubble): its text moved, look again
+  document.addEventListener('scroll', e => { if (e.target !== document && performance.now() - surfAt > 300) surfAt = 0; }, { capture: true, passive: true });
 
   // It never stands where its body would cover words: the space above its feet must be free of text.
   const covers = (x, y) => ink.some(q => q.b > y - CFG.size && q.t < y - 4 && q.r > x - 30 && q.l < x + 30);
@@ -322,8 +330,10 @@ window.SCION_BOOT = R => {
     for (const s of surfaces) {
       const r = surfRect(s); if (!r) continue;
       const sy = r.top + scrollY; if (sy < top + 60 || sy > bottom) continue;  // room above for the bird
-      const fx = clamp(x, r.left + scrollX + 24, r.right + scrollX - 24);
-      if (r.right - r.left < 48) continue;
+      // only the stretch you can see: inside the screen, and inside its carousel's box (a card swiped off screen is not a perch)
+      const c = s.clip, lo = Math.max(r.left + scrollX + 24, scrollX + 16, c ? c.l + 16 : -1e9), hi = Math.min(r.right + scrollX - 24, scrollX + innerWidth - 16, c ? c.r - 16 : 1e9);
+      if (hi < lo || (c && (sy < c.t || sy > c.b))) continue;
+      const fx = clamp(x, lo, hi);
       const d = Math.hypot(fx - x, (sy - y) * 1.3) + (s === avoid ? 400 : 0) + (s.kind === 'text' ? 0 : 20) + (fresh ? 0 : stale(s) * 260);
       // The cover test (it scans every line of text) runs only for a spot that would win.
       if (d < bd && !covers(fx, sy, s)) { bd = d; best = { s, dx: fx - (r.left + scrollX), x: fx, y: sy }; }
@@ -842,8 +852,9 @@ window.SCION_BOOT = R => {
   }
 
   function perchTick(dt, now, p) {
-    const pos = spotPos(a.spot);
+    const pos = spotPos(a.spot), cb = a.spot.s.clip;
     if (!pos || pos.r.width === 0) return takeOff(null, 'perch vanished');
+    if (cb && (pos.x < cb.l + 8 || pos.x > cb.r - 8)) return takeOff(null, 'perch swiped away');   // its card left the carousel's view
     a.x = pos.x; a.y = pos.y;
     const dazed = REL.body('dove').dazed > 0, rel = a.rel && !a.rel.fin ? a.rel : null;
     for (const k of ['watchHugo', 'displayT', 'seenT', 'bobT', 'wingT']) a[k] = (a[k] || 0) - dt;
