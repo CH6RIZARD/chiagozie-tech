@@ -213,6 +213,14 @@ const hidden = e => (e.checkVisibility ? !e.checkVisibility({ opacityProperty: t
 const covered = e => { const r = e.getBoundingClientRect(), d = e.ownerDocument, cx = (r.left + r.right) / 2;
   const hits = [d.elementFromPoint(cx, r.top + Math.min(4, r.height / 2)), d.elementFromPoint(cx, (r.top + r.bottom) / 2)].filter(Boolean);
   return hits.length > 0 && !hits.some(h => e.contains(h)); };
+// Distance from the top of a text box to the top of its capitals (the hero name only; 0 elsewhere).
+let capEl = null, capPx = 0;
+function capInset(el) {
+  const h = el.closest('#mast h1'); if (!h) return 0;
+  if (capEl !== h) { const cs = getComputedStyle(h), c = document.createElement('canvas').getContext('2d'); c.font = `${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+    const m = c.measureText('ChiagozieOliver'); capPx = Math.max(0, (m.fontBoundingBoxAscent || 0) - (m.actualBoundingBoxAscent || 0)); capEl = h; }
+  return capPx;
+}
 function scan() {
   floors = []; ink = []; textInk = [];
   const vh = innerHeight, near = r => r.bottom > -vh * 1.5 && r.top < vh * 2.5;
@@ -236,10 +244,11 @@ function scan() {
       n.textContent.trim() && !n.parentElement.closest(skipSel) && !(phone() && hidden(n.parentElement)) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT });
     for (let n; (n = walk.nextNode());) {
       const range = n.ownerDocument.createRange(); range.selectNodeContents(n);
+      const cap = phone() && !fr ? capInset(n.parentElement) : 0;   // phones, the hero name: its ledge is the tops of the letters, not the line box
       for (const r of range.getClientRects()) if (r.width > 0 && near(fo ? { top: r.top + fo.top, bottom: r.bottom + fo.top } : r)) {
-        const q = { l: r.left + ox, t: r.top + oy, r: r.right + ox, b: r.bottom + oy };
+        const q = { l: r.left + ox, t: r.top + oy + cap, r: r.right + ox, b: r.bottom + oy };
         ink.push(q); if (phone()) textInk.push(q);
-        if (r.width > 120) floors.push({ y: r.top + oy, x1: r.left + ox, x2: r.right + ox, el: n.parentElement, text: true, fr });
+        if (r.width > 120 || cap > 0) floors.push({ y: r.top + oy + cap, x1: r.left + ox, x2: r.right + ox, el: n.parentElement, text: true, fr, name: cap > 0 });
       }
     }
   };
@@ -643,7 +652,8 @@ function landingBelow(x, y, vis) {   // nearest floor under (x, y) within a scre
   let best = null;
   const visBottom = scrollY + innerHeight - 30, lim = vis && visBottom > y + 2 ? visBottom : Infinity;
   // The bottom of the page always catches him, words or not; otherwise he fell straight through it and out of the world.
-  for (const f of floors) if (f.y > y + 2 && f.y <= lim && (f.ground || f.y < y + innerHeight * 1.5) && onFloor(f, x) && (f.ground || clear(x, f.y, CFG.size + 4)) && (!best || f.y < best.y)) best = f;
+  // Phones: not behind words (Read less: the monitor and its caption sit on it); past it he falls out of the world and is born again in view.
+  for (const f of floors) if (f.y > y + 2 && f.y <= lim && (f.ground || f.y < y + innerHeight * 1.5) && onFloor(f, x) && ((f.ground && !phone()) || clear(x, f.y, CFG.size + 4)) && (!best || f.y < best.y)) best = f;
   // Dropped over a dense page, almost no ledge has a body-sized gap above it. If the strict search found nothing near, he lands on
   // the nearest ledge below him anyway, standing in front of the words, as a small figure on a page would.
   if (!phone() && (!best || (best.ground && best.y > y + innerHeight * 0.9))) {   // phones: never in front of words
@@ -719,6 +729,12 @@ function born() {   // first appearance: a floor in view with standing room
   if (ledge && !bornTries) {
     for (let x = ledge.x2 - HALF_W * 0.4 - 2; x > ledge.x1 + HALF_W; x -= 8)   // the clear spot nearest the end
       if (clear(x, ledge.y, SIT_H + 4)) { st.floor = ledge; st.x = x; st.y = ledge.y; st.dir = -1; st.mode = 'sit'; st.sitK = 1; st.idleUntil = t + 14 + Math.random() * 10; return true; }
+  }
+  // Phones, first appearance: sitting on top of the hero name, somewhere new along it each load, in one of his sitting poses.
+  if (phone() && !bornTries && !st.bornOnce) {
+    const xs = []; for (const nm of floors) if (nm.name && nm.y > scrollY && nm.y < scrollY + innerHeight) for (let x = nm.x1 + HALF_W * 0.6; x <= nm.x2 - HALF_W * 0.6; x += 6) if (clear(x, nm.y, SIT_H + 4)) xs.push({ nm, x });   // both words, end to end
+    if (xs.length) { const { nm, x } = xs[(Math.random() * xs.length) | 0]; st.bornOnce = true; st.floor = nm; st.x = x; st.y = nm.y; st.dir = Math.random() < 0.5 ? -1 : 1; st.mode = 'sit'; st.sitK = 1;
+      st.idleUntil = t + 8 + Math.random() * 10; st.pendGest = { name: SIT[(Math.random() * SIT.length) | 0], dur: 3 + Math.random() * 4, side: Math.random() < 0.5 ? -1 : 1, amp: 0.7 + Math.random() * 0.5 }; return true; }
   }
   let c = spots(true);
   if (!c.length && (bornTries = (bornTries || 0) + 1) > 90) c = spots(false);   // nothing in view for ~1.5 s: start anywhere he fits
