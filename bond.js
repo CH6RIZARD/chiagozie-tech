@@ -56,6 +56,7 @@
   let S = null, SIM = null;
   let DEBUG = false, HUDEL = null;
 
+  const newDrv = () => ({ boredom: U(.1, .4), lonely: 0, energy: U(.5, .9), hunger: U(.1, .4) });
   function newM() { return { facts: [], famil: 0, hab: { hugo: o0(HABK), dove: o0(HABK) }, own: {}, W: { hugo: {}, dove: {} }, history: [], doveId: null }; }
   function newS() {
     const r = rnd(), kind = r < .4 ? 'rising' : r < .75 ? 'calm' : 'random';
@@ -66,7 +67,8 @@
       P, pt: { hd: { aff: 0, dom: 0, aro: U(.1, .3) }, dh: { aff: 0, dom: 0, aro: U(.1, .3) } }, rest: { hd: { aff: 0, dom: 0 }, dh: { aff: 0, dom: 0 } },
       I: { hugo: o0(MOT, .2), dove: o0(MOT, .2) }, eng: { hugo: null, dove: null }, phi: { hugo: o0(MOT), dove: o0(MOT) },
       nudge: { hugo: {}, dove: {} }, boost: { hugo: {}, dove: {} },
-      drv: { hugo: { boredom: U(.1, .4), lonely: 0, energy: U(.5, .9) }, dove: { boredom: U(.1, .4), lonely: 0, energy: U(.5, .9), hunger: U(.1, .4) } },
+      drv: { hugo: newDrv(), dove: newDrv() },
+      food: [], foodIds: 0, nextFood: U(15, 40), meal: { hugo: false, dove: false }, dig: { hugo: 0, dove: 0 }, fedOut: { hugo: 0, dove: 0 }, block: { hugo: {}, dove: {} }, guardUntil: 0, rideAt: 0,
       tens: { hugo: 0, dove: 0 }, conf: { hugo: 0, dove: 0 }, frameRead: { hugo: .3, dove: .3 },
       bid: { hugo: { answered: .6 }, dove: { answered: .6 } }, bidOpen: { hugo: null, dove: null },
       body: { dove: { ruffled: 0, sore: 0, dazed: 0, hits: 0, lastHit: null, heldBy: null, heldUntil: 0 }, hugo: { ruffled: 0, sore: 0, dazed: 0, hits: 0, lastHit: null, heldBy: null, heldUntil: 0 } },
@@ -198,7 +200,8 @@
     let risk = threatH * (1 - habD.approach) * (1 + S.tens.dove) * (1 + .6 * grudge('dove')) * (1 + .5 * sore01('dove'));
     if (has && d.y < h.y - reachY && !h.air && h.mode !== 'climb' && !h.hop) risk *= .3;
     const cost = .5 * Math.max(0, ownHere('dove')) + .4 * S.drv.dove.hunger * ((d && d.onText) || crumbNear < 60 ? 1 : 0) + .25 * (frame === 'play') + .15;
-    const fid = clamp((40 + 160 * S.P.dove.nerve) * (.4 + risk) / (.4 + cost), 20, 420);
+    // flight distance shrinks as the dove gets used to him and trusts him (urban doves: FID falls with habituation)
+    const fid = clamp((40 + 160 * S.P.dove.nerve) * (.4 + risk) / (.4 + cost) * (1 - .35 * S.M.famil) * (1 - .25 * Math.max(0, trust('dove'))), 20, 420);
     const fearH = who === 'hugo' ? fear : Math.max(0, -S.pt.hd.aff) * (1 - S.pt.hd.dom) / 2 + .5 * Math.max(0, S.pt.hd.aro - .6) + .3 * sore01('hugo');
     const flightH = clamp(40 + 160 * fearH * (1 - S.M.hab.hugo.dive) + 80 * sore01('hugo') - 60 * S.M.famil, 25, 300);
     return {
@@ -208,7 +211,7 @@
       trust: trust(who), grudge: grudge(who), famil: S.M.famil, conf: S.conf[who],
       openHarm: grudge(who) > .1 || grudge(o) > .1 || !!(ph && ph.harm.length && !ph.repaired),
       stress: clamp(+((self && self.stress) || 0)), frame,
-      away: S.away > 0 ? 1 : 0, sore: sore01(who),
+      away: S.away > 0 ? 1 : 0, sore: sore01(who), advert: who === 'dove' ? advertBest('dove').adv : 0,
     };
   }
 
@@ -238,7 +241,7 @@
       care: 1.3 * aff + .4 * dom + .8 * c.otherSore + .4 * nurt,
       inspect: .6 * (1 - c.famil) + .6 * cur - .5 * Math.abs(aff) + .5 * bell(aro, .45, .2),
       play: aff < -.2 ? -1 : 1.0 * (dv ? P.energy : P.play) + .8 * Dr.boredom + .5 * aff - 1.2 * c.stress,
-      prey: dv ? .8 * Dr.hunger + .4 * dom + .3 * (c.crumbNear < 250 ? 1 : 0) + .3 * c.conf - 1.0 * c.threatH * (c.gaze ? 1 : 0)
+      prey: dv ? .8 * Dr.hunger + .4 * dom + .6 * c.advert + .3 * c.conf - 1.0 * c.threatH * (c.gaze ? 1 : 0)   // advert: the food's own pull (value x distance falloff)
         : .9 * P.aggr + .6 * Dr.boredom + .5 * dom - .6 * aff * (1 - S.frameRead.hugo) + .4 * (c.reach ? 1 : 0) + .3 * c.away,
       antag: -1.2 * aff + .8 * dom + .9 * c.grudge + .4 * aro + .4 * c.anx * (c.otherHeldRecent ? 1 : 0),
       avoid: 1.5 * c.fear + .6 * c.sore - .7 * c.conf,
@@ -360,7 +363,7 @@
       case 'stalk': return who === 'hugo' ? c.reach : !c.h.air && !c.h.held;
       case 'swat': return c.reach && !c.otherHeld;
       case 'pickup': return c.reach && !c.otherHeld && c.d.mode === 'perch' && (c.aff > .15 || fr === 'play' || S.I.hugo.care > .4);
-      case 'scrounge': return !!S.crumb || c.dist < 250;
+      case 'scrounge': return !!advertBest('dove').item || c.dist < 250;
       case 'peck_at': return !c.h.air && !c.h.held;
       case 'guard_spot': return c.own > 0;
       case 'displace': return c.dom > .2 || ownHere(c.o) !== 0 || c.contested > 0;
@@ -440,7 +443,7 @@
       case 'inspect': o.do = 'inspect'; o.dur = 3; break;
       case 'follow': o.do = 'follow_hugo'; o.gap = U(60, 150); o.until = S.t + 10; break;
       case 'offer': o.do = 'offer'; o.gap = 40; break;
-      case 'scrounge': o.do = S.crumb ? (c.aff < .1 || (c.gaze && c.fear > .3) ? 'steal' : 'take') : 'scrounge'; if (S.crumb) { o.x = S.crumb.x; o.y = S.crumb.y; } else { o.x = h.x + side * 30; } break;
+      case 'scrounge': { const it = advertBest('dove').item; o.do = it ? (c.aff < .1 || (c.gaze && c.fear > .3) ? 'steal' : 'take') : 'scrounge'; if (it) { o.x = it.x; o.y = it.y; o.food = it.id; } else { o.x = h.x + side * 30; } break; }
       case 'groom': o.do = 'preen_beside'; o.gap = 25; o.dur = 4; break;
       case 'sit_with': o.do = 'land_beside'; o.gap = U(40, 90); o.dur = 20; o.rest = true; break;
       case 'play_bow': o.do = 'hop'; o.dur = 1.2; break;
@@ -778,16 +781,16 @@
         bumpPt(b, -.2 * s, 0, .4 * s); S.conf[a] = clamp(S.conf[a] + .05 * s, -1, 1);
         if (data.play && sev < .2) addFact('heldGently', a, b, .12, 4); else addFact('caughtRough', a, b, -.2, 6);
         break;
-      case 'fed': {
-        const eater = a === 'dove' ? 'dove' : b === 'dove' ? 'dove' : b, feeder = eater === a ? b : a;
-        if (isAg(eater)) bumpPt(eater, .08 * Math.max(s, .5), 0, 0);
-        if (isAg(feeder) && isAg(eater) && feeder !== eater) addFact('fed', feeder, eater, .15, 4);
-        S.drv.dove.hunger = clamp(S.drv.dove.hunger - .4);
+      case 'fed': {   // a: the eater, b: who put the food there (if anyone)
+        const eater = isAg(a) ? a : 'dove', feeder = isAg(b) && b !== eater ? b : null;
+        if (data.frac == null && S.crumb) bite(eater, S.crumb, 1, true);   // eaten whole (the sim's toy bodies)
+        bumpPt(eater, .08 * Math.max(s, .5), 0, 0);
+        if (feeder) { addFact('fed', feeder, eater, .15, 4); S.M.famil = clamp(S.M.famil + .02); }   // feeding builds trust
         if (ph) { ph.fed = (ph.fed || 0) + 1; if (data.steal) ph.stole = true; }
-        dropCrumb(); break;
+        break;
       }
-      case 'forage': S.drv.dove.hunger = clamp(S.drv.dove.hunger - .25); break;
-      case 'drop': if (!S.crumb && data.x != null) S.crumb = { x: data.x, y: data.y, by: a === 'hugo' ? 'hugo' : 'stage', t: S.t, el: null }; break;
+      case 'forage': S.drv.dove.hunger = clamp(S.drv.dove.hunger - .05); break;   // a word is not a meal
+      case 'drop': if (data.x != null) dropFood(a, data); break;
       case 'nearMiss': bumpPt('hugo', 0, 0, .15 * sev / .3); bumpPt('dove', 0, 0, .15 * sev / .3);
         if (isAg(b)) S.frameRead[b] = clamp(S.frameRead[b] + (ph && ph.frame === 'play' ? .1 : -.15)); break;
       case 'ignored': if (isAg(b)) { bumpPt(b, -.03, 0, 0); S.bid[b].answered += .25 * (.5 - S.bid[b].answered); } break;
@@ -864,7 +867,169 @@
     if (ph.pivots < 1 && ph.bends < 2) { ph.pivots++; bend('visitor', S.story.J0 * 3); if (S.grabAt > S.t - 30) ph.object = { kind: 'visitor', key: null, x: 0, y: 0 }; }
     else if (ph.stage === 'build' || ph.stage === 'peak') { ph.stage = 'fade'; ph.stageT0 = S.t; ph.cause = 'visitor-grab'; }
   }
-  function dropCrumb() { if (S.crumb && S.crumb.el) { try { S.crumb.el.remove(); } catch (e) { /* gone */ } } S.crumb = null; }
+  // ---------------------------------------------------------------- 9b. food: a smart object with a life cycle
+  // HELD (in Hugo's hand; the bird can only beg) -> DROPPED (falls, bounces and settles on a real ledge, page coords)
+  // -> PECKED (each peck knocks 2-4 crumbs loose; Hugo takes 25-35% bites) -> STALE (untouched 60-90 s: half the pull,
+  // duller) -> GONE (a fade). One fresh item at a time; Hugo finds the next one 20-60 s later. Each item advertises
+  // value x 1/(1+(d/R)^2); eaters score it through a hunger curve with meal hysteresis (on at .6, off at .2).
+  const edible = it => !!it && it.st !== 'held' && it.st !== 'gone' && it.n >= .02 && (it.settled || !!SIM);
+  function mkFood(by, x, y, st, main, n) {
+    return { id: ++S.foodIds, by, x, y, vx: 0, vy: 0, st, main: !!main, n: n == null ? 1 : n, t0: S.t, touched: S.t, life: SIM ? 30 : U(60, 90),
+      settled: !!SIM, ledge: null, el: null, owner: null, ownUntil: 0, holder: null, fedBy: {} };
+  }
+  function syncCrumb() { S.crumb = S.food.find(it => it.main && edible(it)) || S.food.find(edible) || null; }
+  function release(it, x, y, vx) { it.st = 'dropped'; it.holder = null; it.x = x; it.y = y - 2; it.vx = vx || 0; it.vy = -40; it.settled = !!SIM; it.touched = S.t; physKick(); }
+  function dropFood(a, data) {
+    const held = S.food.find(it => it.st === 'held');
+    if (held) return release(held, data.x, data.hy != null ? data.hy : data.y, data.vx);
+    if (S.food.some(it => it.main && it.st !== 'gone')) return;   // one fresh item at a time
+    S.food.push(mkFood(a === 'hugo' ? 'hugo' : 'stage', data.x, (data.hy != null ? data.hy : data.y) - (SIM ? 0 : 2), 'dropped', true)); syncCrumb(); physKick();
+  }
+  function advertBest(who) {
+    const a = who === 'hugo' ? getH() : getD(); let item = null, adv = 0;
+    if (!a || !S.food.length) return { item, adv };
+    const R = (DOM && G.innerWidth < 760 ? 120 : 200) * (SIM ? 1 : 1 + 2 * S.drv[who].hunger), blk = S.block[who];   // hunger widens the search (the sim keeps the plain falloff)
+    for (const it of S.food) {
+      if (!edible(it) || (blk[it.id] || 0) > S.t || (who === 'hugo' && !SIM && !it.ledge)) continue;   // he walks: only food lying on a floor
+      const d = Math.hypot(it.x - a.x, it.y - a.y), v = (.4 + .6 * it.n) * (it.st === 'stale' ? .5 : 1) / (1 + (d / R) ** 2);   // even a crumb is worth a peck
+      if (v > adv) { adv = v; item = it; }
+    }
+    return { item, adv: Math.min(1, adv) };
+  }
+  // How much `who` wants to eat right now, and what. Considerations multiply (any zero vetoes): hunger x advert x fear x possession.
+  function eatU(who) {
+    const D = S.drv[who];
+    if (D.hunger >= .6) S.meal[who] = true; else if (D.hunger <= .2) S.meal[who] = false;
+    if (!S.meal[who]) return null;
+    const hU = clamp(.3 + D.hunger);
+    const held = S.food.find(it => it.st === 'held' && it.holder === who);
+    if (held) return { u: hU, item: held, held: true };
+    const { item, adv } = advertBest(who); if (!item) return null;
+    const h = getH(), c = ctx(who); let veto = 1, steal = false;
+    if (who === 'dove' && h) {
+      const near = Math.hypot(item.x - h.x, item.y - h.y) < 160;
+      if (near) veto *= 1 - .8 * c.fear;
+      if (near && S.t < S.guardUntil && c.gaze) veto *= .4;   // he is guarding it and looking
+      steal = near && (c.aff < .1 || (c.gaze && c.fear > .3));
+    }
+    if (item.owner && item.owner !== who && S.t < item.ownUntil) veto *= .3;   // someone got there first: a 2-3 s possession window
+    return { u: hU * adv * veto, item, steal };
+  }
+  function bite(who, it, frac, quiet) {
+    if (!it || it.st === 'gone' || (it.st === 'held' && it.holder !== who)) return 0;
+    const take = Math.min(it.n, frac); if (take <= 0) return 0;
+    const stale = it.st === 'stale', food = take * (stale ? .5 : 1);
+    it.n -= take; it.touched = S.t; if (it.st === 'dropped') it.st = 'pecked';
+    const D = S.drv[who];
+    D.hunger = clamp(D.hunger - food * (who === 'dove' ? 2.2 : 1.2));
+    S.dig[who] += food * .6; S.fedOut[who] += food;   // digested into energy over the next seconds
+    if (G.MORTAL && !SIM) G.MORTAL.progress(who, 'ate');
+    if (!it.owner || S.t > it.ownUntil || it.owner === who) { it.owner = who; it.ownUntil = S.t + 2.5; }
+    if (who === 'dove' && it.n > .15 && !SIM) {   // the peck knocks crumbs loose
+      const k = 2 + ((rnd() * 3) | 0);
+      for (let i = 0; i < k && S.food.length < 9; i++) {
+        const n = Math.min(.05, (it.n - .1) / k); if (n < .02) break;
+        it.n -= n; const cr = mkFood(it.by, it.x, it.y - 3, 'pecked', false, n); cr.vx = U(-70, 70); cr.vy = U(-160, -90); cr.settled = false; S.food.push(cr);
+      }
+      physKick();
+    }
+    if (it.n < .02) it.st = 'gone';
+    if (!quiet && !it.fedBy[who]) {   // the first bite of a meal is the relational event
+      it.fedBy[who] = 1;
+      const h = getH(), byHugo = it.by === 'hugo' && who === 'dove';
+      ev(who, 'fed', it.by === 'hugo' && who !== 'hugo' ? 'hugo' : null, .2, { frac: take, steal: byHugo && h && Math.hypot(h.x - it.x, h.y - it.y) < 160 && S.meal.hugo ? 1 : 0 });
+      if (byHugo && h && S.meal.hugo && Math.hypot(h.x - it.x, h.y - it.y) < 160) {   // producer-scrounger: a hungry Hugo shares, guards or chases
+        const P = S.P.hugo, ch = ctx('hugo');
+        if (P.aggr > .55 && ch.aff < .4) S.boost.hugo.chase = { v: .6, until: S.t + 8 };
+        else if (ch.dom > 0 || P.aggr > .35) { S.guardUntil = S.t + 5; S.boost.hugo.guard_spot = { v: .6, until: S.t + 6 }; }
+        else ev('hugo', 'answered', 'dove', .1);
+      }
+    }
+    syncCrumb();
+    return food;
+  }
+  function foodStep(dt) {
+    for (const it of S.food) {
+      if (it.st === 'held') { it.touched = S.t; continue; }
+      if (SIM) { if (S.t - it.t0 > 90) it.st = 'gone'; continue; }
+      if (it.st !== 'gone' && it.st !== 'stale' && S.t - it.touched > it.life) it.st = 'stale';
+      else if (it.st === 'stale' && S.t - it.touched > it.life + 60) it.st = 'gone';
+    }
+    for (let i = S.food.length - 1; i >= 0; i--) { const it = S.food[i]; if (it.st === 'gone' && (!it.el || it.faded)) { if (it.main) S.nextFood = S.t + U(20, 60); S.food.splice(i, 1); } }
+    syncCrumb();
+    if (SIM) return;
+    const h = getH();
+    // Hugo is the producer: he comes up with the next one and holds it
+    if (h && !S.food.some(it => it.main) && S.t > S.nextFood && h.floor && !h.held && !h.air && !h.dead) {
+      S.food.push(Object.assign(mkFood('hugo', h.x, h.y, 'held', true), { holder: 'hugo', heldAt: S.t, holdFor: 6 + 14 * S.P.hugo.patience })); physKick();
+    }
+    const held = S.food.find(it => it.st === 'held');
+    if (held) {
+      if (!h || h.held || h.air || h.dead) release(held, held.x, held.y);
+      else if (!S.meal.hugo) {   // not hungry: share it with the bird if he likes it, else set it down after a while
+        const c = ctx('hugo');
+        if (c.has && c.dist < 320 && c.aff > .1) S.boost.hugo.offer = { v: .7, until: S.t + 3 };
+        if (S.t - held.heldAt > held.holdFor) release(held, h.x + (h.dir || 1) * 20, h.y - 10);
+      }
+    }
+    if ((S.rideAt += dt) >= 1) {   // settled food rides its ledge as the page reflows (one rect read per item a second)
+      S.rideAt = 0;
+      for (const it of S.food) {
+        const L = it.ledge; if (!it.settled || !L || !L.el) continue;
+        const r = L.el.isConnected ? L.el.getBoundingClientRect() : null;
+        if (!r || !r.height) { it.settled = false; it.ledge = null; physKick(); continue; }
+        it.y = r.top + scrollY + L.dy;
+      }
+    }
+  }
+  // Fixed-step physics while anything is in the air or in a hand: gravity, bounce (restitution .4), rolling friction,
+  // sleep when slow. The colliders are the top edges of the ledges Hugo already scans.
+  let physRAF = 0, physLast = 0, physAcc = 0;
+  function physKick() { if (!physRAF && DOM && !SIM && G.requestAnimationFrame) { physLast = performance.now(); physAcc = 0; physRAF = requestAnimationFrame(physFrame); } }
+  function physFrame(tm) {
+    physRAF = 0; if (!S) return;
+    physAcc += Math.min(.1, (tm - physLast) / 1000); physLast = tm;
+    const fl = G.__hugoFloors ? G.__hugoFloors() : [], H = 1 / 60;
+    for (; physAcc >= H; physAcc -= H) for (const it of S.food) if (!it.settled && it.st !== 'held' && it.st !== 'gone') physStep(it, H, fl);
+    renderFood();
+    if (S.food.some(it => it.st === 'held' || (!it.settled && it.st !== 'gone'))) physRAF = requestAnimationFrame(physFrame);
+  }
+  function physStep(it, H, fl) {
+    const py = it.y; it.vy += 1400 * H; it.x += it.vx * H; it.y += it.vy * H;
+    let f = null;
+    for (const q of fl) if (q.support !== false && it.x >= q.x1 && it.x <= q.x2 && py <= q.y + .5 && it.y >= q.y && (!f || q.y < f.y)) f = q;
+    if (f) {
+      it.y = f.y;
+      if (it.vy > 80) { it.vy = -it.vy * .4; it.vx *= .7; }
+      else {
+        it.vy = 0; it.vx *= Math.max(0, 1 - 8 * H);
+        if (Math.abs(it.vx) < 6) {   // asleep on this ledge: remember which one, so it rides it
+          it.settled = true; it.vx = 0; it.touched = S.t;
+          let dy = 0; try { dy = f.y - (f.el.getBoundingClientRect().top + scrollY); } catch (e) { dy = 0; }
+          it.ledge = f.el && !f.fr && !f.ground ? { el: f.el, dy, x1: f.x1, x2: f.x2, y: f.y, text: !!f.text } : { el: null, dy: 0, x1: f.x1, x2: f.x2, y: f.y, ground: !!f.ground };
+        }
+      }
+    }
+    if (it.y > document.documentElement.scrollHeight + 300) it.st = 'gone';
+  }
+  function renderFood() {
+    if (!DOM || SIM) return;
+    const L = document.getElementById('agent-layer'); if (!L) return;
+    const h = getH();
+    for (const it of S.food) {
+      if (it.st === 'held' && h && h.hand) { it.x = h.hand.x; it.y = h.hand.y + 4; }
+      if (!it.el) {
+        if (it.st === 'gone') { it.faded = true; continue; }
+        it.el = L.appendChild(Object.assign(document.createElement('i'), { className: 'rel-crumb' }));
+        Object.assign(it.el.style, { position: 'absolute', left: 0, top: 0, borderRadius: '50%', pointerEvents: 'none', transition: 'opacity .6s, background-color 1.5s', willChange: 'transform' });
+      }
+      const s = Math.max(3, Math.round(3 + 5 * Math.sqrt(it.n)));
+      if (it.sz !== s) { it.sz = s; it.el.style.width = it.el.style.height = s + 'px'; }
+      it.el.style.background = it.st === 'stale' ? '#8F846E' : '#C9A86A';
+      it.el.style.transform = `translate(${(it.x - s / 2).toFixed(1)}px,${(it.y - s).toFixed(1)}px)`;
+      if (it.st === 'gone' && !it.fading) { it.fading = true; it.el.style.opacity = 0; setTimeout(() => { try { it.el.remove(); } catch (e) { /* gone */ } it.faded = true; }, 650); }
+    }
+  }
 
   // ---------------------------------------------------------------- 10. phase
   const DISP_Z = new Set(['W', 'WD', 'WS', 'D', 'HD']);
@@ -1275,9 +1440,13 @@
       hugo_feels: `${ZH[zone(S.pt.hd)]} ${pt3(S.pt.hd)}`, dove_feels: `${ZD[zone(S.pt.dh)]} ${pt3(S.pt.dh)}`,
       moment: S.ph ? liveLabel() : null, stage: S.ph ? S.ph.stage : 'between moments', dist_px: c.has ? Math.round(c.dist) : null,
       my_move_with_dove: S.cur.hugo ? S.cur.hugo.ex : null, dove_doing: S.cur.dove ? S.cur.dove.ex : null, leaning: S.eng.hugo,
-      body: b('hugo'), dove_body: b('dove'), needs: Object.fromEntries(Object.entries(S.drv.hugo).map(([k, v]) => [k, r2(v)])),
+      body: b('hugo'), dove_body: b('dove'), needs: Object.fromEntries(Object.entries(S.drv.hugo).map(([k, v]) => [k, r2(v)])), food: foodBrief('hugo'),
       recent: S.log.filter(e => e.a !== 'mind' && e.t > S.t - 90).slice(-8).map(e => `${Math.round(S.t - e.t)}s ago: ${[e.a, e.v, e.b].filter(Boolean).join(' ')}`),
     };
+  }
+  function foodBrief(who) {   // the food it can see, relative to it (+dx right, +dy above), for a mind that wants to eat or feed
+    const a = who === 'hugo' ? getH() : getD(); if (!a) return [];
+    return S.food.filter(it => it.st !== 'gone').slice(0, 4).map(it => ({ state: it.st, held_by: it.holder, size: +it.n.toFixed(2), dx: Math.round(it.x - a.x), dy: Math.round(a.y - it.y) }));
   }
   // He thinks every 12 s, or within 3 s of something happening to him (hugo3d's pokes: the cursor near, grabbed, thrown,
   // a wall; REL: a hit or a fall). The mind sees his body's senses (hugo3d's __hugoSense) and REL's state, and answers
@@ -1309,11 +1478,12 @@
   const frame = { up: false, id: null, es: null, busy: false, fails: 0, retryAt: 0, dead: false, deadAt: 0, leaving: false };
   const frameSense = () => JSON.stringify({
     gate: { power: !document.hidden && !frame.leaving, sensors: !!G.__hugoSense, actuators: !!G.__hugoAct },   // the truth: a hidden or closing tab is a body with no power
-    observation: { ...hugoBrief(), ...G.__hugoSense(), last_wish_result: lastResult } });
+    observation: { ...hugoBrief(), ...G.__hugoSense(), last_wish_result: lastResult }, fed: REL.takeFed('hugo') });   // fed: nutrition eaten since the last report (the frame regenerates energy from it)
   const framePost = (path, body, keepalive) => fetch(FRAME + path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body, keepalive, signal: keepalive ? undefined : AbortSignal.timeout(3000) });
   function frameBorn(id) {
     if (!id || id === frame.id) return;
     frame.id = id; frame.dead = false; lastResult = null; S.nudge.hugo = {}; S.hugoMind = { born: id };
+    if (G.MORTAL) G.MORTAL.external('hugo', true);   // the frame's being owns this life now
     newBody('hugo', id); G.__hugoLife(true);
   }
   function frameDied(cause) {
@@ -1336,7 +1506,7 @@
       if (frame.up && ++frame.fails >= 3) { frame.up = false; frame.es.close(); frameDied('frame unreachable'); }   // the process is gone, and that being with it
       if (!frame.up) {   // a dead body waits 30 s for the supervisor's next being, then lives on REL alone; with no frame, a quiet look every 15 s
         frame.retryAt = now + (frame.dead ? 2000 : 15000);
-        if (frame.dead && now - frame.deadAt > 30000) { frame.dead = false; frame.id = null; G.__hugoLife(true); }
+        if (frame.dead && now - frame.deadAt > 30000) { frame.dead = false; frame.id = null; G.__hugoLife(true); if (G.MORTAL) G.MORTAL.external('hugo', false); }
       }
     } finally { frame.busy = false; }
   }
@@ -1381,6 +1551,7 @@
     M.facts = M.facts.filter(f => f.b !== who);
     for (const f of M.facts) if (f.a === who) f.v *= .5;
     M.hab[who] = o0(HABK); S.conf[who] = 0; M.W[who] = {};
+    S.drv[who] = newDrv(); S.meal[who] = false; S.dig[who] = 0; S.block[who] = {};   // a new body with its own needs
     S.body[who] = { ruffled: 0, sore: 0, dazed: 0, hits: 0, lastHit: null, heldBy: null, heldUntil: 0 };
     S.I[who] = o0(MOT, .2); S.phi[who] = o0(MOT); S.cur[who] = null; S.imp[who] = [];
     refreshMem();
@@ -1499,12 +1670,9 @@
     }
     // 6. phase
     if (S.ph) stageTick(dt); else armTick(dt);
-    // 7. crumb
-    if (S.crumb) {
-      if (S.t - S.crumb.t > 90) dropCrumb();
-      else if (d && d.mode === 'perch' && Math.hypot(S.crumb.x - d.x, S.crumb.y - d.y) < 20 && SIM == null && d.head === 'peck') ev('dove', 'fed', S.crumb.by, .2);
-    }
-    if (DOM && !SIM) renderCrumb();
+    // 7. food
+    foodStep(dt);
+    if (DOM && !SIM) renderFood();
   }
   // Drives and spot ownership, 1 Hz.
   function drives(dt, h, d) {
@@ -1513,9 +1681,19 @@
       if (!S.cur[w]) D.boredom = clamp(D.boredom + .004 * dt);
       D.lonely = clamp((S.apart - 40) / 200);
       const a = w === 'hugo' ? h : d;
-      if (a) {
-        const moving = w === 'hugo' ? (a.mode === 'walk' && Math.abs(+a.vxw || +a.vx || 0) > 5) || a.air : a.mode === 'fly';
-        D.energy = clamp(D.energy + (moving ? (w === 'hugo' ? -.002 : -.004) : .01) * dt);
+      if (SIM) {   // the sim's toy world has no food economy for Hugo: its needs keep their old shape
+        if (w === 'dove') D.hunger = clamp(D.hunger + .002 * dt);
+        if (a) { const moving = w === 'hugo' ? (a.mode === 'walk' && Math.abs(+a.vxw || +a.vx || 0) > 5) || a.air : a.mode === 'fly'; D.energy = clamp(D.energy + (moving ? (w === 'hugo' ? -.002 : -.004) : .01) * dt); }
+      } else {
+        // runtime_state.py's one energy pool: moving and speaking cost, rest gives a little back only when not hungry,
+        // food is the real refill (digested over the next seconds), starving drains. Hunger: the dove empties in ~90 s, Hugo in ~4 min.
+        const k = dt * ((G.MORTAL && G.MORTAL.speed) || 1);
+        D.hunger = clamp(D.hunger + (w === 'hugo' ? .004 : .011) * k);
+        const dig = Math.min(S.dig[w], .06 * dt); S.dig[w] -= dig;
+        if (a) {
+          const moving = w === 'hugo' ? (a.mode === 'walk' && Math.abs(+a.vxw || +a.vx || 0) > 5) || a.air : a.mode === 'fly';
+          D.energy = clamp(D.energy + ((moving ? (w === 'hugo' ? -.002 : -.004) : D.hunger < .6 ? .004 : 0) - .0005 - (D.hunger >= .9 ? .001 : 0)) * k + dig);
+        }
       }
       // spot keys and ownership: whoever stays in a key for 20 s owns it
       const k = keyOf(w), K0 = S.inKey[w];
@@ -1523,14 +1701,7 @@
       else if (!K0 || K0.key !== k) S.inKey[w] = { key: k, since: S.t };
       else if (S.t - K0.since >= 20 && !S.M.own[k]) S.M.own[k] = { who: w, since: K0.since };
     }
-    S.drv.dove.hunger = clamp(S.drv.dove.hunger + .002 * dt);
-  }
-  function renderCrumb() {
-    const c = S.crumb; if (!c || c.el) return;
-    const d = getD(); if (!d || !('head' in d)) return;   // only once the dove's body exposes its head (it can then eat it)
-    const L = document.getElementById('agent-layer'); if (!L) return;
-    c.el = L.appendChild(Object.assign(document.createElement('i'), { className: 'rel-crumb' }));
-    Object.assign(c.el.style, { position: 'absolute', width: '6px', height: '6px', borderRadius: '50%', background: '#C9A86A', left: c.x - 3 + 'px', top: c.y - 6 + 'px', pointerEvents: 'none' });
+    if (G.MORTAL && !SIM) G.MORTAL.tick(dt, { hugo: { energy: S.drv.hugo.energy, y: h ? h.y : null }, dove: { energy: S.drv.dove.energy, y: d ? d.y : null } });
   }
 
   // ---------------------------------------------------------------- 13. sim: a toy world driven through the same calls
@@ -1859,7 +2030,17 @@
       const ph = S && S.ph; if (!ph) return null;
       return Object.freeze({ n: ph.n, stage: ph.stage, lead: ph.lead, frame: ph.frame, object: ph.object.kind, label: liveLabel(), band: ph.band, boss: ph.boss, t: S.t - ph.t0, dur: ph.dur, contacts: ph.contacts, sig0: ph.sig0 });
     },
-    get crumb() { return S && S.crumb ? { x: S.crumb.x, y: S.crumb.y, by: S.crumb.by } : null; },
+    get crumb() { return S && S.crumb ? { x: S.crumb.x, y: S.crumb.y, by: S.crumb.by, id: S.crumb.id } : null; },
+    // food and needs for the bodies (read-only views; bites and blocks go through these calls)
+    get foods() { return S ? S.food.filter(it => it.st !== 'gone') : []; },
+    food: id => (S ? S.food.find(it => it.id === id && it.st !== 'gone') || null : null),
+    eat: who => (S && (who === 'hugo' || who === 'dove') ? eatU(who) : null),
+    bite: (who, id, frac) => { if (!S) return 0; const it = S.food.find(x => x.id === id); return bite(who, it, frac); },
+    foodBlock(who, id, s) { if (S && S.block[who]) S.block[who][id] = S.t + (s || 20); },
+    needs: who => { if (!S) return { hunger: 0, energy: 1 }; const D = S.drv[who], p = S.pt[PT[who]]; return { hunger: D.hunger, energy: D.energy, meal: S.meal[who], aff: p.aff, aro: p.aro }; },
+    spend(who, e) { if (S && S.drv[who]) S.drv[who].energy = clamp(S.drv[who].energy - e); },   // speech and effort cost energy
+    takeFed(who) { if (!S) return 0; const f = S.fedOut[who]; S.fedOut[who] = 0; return +f.toFixed(3); },   // nutrition since the last report (the frame's regen)
+    get P() { return S ? S.P : null; },
     get t() { return S ? S.t : 0; },
     PRESETS, ZN, EX: EX.map(e => e.id), PATTERNS: PATTERNS.map(p => p[0]),
     _state: () => S,

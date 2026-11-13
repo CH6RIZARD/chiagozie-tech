@@ -1,7 +1,8 @@
 // SCION dove: the EZER dove running the Mortal Agent Frame, living on the page.
-// Embodied gate (Mortal Agent Frame): power = the page is open, sensors = its own senses, motor = its body. Death is a
-// BODY gate failure only (the page closes, or the agent's process ends). No age timer, no dying because nobody is looking.
-// Restart is a birth with a new UUID, never a resume.
+// Embodied gate (Mortal Agent Frame): power = the page is open, sensors = its own senses, motor = its body. Its life is the
+// kernel's (mortal-kernel.js): a hidden lifespan of years from the holy RNG, one energy pool, death when either runs out
+// (or, on localhost, when the agent's process ends). Nobody looking is not death: embodied time just stops accruing.
+// Restart is a birth with a new UUID, never a resume. What it does on its own comes from drives scored by the kernel.
 // It lives in page coordinates: it perches on cards, headings and lines of text, and rides them when you scroll.
 // The body is drawn by dove3d.js (three.js); it calls SCION_BOOT(R) once the model is loaded.
 window.SCION_BOOT = R => {
@@ -96,7 +97,8 @@ window.SCION_BOOT = R => {
   // Life with Hugo is bond.js (window.REL): it reads both bodies and hands out orders; this body carries them out its own way.
   // Without it the dove simply lives its own life.
   const REL = window.REL || { ev() {}, want: () => null, done() {}, reflex: () => null, tonic: () => 0, mindBias: () => false, brief: () => null,
-    describe: () => '', spotKey: () => '', newBody() {}, phase: null, crumb: null,
+    describe: () => '', spotKey: () => '', newBody() {}, phase: null, crumb: null, foods: [], food: () => null, eat: () => null, bite: () => 0, foodBlock() {},
+    needs: () => ({ hunger: 0, energy: 1, aff: 0, aro: 0 }), spend() {}, takeFed: () => 0,
     body: () => ({ speedK: 1, puff: 0, ruffled01: 0, sore01: 0, dazed: 0, hits: 0, lastHit: null, heldBy: null, heldUntil: 0 }) };
   const log = [];
   const emit = (type, msg = '') => { log.unshift(`${type.padEnd(9)}${msg}`); log.length = 3; hudLog.textContent = log.join('\n'); };
@@ -104,6 +106,7 @@ window.SCION_BOOT = R => {
   let sayTimer, typeTimer;
   function speak(text, ms = 4200) {
     if (!CFG.talk) return;
+    REL.spend('dove', 0.002);   // speech costs energy (runtime_state SPEECH_COST_EPSILON)
     clearTimeout(sayTimer); clearInterval(typeTimer);
     let i = 0; say.textContent = ''; say.classList.add('on');
     typeTimer = setInterval(() => { say.textContent = text.slice(0, ++i); if (i >= text.length) clearInterval(typeTimer); }, 28);
@@ -133,6 +136,7 @@ window.SCION_BOOT = R => {
     const now = performance.now(), x = e.clientX + scrollX, y = e.clientY + scrollY;
     if (mouse) mouseV = Math.hypot(x - mouse.x, y - mouse.y) / Math.max(now - lastMove, 1) * 1000;
     mouse = { x, y, cx: e.clientX, cy: e.clientY }; lastMove = now; sense();
+    if (a && Math.hypot(x - a.x, y - a.y) < 140) window.MORTAL?.heard('dove');   // the visitor keeping it company
   }, { passive: true });
   addEventListener('scroll', () => { if (mouse) { mouse.x = mouse.cx + scrollX; mouse.y = mouse.cy + scrollY; } sense(); }, { passive: true });
   addEventListener('keydown', sense);
@@ -198,7 +202,10 @@ window.SCION_BOOT = R => {
           scrolling: performance.now() - scrolledAt < 1500, distance_px: mouse && a ? Math.round(Math.hypot(mouse.x - a.x, mouse.y - a.y)) : null },
         visible: [...new Set(vis.map(titleOf))], sections: [...new Set(hs.map(titleOf))],
         hugo: REL.brief(),   // what is going on between it and Hugo: distance, the moment, how it feels about him, its body
+        needs: (({ hunger, energy }) => ({ hunger: +hunger.toFixed(2), energy: +energy.toFixed(2) }))(REL.needs('dove')),
+        food: a ? REL.foods.slice(0, 4).map(it => ({ state: it.st, size: +it.n.toFixed(2), dx: Math.round(it.x - a.x), dy: Math.round(a.y - it.y) })) : [],
       },
+      fed: REL.takeFed('dove'),   // nutrition eaten since the last report: the frame regenerates energy from it
     };
   }
   async function linkTick() {
@@ -210,7 +217,7 @@ window.SCION_BOOT = R => {
         if (!h.alive) return;
         link.up = true; link.id = h.instance_id; openStream();
         emit('LINK', `Mortal Agent ${h.instance_id.slice(0, 8)} reached`);
-        const wasLocal = link.mode === 'local'; link.mode = 'agent';
+        const wasLocal = link.mode === 'local'; link.mode = 'agent'; window.MORTAL?.external('dove', true);   // the agent's process owns this life now
         if (wasLocal && a) { a.id = h.instance_id; emit('LINK', 'the mind took over this body'); }
       }
       if (!a && !gateOpen()) return;   // nobody here: do not embody a being just to watch it die
@@ -221,7 +228,7 @@ window.SCION_BOOT = R => {
       if (r.instance_id) link.id = r.instance_id;
       if (!a && !corpse && link.id) birth(link.id);
     } catch {
-      if (link.up && ++link.fails >= 3) { link.up = false; link.fails = 0; link.es?.close(); emit('LINK', 'agent unreachable'); if (link.mode === 'agent') { link.mode = 'local'; link.mind = ''; } }   // reflexes carry the body until the mind is back
+      if (link.up && ++link.fails >= 3) { link.up = false; link.fails = 0; link.es?.close(); emit('LINK', 'agent unreachable'); if (link.mode === 'agent') { link.mode = 'local'; link.mind = ''; window.MORTAL?.external('dove', false); } }   // reflexes carry the body until the mind is back
     } finally { link.busy = false; }
   }
   function openStream() {
@@ -248,7 +255,7 @@ window.SCION_BOOT = R => {
     speak(t, 2500 + t.length * 50); emit('SAID', t.slice(0, 40));
   }
   el.addEventListener('click', () => {
-    touchedAt = performance.now();
+    touchedAt = performance.now(); window.MORTAL?.heard('dove');
     if (link.mode !== 'agent' || !a) return;
     const r = el.getBoundingClientRect();
     Object.assign(ask.style, { display: 'block', transform: `translate(${clamp(r.left + scrollX - 80, scrollX + 8, scrollX + innerWidth - 240)}px,${r.bottom + scrollY + 8}px)` });
@@ -326,15 +333,16 @@ window.SCION_BOOT = R => {
   // The ledge Hugo is standing on, at x, when nothing the bird already knows is on that ledge. It is anchored to the
   // real element (its top or bottom edge, or the text line) and read live, like every other perch: a frozen copy left
   // the bird sitting in empty space once he walked off or the page moved. Never the invisible ground at the page bottom.
-  const hugoFloorSpot = (H, x) => {
-    const f = H && H.floor; if (!f || H.air || f.ground || f.x2 - f.x1 < 60) return null;
+  const hugoFloorSpot = (H, x) => (H && !H.air ? floorSpot(H.floor, x) : null);
+  function floorSpot(f, x) {   // a perch on one of Hugo's scanned ledges (his own, or the one the food settled on)
+    if (!f || f.ground || f.x2 - f.x1 < 60) return null;
     const el = f.el; if (!el || !el.isConnected || el === document.body || el === document.documentElement) return null;
     const r = el.getBoundingClientRect(); if (!r.width || !r.height) return null;
     const top = r.top + scrollY, bottom = r.bottom + scrollY;
     const edge = f.text ? 'text' : Math.abs(f.y - bottom) < Math.abs(f.y - top) ? 'bottom' : 'top';
     const fx = clamp(x, f.x1 + 20, f.x2 - 20); if (covers(fx, f.y)) return null;
     return { s: { kind: 'floor', el, edge, off: f.y - top, w: f.x2 - f.x1, lx: f.x1 - (r.left + scrollX) }, dx: fx - f.x1, x: fx, y: f.y, label: 'by Hugo' };
-  };
+  }
   const spotPos = sp => {
     if (sp.s.kind === 'floor') {   // live from its element; gone or hidden: no perch (the bird takes off)
       const s = sp.s; if (!s.el.isConnected) return null;
@@ -399,7 +407,7 @@ window.SCION_BOOT = R => {
     const sp = landingNear(scrollX + innerWidth * rand(0.3, 0.7), scrollY + innerHeight * 0.4);
     const pos = sp ? spotPos(sp) : { x: scrollX + innerWidth / 2, y: scrollY + innerHeight / 2 };
     a = {
-      id: agentId || (crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(16).slice(2, 10)),
+      id: agentId || window.MORTAL?.id('dove') || (crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(16).slice(2, 10)),
       dt: 0, mode: sp ? 'perch' : 'fly', spot: sp, x: pos.x, y: pos.y, vx: 0, vy: 0, z: 0, vz: 0, view: 6, roll: 0, toT: 0,
       yaw: 6, face: 1, head: 'look', phase: 0, glide: false, target: null,
       idle: 1, react: 0, beat: 0, seen: new Set(), spoke: 0, saidOld: false, walk: null, walkPh: 0, jump: 0, peckT: 0, preenT: 0,
@@ -414,14 +422,17 @@ window.SCION_BOOT = R => {
   }
   function end(reason) {
     emit('ENDED', `${a.id.slice(0, 8)} · ${reason} · δt ${a.dt.toFixed(1)}s`);
-    speak(`${a.id.slice(0, 8)} lived ${a.dt.toFixed(1)}s. No save. No reload.`, 3800);
+    speak(`${a.id.slice(0, 8)} ended: ${reason}. No save. No reload.`, 3800);
     feathers(a.x, a.y - 30, 14, 1.6);
     corpse = { x: a.x, y: a.y - 40, z: a.z || 0, vy: -120, rot: 0, face: a.face, yaw: a.yaw };
     a = null; window.__scion = null; el.classList.add('gone'); clearPeck();
     if (link.mode === 'agent') return;   // the next being is the agent's next life (linkTick births it)
-    const wait = () => gateOpen() ? setTimeout(birth, 3000) : setTimeout(wait, 1000);
+    // the next being: a new id from the kernel (holy RNG), born once someone is here to see it
+    const next = () => (window.MORTAL ? window.MORTAL.newBeing('dove') : Promise.resolve(null)).then(id => { if (!a) birth(id); });
+    const wait = () => gateOpen() ? setTimeout(next, 3000) : setTimeout(wait, 1000);
     setTimeout(wait, 1500);
   }
+  window.MORTAL?.on('dove', (type, cause) => { if (type === 'ENDED' && a && link.mode !== 'agent') end(cause === 'energy_depleted' ? 'energy spent' : cause === 'lifespan_expired' ? 'its time ran out' : cause); });
 
   // Two takeoffs: relaxed (the slow first stage) and panic (straight up, frantic wings, a few feathers).
   function takeOff(target, why, panic) {
@@ -458,12 +469,13 @@ window.SCION_BOOT = R => {
   }
   function act(it) {
     if (!a) return;
-    a.intent = it; a.plan = rand(...CFG.think);
+    a.intent = it; a.plan = it.minT || rand(...CFG.think);   // the action's own minimum time; the agent's intents keep its pace
     emit(it.source === 'llm' ? 'MIND' : 'REFLEX', `${it.do.replace('_', ' ')}${it.target ? ' "' + it.target.slice(0, 20) + '"' : ''}${it.why ? ' · ' + it.why : ''}`);
     if (it.say) { speak(it.say, 2600 + it.say.length * 45); a.spoke = performance.now(); }
     const go = (sp, why) => sp && takeOff({ spot: sp, label: sp.label }, why);
     switch (it.do) {
-      case 'visit': go(spotOn(it.target), null); break;
+      case 'visit': { if (it.target) a.seen.add(it.target); const sp = spotOn(it.target); if (sp) go(sp, null); else window.MORTAL?.done('dove'); break; }
+      case 'eat': a.eatWish = performance.now() + 15000; break;   // the agent asked to eat: food wins its next beat even outside a meal
       case 'explore': go(landingNear(scrollX + rand(80, innerWidth - 80), scrollY + rand(160, innerHeight - 60), a.spot), null); break;
       case 'approach_visitor':
         if (performance.now() < (a.wary || 0)) { a.watchT = rand(2, 4); break; }   // still wary of you
@@ -478,17 +490,27 @@ window.SCION_BOOT = R => {
       case 'watch_visitor': a.watchT = rand(3, 6); break;
     }
   }
-  // Local reflexes (no agent): the same drives the agent's reflex fallback uses. Curiosity, then the visitor, then rest.
-  function localIntent() {
-    const vis = headings().filter(h => { const r = h.getBoundingClientRect(); return r.bottom > 80 && r.top < innerHeight - 20; }).map(titleOf);
-    const fresh = vis.filter(t => !a.seen.has(t)), r = Math.random();
-    if (performance.now() - touchedAt < 2500) return { do: 'watch_visitor', why: 'touched', source: 'reflex' };
-    if (a.mood === 'lonely' && r < 0.6) return { do: pick(['rest', 'preen']), why: a.mood, source: 'reflex' };
-    if (r < 0.3) return { do: 'explore', why: 'curious', source: 'reflex' };
-    if (fresh.length && r < 0.5) { const t = pick(fresh); a.seen.add(t); return { do: 'visit', target: t, why: 'unvisited section', source: 'reflex' }; }
-    if (mouse && gateOpen() && stillFor() > 4 && r < 0.6) return { do: 'watch_visitor', why: 'visitor is still', source: 'reflex' };
-    if (mouse && gateOpen() && r < 0.68) return { do: 'approach_visitor', why: 'curious about the visitor', source: 'reflex' };
-    return { do: pick(['rest', 'preen', 'peck', 'watch_visitor']), why: 'idle', source: 'reflex' };
+  // Its own life (no agent connected): drives -> goals -> actions, scored by the Mortal Agent kernel. Moves it chooses for
+  // itself (a new section, a place it read about, the visitor, a new perch) wait for the frame's pressure (>= .45); below it
+  // it stays where it is and rests, preens or watches. null: nothing new (it carries on with what it is doing).
+  function decide() {
+    const M = window.MORTAL; if (!M) return null;
+    if (performance.now() - touchedAt < 2500) return { do: 'watch_visitor', why: 'touched', source: 'reflex', minT: 3 };
+    const n = REL.needs('dove'), mo = M.mot('dove'), g = M.goal('dove');
+    const fresh = M.unvisitedInView('dove').filter(t => headings().some(h => titleOf(h) === t));
+    const perched = a.mode === 'perch' ? (performance.now() - (a.perchSince || performance.now())) / 1000 : 0;
+    const c = M.choose('dove', [
+      fresh.length && { id: 'visit', drive: 'curiosity', u: Math.min(1, 0.3 + mo.c), move: true, minT: 8, target: fresh[0] },
+      g && g.title && { id: 'goal', drive: 'curiosity', u: g.pri, move: true, minT: 10, target: g.title, goal: g.id },
+      mouse && gateOpen() && { id: 'approach_visitor', drive: 'consequence', u: mo.s, move: true, minT: 6 },
+      { id: 'explore', drive: 'curiosity', u: Math.min(1, 0.2 + perched / 90), move: true, minT: 6 },
+      { id: 'rest', drive: 'survival', u: Math.min(1, (1 - n.energy) * 0.9 + M.env.sleepy), move: false, minT: 9, urgent: n.energy < 0.2 },
+      { id: 'preen', drive: 'coherence', u: 0.3, move: false, minT: 2.5 },
+      mouse && gateOpen() && { id: 'watch_visitor', drive: 'consequence', u: 0.15 + 0.4 * (stillFor() > 4 ? 1 : 0), move: false, minT: 4 },
+    ]);
+    if (!c) return null;
+    if (c.goal) M.goalDone('dove', c.goal);
+    return { do: c.id === 'goal' ? 'visit' : c.id, target: c.target, why: c.id === 'goal' ? 'something new from its maker' : c.drive, source: 'reflex', minT: c.minT };
   }
 
   // Pecking: light up the word under the beak (CSS Custom Highlight, no DOM changes).
@@ -496,8 +518,7 @@ window.SCION_BOOT = R => {
   function clearPeck() { if (peckHL && window.CSS && CSS.highlights) CSS.highlights.delete('scion'); peckHL = null; }
   function peckWord() {
     a.peckT = 0.9;
-    const c = REL.crumb;
-    if (c && Math.hypot(c.x - a.x, c.y - a.y) < 20) REL.ev('dove', 'fed', c.by, 0.2); else REL.ev('dove', 'forage', null, 0.05);
+    REL.ev('dove', 'forage', null, 0.05);   // a word is not a meal: eating is the food loop
     const sp = a.spot; if (!sp.s.range || !(window.CSS && CSS.highlights && window.Highlight)) return;
     const bx = a.x + a.face * 22 - scrollX, by = a.y + 6 - scrollY;
     let cp = document.caretRangeFromPoint?.(bx, by);
@@ -530,10 +551,15 @@ window.SCION_BOOT = R => {
     const onFloorAt = y => a.mode === 'perch' && a.spot.s.kind !== 'hugo' && Math.abs(a.y - y) < 12;
     const fly = (x, y, why, panic) => {
       let sp = landingNear(x, y, null, true); const H = window.__hugo;
-      if (o.ex === 'food' && foodAt.sp && Math.abs(foodAt.sp.y - y) < 12) sp = foodAt.sp;   // the ledge the crumb fell on, even if Hugo has walked off it or it sits at the screen edge
-      else if (H && Math.abs(y - H.y) < 2 && (!sp || Math.abs(sp.y - H.y) > 12)) sp = hugoFloorSpot(H, x) || sp;   // beside him means on his ledge
+      if (H && Math.abs(y - H.y) < 2 && (!sp || Math.abs(sp.y - H.y) > 12)) sp = hugoFloorSpot(H, x) || sp;   // beside him means on his ledge
       if (sp) takeOff({ spot: sp, label: sp.label }, why, panic); return !!sp; };
     const toward = (x, y, k) => { if (onFloorAt(y) && Math.abs(a.x - x) < 260) a.walk = { to: x, k }; else if (Math.abs(a.x - x) > 14 || Math.abs(a.y - y) > 12) fly(x, y, null); };
+    const flyFood = it => {   // land on the very ledge the food settled on, on the far side of it from Hugo (never into him)
+      const H = window.__hugo, far = H ? Math.sign(it.x - H.x) || 1 : 1, x = it.x + far * CFG.size * 0.5;
+      const sp = (it.ledge && it.ledge.el && floorSpot({ ...it.ledge, y: it.y }, x)) || landingNear(x, it.y, null, true);
+      if (sp && Math.hypot(sp.x - a.x, sp.y - a.y) > 6) takeOff({ spot: sp, label: 'the food' }, null);
+      else if (Math.abs(it.y - a.y) < 14) a.walk = { to: it.x - (Math.sign(it.x - a.x) || 1) * CFG.size * 0.45 };
+    };
     const beside = (gap, k) => { const H = window.__hugo; if (H) toward(H.x + (Math.sign(a.x - H.x) || 1) * Math.max(20, gap), H.y, k); };   // on its own side of him
     emit('HUGO', `${o.do}${o.rung > 1 ? ' · rung ' + o.rung : ''}${o.why && !R0.rx ? ' · ' + o.why : ''}`);
     switch (o.do) {
@@ -547,24 +573,39 @@ window.SCION_BOOT = R => {
         break;
       case 'offer': beside(o.gap || 40); R0.face = 1; R0.hold = 1.2; R0.arrive = () => { a.peckT = 0.9; }; break;   // a head-down bow beside him
       case 'preen_beside': case 'comfort': beside(o.gap || 25); R0.face = 1; R0.hold = o.dur || 4; R0.arrive = () => { a.preenT = Math.min(3, R0.hold); }; break;
-      case 'steal': case 'take': case 'scrounge': {   // stealing waits off to the side until he looks away; taking walks up, eats and stays; scrounging just goes for his feet
-        R0.hold = 2; R0.busy = true; R0.st = o.do === 'steal' && dist < 260 ? 'wait' : 'go';
-        toward(R0.st === 'wait' ? o.x + side * 90 : o.x, o.y);
-        R0.step = () => {
+      case 'steal': case 'take': case 'scrounge': {   // food: a thief waits off to the side until he looks away; a taker walks up and eats
+        const it0 = o.food != null ? REL.food(o.food) : null;
+        if (!it0) { R0.face = 1; R0.hold = 2; toward(o.x, o.y); break; }   // scrounging: just goes for his feet
+        R0.hold = 1.5; R0.busy = true; R0.food = it0.id; R0.tries = 0; R0.st = o.do === 'steal' && dist < 260 ? 'wait' : 'go';
+        const done = () => { R0.busy = false; R0.st = 'done'; a.head = 'look'; };   // over: it stays where it is (no flying off)
+        if (R0.st === 'wait') toward(o.x + side * 90, o.y); else flyFood(it0);
+        R0.step = now => {
           if (a.mode !== 'perch' || a.walk || R0.st === 'done') return;
-          const H = window.__hugo, looking = gazeOn(H), away = H ? Math.sign(a.x - H.x) || 1 : a.face;
-          if (R0.st === 'wait') { a.watchHugo = 0.3; if (!looking) { R0.st = 'go'; toward(o.x, o.y); } return; }
-          const cf = REL.crumb, off = cf ? Math.hypot(cf.x - a.x, cf.y - a.y) : 0;
-          if (o.why === 'food' && off > 30 && !R0.tries) { R0.tries = 1; a.walk = { to: cf.x }; return; }   // landed or stopped short: one walk to the crumb
-          R0.st = 'done';
-          if (o.do === 'steal' && looking) { R0.busy = false; fly(a.x + away * rand(220, 360), a.y - rand(40, 160), 'caught looking'); return; }
-          a.peckT = 0.9;   // the peck is the eating: report it now, before the head comes down, so a theft is told as one
-          const c = REL.crumb; if (c && Math.hypot(c.x - a.x, c.y - a.y) < (o.why === 'food' ? 70 : 30)) REL.ev('dove', 'fed', c.by, 0.2, { steal: o.do === 'steal' ? 1 : 0 });
-          setTimeout(() => {
-            R0.busy = false; if (!a || a.mode !== 'perch') return;
-            peckWord();
-            if (o.do === 'steal') fly(a.x + away * rand(220, 360), a.y - rand(40, 160), 'off with it');
-          }, 450);
+          const it = REL.food(R0.food), H = window.__hugo, looking = gazeOn(H), away = H ? Math.sign(a.x - H.x) || 1 : a.face;
+          if (!it || it.st === 'held') return done();
+          if (R0.st === 'wait') { a.watchHugo = 0.3; if (!looking) { R0.st = 'go'; flyFood(it); } return; }
+          const near = Math.abs(it.x - a.x) < CFG.size * 0.9 && Math.abs(it.y - a.y) < 14;   // its perch on a line of text sits a few px above Hugo's floor on the same line   // eat radius scales with the body; same ledge only
+          if (R0.st === 'go') {
+            if (near) { R0.st = 'eat'; R0.pecks = 2 + ((Math.random() * 4) | 0); R0.nextAt = now + 220; return; }
+            if (++R0.tries > 3) { REL.foodBlock('dove', it.id, 20); emit('ACTION', 'gave up on the crumb'); return done(); }   // the old one-try lock, fixed: up to three goes, then let it be
+            if (Math.abs(it.y - a.y) < 14 && Math.abs(it.x - a.x) < 260) { const dir = Math.sign(it.x - a.x) || a.face; a.walk = { to: it.x - dir * CFG.size * 0.45 }; }
+            else flyFood(it);
+            return;
+          }
+          if (!near) { R0.st = 'go'; return; }
+          if (o.do === 'steal' && looking && H && Math.hypot(H.x - a.x, H.y - a.y) < 220) { done(); fly(a.x + away * rand(220, 360), a.y - rand(40, 160), 'caught looking'); return; }
+          if (now < R0.nextAt) return;
+          const E = REL.eat('dove');
+          if (!(E && E.item && E.item.id === it.id) && !(a.eatWish > now)) return done();   // full: the meal is over (or something better is on offer)
+          if (it.x !== a.x) a.wantFace = Math.sign(it.x - a.x);   // beak toward it
+          if (R0.pecks > 0) {   // pecking at ~3.5 Hz: the head goes down, and each peck is the bite that breaks the crumb
+            R0.pecks--; a.peckT = 0.22; R0.nextAt = now + 285;
+            setTimeout(() => { if (a && a.rel === R0) REL.bite('dove', it.id, 0.06); }, 110);
+          } else {   // head up and a look round between bouts; longer with Hugo close
+            const hn = H && Math.hypot(H.x - a.x, H.y - a.y) < 220; a.head = 'look'; if (hn) a.watchHugo = 1.2;
+            R0.pecks = 2 + ((Math.random() * 4) | 0); R0.nextAt = now + (hn ? 1500 : 500 + Math.random() * 1000);
+            if (o.do === 'steal') { done(); fly(a.x + away * rand(220, 360), a.y - rand(40, 160), 'off with it'); }
+          }
         };
         break;
       }
@@ -661,7 +702,6 @@ window.SCION_BOOT = R => {
     REL.done('dove', R0.id, 'ok', { stayed: d < 300, won });
     if (R0.end) R0.end(d, won);
   }
-  let foodAt = {};
   function relStep(now) {
     const B = REL.body('dove');
     if (B.hits !== a.hitsSeen) {   // struck: feathers fly, it jumps, and it is shaken (never more than that)
@@ -686,19 +726,21 @@ window.SCION_BOOT = R => {
       }
     }
     if (a.held && a.heldBy !== 'hugo') return;   // in the visitor's hand nothing else matters
-    const cr = REL.crumb, ck = cr && cr.x + ',' + cr.y;   // a new crumb: remember its ledge while Hugo still stands on it
-    if (ck !== foodAt.k) foodAt = { k: ck, sp: cr ? hugoFloorSpot(window.__hugo, cr.x + (Math.sign(cr.x - (window.__hugo?.x ?? cr.x)) || 1) * 18) : null };
     const r = REL.reflex('dove');
     if (r) { doveDo({ ...r, ex: r.do, id: r.id || 'rx' + now }); return; }   // REL already limits reflexes to one a second
     if (a.held || B.dazed > 0) return;   // dazed: no plans, only the reflex flight
     if (now > (a.relAt || 0)) {
       a.relAt = now + 750;
-      const c = REL.crumb, food = c && 'food' + c.x + ',' + c.y;   // food on the floor beats any plan: fly to it and peck it up
-      if (c && window.__hugo && a.mode === 'perch' && a.rel?.id !== food && !(a.wary > now)) { doveDo({ id: food, ex: 'food', do: 'take', x: c.x + (Math.sign(c.x - window.__hugo.x) || 1) * 18, y: c.y, why: 'food' }); return; }   // lands on the far side of the crumb from Hugo, never into him
-      const o = c && a.rel?.id === food && !a.rel.fin ? null : REL.want('dove');   // on its way to the food: no other plan
+      // Food against everything else: REL.eat's score (hunger curve x the food's advert x fear x possession) against the
+      // utility of what REL has it doing, the current one keeping a 1.3x commitment. No override: a full or frightened dove leaves it.
+      const eating = !!a.rel && a.rel.food != null && !a.rel.fin, wish = a.eatWish > now;
+      const E = !eating && a.mode === 'perch' && !(a.wary > now) ? REL.eat('dove') || (wish && REL.crumb ? { u: 1, item: REL.food(REL.crumb.id) } : null) : null;
+      if (E && E.item && !E.held && (wish || E.u > Math.max(0.12, 1.3 * (a.rel && !a.rel.fin ? a.rel.u || 0 : 0)))) {
+        const it = E.item; doveDo({ id: 'food' + it.id + '.' + Math.round(now), ex: 'food', do: E.steal ? 'steal' : 'take', food: it.id, x: it.x, y: it.y, why: 'food', u: E.u || 0.5 }); return;
+      }
+      const o = eating ? null : REL.want('dove');
       if (o && o.id !== a.rel?.id) doveDo(o);
-      else if (c && a.rel?.id === food) { /* keep the food order */ }
-      else if (!o && a.rel && !(a.rel.rx && !a.rel.fin)) a.rel = null;
+      else if (!o && !eating && a.rel && !(a.rel.rx && !a.rel.fin)) a.rel = null;
     }
     relCheck(now);
   }
@@ -714,7 +756,7 @@ window.SCION_BOOT = R => {
       a.preHold = a.mode === 'perch' ? a.spot : null;
       a.held = true; a.flee = 0; a.temper = 0.5 + Math.random() * 0.9;
       a.stress = (a.stress || 0) + (a.mode === 'fly' ? 0.18 : 0.06) * Math.random();   // snatched out of the air is more of a shock
-      takeOff({ hand: true }, 'caught by visitor');
+      takeOff({ hand: true }, 'caught by visitor'); window.MORTAL?.heard('dove');
       dovePointer = e.pointerId;
       emit('ACTION', 'in the visitor\'s hand');
       REL.ev('visitor', 'grabbed', 'dove', a.stress);
@@ -769,18 +811,18 @@ window.SCION_BOOT = R => {
     if (!a) return;
 
     a.dt += dt;
-    // Moods, not deaths. Nobody around: lonely. Tab hidden: asleep. They slow it, make it
-    // breathe harder and rest more; all of them pass. Only a body failure ends it.
-    const lonely = !document.hidden && (performance.now() - lastSense) / 1000 > CFG.sensorWindow;
+    // Mood: REL's feeling toward Hugo plus its needs and the kernel's drives (hungry, tired, lonely, curious...). Tab hidden: asleep.
+    // Pressure is the frame's real number (curiosity .4, isolation .3, anxiety .3); at .45 and above it acts on its own.
     if (!a.held) a.stress = Math.max(0, (a.stress || 0) - dt / 45);
-    const mood = document.hidden ? 'asleep' : !a.held && (a.stress || 0) > 0.3 ? 'shaken' : lonely ? 'lonely' : 'content';
+    const M = window.MORTAL, nd = REL.needs('dove');
+    const mood = document.hidden ? 'asleep' : M ? M.mood('dove', { ...nd, stress: a.held ? 0 : a.stress || 0 }) : (a.stress || 0) > 0.3 ? 'shaken' : 'content';
     if (mood !== a.mood) {
-      if (a.mood && mood === 'content') speak(pick(a.mood === 'lonely' ? ['Oh. You came back.', 'There you are.'] : ['…awake.']), 2600);
+      if ((a.mood === 'lonely' || a.mood === 'asleep') && mood !== 'asleep') speak(pick(a.mood === 'lonely' ? ['Oh. You came back.', 'There you are.'] : ['…awake.']), 2600);
       else if (mood === 'lonely') speak(pick(['Nobody here.', 'Quiet page.']), 2600);
       a.mood = mood; emit('MOOD', mood);
     }
-    const p = mood === 'lonely' ? 0.45 : mood === 'shaken' ? 0.3 : 0;
-    if ((a.beat -= dt) <= 0) { emit('HEARTBEAT', `δt ${a.dt.toFixed(0)}s · pressure ${p.toFixed(2)}`); a.beat = 10; }
+    const p = M ? M.pressure('dove') : 0;
+    if ((a.beat -= dt) <= 0) { emit('HEARTBEAT', `δt ${a.dt.toFixed(0)}s · pressure ${p.toFixed(2)} · energy ${nd.energy.toFixed(2)} · hunger ${nd.hunger.toFixed(2)}`); a.beat = 10; }
     pulse.style.opacity = 0.35 + 0.65 * Math.abs(Math.sin(now / (520 - 300 * p)));
     hudBar.style.width = `${p * 100}%`;
 
@@ -794,10 +836,6 @@ window.SCION_BOOT = R => {
     a.puffT = (a.puffT || 0) - dt;   // puffed up (a threat, a display) or ruffled after a hit
     const pv = Math.max(a.puffT > 0 ? 1 : 0, REL.body('dove').ruffled01); a.puffV = (a.puffV || 0) + (pv - (a.puffV || 0)) * Math.min(1, dt * 8);
     R.set({ puff: a.puffV });
-    if (a.mode === 'perch' && !a.held && a.restT <= 0 && a.mood !== 'asleep' && !relBusy() && !(REL.body('dove').dazed > 0) && now - (a.perchSince || now) > (a.patience ??= rand(40000, 90000))) {
-      a.patience = rand(40000, 90000); a.perchSince = now;
-      const sp = landingNear(scrollX + rand(80, innerWidth - 80), scrollY + rand(160, innerHeight - 60), a.spot); if (sp) takeOff({ spot: sp, label: sp.label }, 'restless');
-    }
     const rd = REL.describe('dove');
     hudId.title = rd ? 'with Hugo: ' + rd : '';
     hudId.innerHTML = `<b>SCION</b> · ${a.id.slice(0, 8)} · ${rd ? 'with Hugo: ' + rd + ' · ' : ''}${a.mood && a.mood !== 'content' ? a.mood + ' · ' : ''}${link.mode === 'agent' ? `mind: ${link.mind === 'llm' ? 'agent LLM' : link.mind ? 'agent reflex' : 'agent'}` : 'local reflexes'} · δt ${a.dt.toFixed(1)}s · ${a.mode === 'fly' ? `z ${a.z.toFixed(0)} · ` : ''}${physLive(now) ? 'flight: MuJoCo ' + (phys.hugoF > 0.01 ? '(contact ' + phys.hugoF.toFixed(2) + ' N) ' : '') + '· ' : 'flight: kinematic (no physics server) · '}${a.mode === 'perch' ? (a.walk ? 'walking' : a.head === 'peck' ? 'pecking' : a.head === 'preen' ? 'preening' : 'perched') : a.glide ? 'gliding' : 'flying'}`;
@@ -824,7 +862,7 @@ window.SCION_BOOT = R => {
     } else a.offT = 0;
     if ((a.plan -= dt) <= 0) {
       if (dazed || relBusy()) a.plan = 1.5;   // busy with Hugo (or seeing stars): its own plans wait
-      else if (link.mode !== 'agent') act(localIntent());
+      else if (link.mode !== 'agent') { window.MORTAL?.done('dove'); const it = decide(); if (it) act(it); else a.plan = 1; }   // re-weighed every second until something wins
       else a.plan = 4;   // the agent decides; wait for its next intent
       if (a.mode !== 'perch') return;
     }
@@ -883,7 +921,6 @@ window.SCION_BOOT = R => {
         if (r < 0.42) { a.head = pick(['look', 'look', 'tilt', 'turnA', 'turnB']); a.gaze = pick([0, 1, 2, 2, 3, 6]); }
         else if (r < 0.5 && a.restT <= 0 && a.spot.s.range) { a.peckT = 0.9; setTimeout(() => a && a.mode === 'perch' && peckWord(), 450); }
         else if (r < 0.56 && quiet) a.preenT = rand(1.4, 2.6);
-        else if (r < 0.66 && a.restT <= 0 && maxX - minX > 90 && !rel) a.walk = { to: clamp(a.x + rand(-90, 90), minX, maxX) };
         else if (r < 0.74 && !rel && a.watchHugo <= 0) a.wantFace = -a.face;
       }
     }
@@ -926,7 +963,7 @@ window.SCION_BOOT = R => {
       }
     }
     else if (!a.target && !(a.flee > 0)) { const sp = landingNear(a.x, a.y + 80) || landingNear(scrollX + rand(80, innerWidth - 80), scrollY + rand(160, innerHeight - 60)); a.target = sp ? { spot: sp } : { wander: true }; }
-    if (a.target?.wander && Math.random() < dt / 2) a.target = null;   // look again for somewhere to land
+    if (a.target?.wander && (a.target.wt = (a.target.wt || 0) + dt) > 2) a.target = null;   // after a couple of seconds' drift, look again for somewhere to land
     if (a.target?.follow && mouse) {
       // Land beside the cursor on its own side, not under it.
       if (!a.target.spot || now - (a.target.at || 0) > 400) { a.target.spot = landingNear(mouse.x + 70 * Math.sign(a.x - mouse.x || 1), mouse.y + 10); a.target.at = now; }
@@ -1034,6 +1071,7 @@ window.SCION_BOOT = R => {
   (async () => {
     for (let i = 0; i < 3 && link.url && !link.up; i++) { await linkTick(); if (!link.up) await new Promise(r => setTimeout(r, 700)); }
     physConnect();
+    if (window.MORTAL) await Promise.race([window.MORTAL.ready, new Promise(r => setTimeout(r, 1500))]);   // its being: loaded or newly born
     if (link.mode === 'local') birth();
     requestAnimationFrame(tick);
   })();

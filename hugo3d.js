@@ -236,8 +236,8 @@ function scan() {
       if (cs.display === 'none' || cs.visibility === 'hidden' || (phone() && hidden(e))) continue;
       const boxed = cs.backgroundColor !== 'rgba(0, 0, 0, 0)' || e.tagName === 'IMG' || e.tagName === 'IFRAME';
       const wrapper = od && (fr ? r.width > view.innerWidth - 4 && r.height > view.innerHeight * 0.8 : e.contains(os));   // the frame and its page-sized wrappers: not walls, and their edge-to-edge tops are traps, not ledges
-      if ((parseFloat(cs.borderTopWidth) > 0 || boxed) && !wrapper) floors.push({ y: r.top + oy, x1: r.left + ox, x2: r.right + ox, el: e, fr });
-      if (parseFloat(cs.borderBottomWidth) > 0 && !wrapper) floors.push({ y: r.bottom + oy, x1: r.left + ox, x2: r.right + ox, el: e, fr });
+      if ((parseFloat(cs.borderTopWidth) > 0 || boxed) && !wrapper) floors.push({ y: r.top + oy, x1: r.left + ox, x2: r.right + ox, el: e, fr, support: true });
+      if (parseFloat(cs.borderBottomWidth) > 0 && !wrapper) floors.push({ y: r.bottom + oy, x1: r.left + ox, x2: r.right + ox, el: e, fr, support: true });
       if (boxed && r.height > 30 && !wrapper) ink.push({ l: r.left + ox, t: r.top + oy, r: r.right + ox, b: (fr ? Math.min(r.bottom, view.innerHeight) : r.bottom) + oy });   // boxes are solid
     }
     const walk = (fr ? fr.contentDocument : document).createTreeWalker(root, NodeFilter.SHOW_TEXT, { acceptNode: n =>
@@ -248,7 +248,7 @@ function scan() {
       for (const r of range.getClientRects()) if (r.width > 0 && near(fo ? { top: r.top + fo.top, bottom: r.bottom + fo.top } : r)) {
         const q = { l: r.left + ox, t: r.top + oy + cap, r: r.right + ox, b: r.bottom + oy };
         ink.push(q); if (phone()) textInk.push(q);
-        if (r.width > 120 || cap > 0) floors.push({ y: r.top + oy + cap, x1: r.left + ox, x2: r.right + ox, el: n.parentElement, text: true, fr, name: cap > 0 });
+        if (r.width > 120 || cap > 0) floors.push({ y: r.top + oy + cap, x1: r.left + ox, x2: r.right + ox, el: n.parentElement, text: true, fr, name: cap > 0, support: true });
       }
     }
   };
@@ -256,7 +256,7 @@ function scan() {
   const bar = phone() && document.querySelector('nav[aria-label="Sections"]');   // phones: the bar is locked over the page; nothing stands under it
   if (bar) { const r = bar.getBoundingClientRect(); ink.push({ l: r.left + scrollX, t: r.top + scrollY - 400, r: r.right + scrollX, b: r.bottom + scrollY }); }
   if (od) pass(od, os);
-  if (!od) floors.push({ y: groundY(), x1: 0, x2: document.documentElement.scrollWidth, el: document.body, ground: true });   // phones, Read less: the page bottom is under the monitor and its caption, not a floor
+  if (!od) floors.push({ y: groundY(), x1: 0, x2: document.documentElement.scrollWidth, el: document.body, ground: true, support: true });   // phones, Read less: the page bottom is under the monitor and its caption, not a floor
   if (phone()) { floors.forEach(fit);   // phones: only ledges with standing room somewhere along them (no climbing into a gap and crawling there)
     floors = floors.filter(f => f.ground || f.x2 - f.x1 < 2 * HALF_W || [0, 1, 2, 3, 4, 5, 6, 7, 8].some(i => clear(f.x1 + HALF_W + (f.x2 - f.x1 - 2 * HALF_W) * i / 8, f.y, CFG.size + 4))); }
   dirty = false; scanAt = performance.now();
@@ -364,7 +364,8 @@ function gesture(dt, sitting, still) {
   const S1 = sd > 0 ? 'R' : 'L';   // the arm on the gesture's side
   const T1 = (sd > 0) === (st.dir > 0) ? 'R' : 'L';   // the arm toward that side, whichever way he faces
   // an offer: halfway through crouching to it, a crumb appears by his hand
-  if (gest.rel && st.relOrder && st.relOrder.drop && !st.relOrder.dropped && u > 0.5 && st.floor) { st.relOrder.dropped = true; const food = { x: st.x + sd * 24, y: st.y, t: performance.now() }; window.REL.ev('hugo', 'drop', 'dove', 0, food);
+  if (gest.food && !gest.bit && u > (gest.name === 'eat' ? 0.4 : 0.6)) { gest.bit = 1; foodBite(gest.food); }   // the bite lands on the apex of the move
+  if (gest.rel && st.relOrder && st.relOrder.drop && !st.relOrder.dropped && u > 0.5 && st.floor) { st.relOrder.dropped = true; const food = { x: st.hand ? st.hand.x : st.x + sd * 24, y: st.y, hy: st.hand ? st.hand.y : st.y - CFG.size * 0.4, vx: sd * 30, t: performance.now() }; window.REL.ev('hugo', 'drop', 'dove', 0, food);
     window.__hugoFood = food; dispatchEvent(new CustomEvent('hugo:food', { detail: food })); }   // the crumb, page coordinates: anything (the bird) can find it
   switch (gest.name) {
     case 'look': lookGoal = sd * 0.8 * Math.sin(ph * 1.3) * A; break;
@@ -376,6 +377,12 @@ function gesture(dt, sitting, still) {
     case 'tap': mix(sd > 0 ? B.thighR : B.thighL, -0.18, 0, 0, w); mix(sd > 0 ? B.shinR : B.shinL, 0.25 + Math.max(0, Math.sin(ph * 9)) * 0.3 * A, 0, 0, w); break;
     case 'behind': armMix('L', [0.18, -0.9, -0.38], [-0.8, -0.15, -0.45], w); armMix('R', [0.18, -0.9, -0.38], [-0.8, -0.1, -0.5], w); mix(B.chest, -0.05, 0, 0, w); break;
     case 'lean': armMix('L', [0.3, -0.6, -0.75], [0.12, -1, -0.25], w); armMix('R', [0.3, -0.6, -0.75], [0.12, -1, -0.25], w); mix(B.chest, -0.15, 0, 0, w); break;
+    case 'eat': armMix(T1, [0.15, -0.55, 0.8], [-0.25, 1, 0.12], w); mix(B.head, 0.12 + Math.max(0, Math.sin(ph * 9)) * 0.08, 0, 0, w); break;   // hand to mouth, chewing
+    case 'forage': {   // a beat of anticipation (a lean back), then down to it and one hand to the food; the apex is the bite
+      const pre = u < 0.22, k = pre ? 0 : Math.min(1, (u - 0.22) * 3);
+      if (pre) mix(B.chest, -0.08, 0, 0, w);
+      mix(B.thighL, -0.85 * k, 0, 0, w); mix(B.thighR, -0.6 * k, 0, 0, w); mix(B.shinL, 1.35 * k, 0, 0, w); mix(B.shinR, 1.0 * k, 0, 0, w); mix(B.chest, 0.35 * k, 0, 0, w); mix(B.head, 0.4 * k, 0, 0, w);
+      armMix(T1, [0.25, -0.75, 0.6 * k], [0.1, -0.85, 0.5 * k], w * k); lookGoal = sd * 0.6; break; }
     case 'chin': armMix(S1, [0.15, -0.55, 0.8], [-0.25, 1, 0.12], w); mix(B.head, 0.18, 0, 0, w); mix(B.chest, 0.1, 0, 0, w); break;
     case 'kick': mix(B.shinL, Math.PI / 2 - 0.2 + Math.sin(ph * 4) * 0.5 * A, 0, 0, w); mix(B.shinR, Math.PI / 2 - 0.2 + Math.sin(ph * 4 + 2.4) * 0.5 * A, 0, 0, w); break;
     case 'breathe': { const b = Math.sin(t * (6 + A * 3)) * 0.06; mix(B.chest, 0.4 + b, 0, 0, w); armMix('L', [0.12, -0.75, 0.62], [0.02, -0.95, 0.25], w); armMix('R', [0.12, -0.75, 0.62], [0.02, -0.95, 0.25], w);
@@ -449,6 +456,7 @@ function gesture(dt, sitting, still) {
 }
 
 window.__hugo = st;   // read-only peek for debugging
+window.__hugoFloors = () => floors;   // the ledges he scans are the food's colliders too (bond.js)
 if (/[?&]debug/.test(location.search)) window.__hugoDbg = { get floors() { return floors; }, get t() { return t; }, get gest() { return gest && gest.name; }, miss: why => missed(why), clear: (x, y, h) => clear(x, y, h), get ink() { return ink; } };
 st.dims = { THIGH, ARMLEN, SPINE, PITCH, CRAWL_H, size: CFG.size };
 // Hit area follows him; the canvas itself never takes the pointer.
@@ -459,7 +467,7 @@ Object.assign(hud.style, { position: 'fixed', left: 0, top: 0, zIndex: 9999, poi
   color: 'var(--muted, #777)', whiteSpace: 'pre', opacity: 0, transition: 'opacity .2s' });
 document.body.append(hit, hud);
 let lastDown = 0, pointerId = null, pvx = 0, pvy = 0, ppx = 0, ppy = 0, ptime = 0, grabAt = 0, grabX = 0, grabY = 0, dragged = false;
-hit.addEventListener('pointerenter', () => { st.hover = true; });
+hit.addEventListener('pointerenter', () => { st.hover = true; window.MORTAL?.heard('hugo'); });
 hit.addEventListener('pointerleave', () => { if (!st.held) st.hover = false; });
 hit.addEventListener('pointerdown', e => {
   const now = performance.now();
@@ -471,7 +479,7 @@ hit.addEventListener('pointerdown', e => {
     st.grip = Math.max(0.3, Math.min(1, (st.y - (e.clientY + scrollY)) / CFG.size)); st.flip = false;   // held where you took him, always the right way up
     st.temper = 0.5 + Math.random() * 0.9; st.fearHigh = Math.random() * 0.35 - 0.1; st.fearFlip = Math.random() * 0.45;
     st.stress = (st.stress || 0) + (st.mode === 'walk' && st.amt > 0.3 ? 0.12 : st.mode === 'sit' ? 0 : 0.04) * Math.random(); st.react = null; st.reactUntil = 0;   // a surprise if you snatch him mid-stride
-    relClear(); gest = null; st.pounce = null; window.REL?.ev('visitor', 'grabbed', 'hugo', st.stress); poke('the cursor picked me up');
+    relClear(); gest = null; st.pounce = null; st.food = null; window.REL?.ev('visitor', 'grabbed', 'hugo', st.stress); poke('the cursor picked me up'); window.MORTAL?.heard('hugo');
     st.px = e.clientX + scrollX; st.py = e.clientY + scrollY + (st.flip ? 0 : CFG.size * st.grip);
     ppx = st.px; ppy = st.py; ptime = now; pvx = pvy = 0; grabAt = now; grabX = e.clientX; grabY = e.clientY; dragged = false;
     e.preventDefault();
@@ -506,6 +514,7 @@ addEventListener('pointermove', e => {
   if (d > 2) pointer.movedAt = now;
   const near = Math.hypot(pointer.cx + scrollX - st.x, pointer.cy + scrollY - (st.y - CFG.size / 2)) < 160;
   if (near && !pointer.near && !st.held) poke('the cursor came close');
+  if (near) window.MORTAL?.heard('hugo');   // the visitor's attention: no isolation while the cursor keeps him company
   pointer.near = near;
 }, { passive: true });
 document.documentElement.addEventListener('pointerleave', () => { pointer.in = false; });
@@ -582,6 +591,11 @@ window.__hugoAct = (act, target) => {
     case 'dance': case 'stretch': stand(act, act === 'dance' ? 5 + Math.random() * 4 : 3 + Math.random() * 2); return 'ok';
     case 'look_around': stand('look', 3 + Math.random() * 3); return 'ok';
     case 'wander': { const g = pickFloor(true) || pickToward(Math.random() < 0.5 ? 1 : -1); if (!g) return 'nowhere new'; st.goal = { f: g.f, x: g.x, until: t + 30 }; st.mode = 'walk'; return 'ok'; }
+    case 'eat': { const R = window.REL, fs = R ? R.foods.filter(it => it.st !== 'gone' && (it.holder === 'hugo' || (it.settled && it.ledge))) : [];   // the frame's food moves
+      if (!fs.length) return 'no food'; const it = fs.reduce((a, b) => Math.hypot(b.x - st.x, b.y - st.y) < Math.hypot(a.x - st.x, a.y - st.y) ? b : a);
+      st.food = { id: it.id, tries: 0, miss: 0, forced: true }; return 'ok'; }
+    case 'feed': { const R = window.REL; if (!R || !R.foods.some(it => it.st === 'held')) return 'nothing in hand';
+      R.ev('hugo', 'drop', 'dove', 0, { x: st.hand ? st.hand.x : st.x, y: st.y, hy: st.hand ? st.hand.y : st.y - CFG.size * 0.4, vx: st.dir * 30 }); return 'ok'; }
     default: return 'carry on';
   }
 };
@@ -591,7 +605,21 @@ window.__hugoLife = alive => { if (!alive === !!st.dead) return; st.dead = !aliv
 const say = layer.appendChild(document.createElement('div')); let sayTimer;
 Object.assign(say.style, { position: 'absolute', left: 0, top: 0, maxWidth: '240px', padding: '9px 12px', font: '13px/1.4 system-ui,sans-serif', color: '#15171C', background: '#fff',
   border: '1px solid #D8D8D2', borderRadius: '14px', boxShadow: '0 8px 24px rgba(21,23,28,.16)', opacity: 0, transition: 'opacity .35s' });   // the dove's bubble (#scion-say), same look
-window.__hugoSay = text => { text = String(text || '').replace(/\s+/g, ' ').trim().slice(0, 220); if (!text) return; say.textContent = text; say.style.opacity = 1; clearTimeout(sayTimer); sayTimer = setTimeout(() => { say.style.opacity = 0; }, 2500 + text.length * 50); };
+// His life on the public page is the Mortal Agent kernel's being (mortal-kernel.js): a hidden lifespan of years and one
+// energy pool. ENDED: he goes limp where he is; a while later a new being stands up in this body, nothing carried over.
+// On localhost the frame (bond.js frameTick) owns his life instead, and the kernel stands aside.
+if (window.MORTAL) {
+  const M = window.MORTAL;
+  M.ready.then(() => window.REL?.newBody('hugo', M.id('hugo')));
+  M.on('hugo', type => {
+    if (type !== 'ENDED') return;
+    window.__hugoLife(false);
+    setTimeout(async () => { const id = await M.newBeing('hugo'); window.REL?.newBody('hugo', id); window.__hugoLife(true); }, 12000);
+  });
+}
+const lifeLine = () => { const M = window.MORTAL, R = window.REL; if (!M || !R || !M.alive('hugo')) return '';   // desktop hover readout; never the lifespan
+  const n = R.needs('hugo'), p = M.pressure('hugo'); return `\nδt ${M.being('hugo').dt.toFixed(0)}s · energy ${n.energy.toFixed(2)} · hunger ${n.hunger.toFixed(2)}\npressure ${p.toFixed(2)}${p >= M.ACT ? ' (acting)' : ''} · ${M.mood('hugo', { ...n, stress: st.stress || 0 })}`; };
+window.__hugoSay = text => { text = String(text || '').replace(/\s+/g, ' ').trim().slice(0, 220); if (!text) return; window.REL?.spend('hugo', 0.002); say.textContent = text; say.style.opacity = 1; clearTimeout(sayTimer); sayTimer = setTimeout(() => { say.style.opacity = 0; }, 2500 + text.length * 50); };
 // Something happened to him: his mind (the frame, or hugo-mind, via bond.js) thinks again right away instead of at its next beat.
 let pokes = 0, pokeWhy = '';
 function poke(why) { pokes++; pokeWhy = why; }
@@ -708,13 +736,73 @@ function relArrive(f) {   // got where the order wanted him
   const dd = d ? Math.hypot(d.x - st.x, d.y - st.y) : 1e9;
   if (!o.gesture && !o.sit) relEnd('ok', { won: o.ex === 'displace' && dd > 50, stayed: dd < CFG.size * 2 });
 }
+// Eating: the food's pull (REL.eat: hunger curve x advert x possession) against whatever REL has him doing, with a 1.3x
+// commitment to the current one. He walks to food on a floor, leans in and takes 25-35% bites; food in his own hand he eats there.
+const goTo = (f, x, extra) => { st.goal = { f, x: Math.max(f.x1 + HALF_W, Math.min(f.x2 - HALF_W, x)), until: t + 25, ...extra }; if (st.mode !== 'walk') { st.mode = 'walk'; restyle(); } };
+function foodBite(id) {
+  const R = window.REL, it = R && R.food(id), F = st.food; if (!it || !F) return;
+  const reach = it.st === 'held' || (Math.abs(it.x - st.x) < HALF_W + CFG.size * 0.35 && Math.abs(it.y - st.y) < 10);
+  if (reach) { R.bite('hugo', id, 0.25 + 0.1 * Math.random()); F.miss = 0; R.spend('hugo', 0.001); if (F.forced && !R.food(id)) st.food = null; }
+  else if (++F.miss >= 3) { R.foodBlock('hugo', id, 20); st.food = null; }   // three misses: not that one, not now
+}
+function forage(f) {
+  const R = window.REL, E = R.eat('hugo'), F = st.food;
+  if (F) {
+    const it = R.food(F.id);
+    if (!it || (!F.forced && (!E || (E.item.id !== F.id && !(gest && gest.food))))) { st.food = null; if (st.goal && st.goal.food) st.goal = null; return false; }   // full, or it is gone
+    const unseen = st.y - scrollY > innerHeight + 60 || st.y - scrollY < -CFG.size - 40;   // off screen frame() skips his gestures: he still eats, just unanimated
+    if (unseen && t > (F.at || 0)) { F.at = t + 1.4; if (it.st === 'held' || (Math.abs(it.x - st.x) < HALF_W + CFG.size * 0.35 && Math.abs(it.y - st.y) < 10)) { foodBite(F.id); return true; } }
+    if (it.st === 'held') { if (!gest || !gest.food) { st.mode = 'idle'; st.idleUntil = t + 1.6; gest = { name: 'eat', t0: t, dur: 1.5, side: st.dir, amp: 1, f: 1, food: F.id }; } return true; }
+    if (st.goal && st.goal.food) return true;   // on his way
+    if (Math.abs(it.x - st.x) < HALF_W + CFG.size * 0.35 && Math.abs(it.y - st.y) < 10) {
+      if (!gest || !gest.food) { st.dir = Math.sign(it.x - st.x) || st.dir; st.mode = 'idle'; st.idleUntil = t + 1.5; gest = { name: 'forage', t0: t, dur: 1.4, side: st.dir, amp: 1, f: 1, food: F.id }; }
+      return true;
+    }
+    const g = floorNear(it.x, it.y - 1);
+    if (!g || Math.abs(g.f.y - it.y) > 10 || ++F.tries > 3) { R.foodBlock('hugo', F.id, 20); st.food = null; return false; }   // retry up to three walks, then let it be
+    goTo(g.f, it.x - (Math.sign(it.x - st.x) || 1) * HALF_W * 0.6, { food: F.id }); return true;
+  }
+  if (!E || st.held || st.air || st.relBusy || st.dead) return false;
+  if (E.u < Math.max(0.12, 1.3 * (st.relOrder ? st.relOrder.u || 0 : 0))) return false;
+  if (st.relOrder) relEnd('interrupted');
+  st.food = { id: E.item.id, tries: 0, miss: 0 }; window.MORTAL?.done('hugo');
+  return forage(f);
+}
+// His own life between orders: drives -> goals -> actions through the Mortal Agent kernel (no dice, no timers). Self-directed
+// moves wait for the frame's pressure (>= .45); keeping himself in the visitor's view is a body reflex, like the dove's.
+function autonomy(f) {
+  const M = window.MORTAL, R = window.REL; if (!M || !M.alive('hugo') || st.goal || st.relOrder || st.food || st.held || st.air || st.dead) return;
+  if (!(st.mode === 'idle' || st.mode === 'sit' || (st.mode === 'walk' && st.amt < 0.05))) return;
+  const cur = M.current('hugo'); if (cur && cur.move) M.done('hugo');   // no goal left: that walk is over, however it ended (arrived, blocked, gave up)
+  const inView = st.y > scrollY + 30 && st.y - CFG.size < scrollY + innerHeight - 10;
+  st.away = inView ? 0 : (st.away || 0) + 0.75 * (f.ground ? 3 : 1);
+  const patience = 3 + 9 * (R.P ? R.P.hugo.patience : 0.5);
+  if (st.away > patience) { const g = pickToward(st.y < scrollY + 30 ? 1 : -1); if (g) { goTo(g.f, g.x, { toView: true }); return; } st.away = 0; }
+  const n = R.needs('hugo'), mo = M.mot('hugo'), env = M.env, g = M.goal('hugo');
+  const gh = g && g.title ? [...document.querySelectorAll('h1,h2,h3')].find(h => h.textContent.replace(/\s+/g, ' ').trim().slice(0, 60) === g.title && h.getClientRects().length) : null;
+  const c = M.choose('hugo', [
+    { id: 'wander', drive: 'curiosity', u: Math.min(1, 0.25 + 1.2 * mo.c * (1 - novelty(st.x, st.y))), move: true, minT: 4 },
+    gh && { id: 'goal', drive: 'curiosity', u: g.pri, move: true, minT: 6 },
+    pointer.in && { id: 'visitor', drive: 'consequence', u: mo.s, move: true, minT: 6 },
+    { id: 'rest', drive: 'survival', u: Math.min(1, (1 - n.energy) * 0.9 + env.sleepy), move: false, minT: 8, urgent: n.energy < 0.2 },
+    { id: 'stay', drive: 'coherence', u: 0.25, move: false, minT: 3 },
+  ]);
+  if (!c) return;
+  const fail = () => M.done('hugo');
+  if (c.id === 'wander') { const p = pickFloor(true) || pickToward(st.dir); if (p) goTo(p.f, p.x, { auto: 1 }); else fail(); }
+  else if (c.id === 'goal') { const r = gh.getBoundingClientRect(), p = floorNear(r.left + scrollX + Math.min(r.width, 300) / 2, r.top + scrollY);
+    if (p && (g.tries = (g.tries || 0) + 1) <= 3) goTo(p.f, p.x, { auto: 1, goalId: g.id }); else { M.goalDone('hugo', g.id); fail(); } }   // three tries, then it lets that goal go
+  else if (c.id === 'visitor') { const p = floorNear(pointer.cx + scrollX, pointer.cy + scrollY); if (p) goTo(p.f, p.x, { auto: 1 }); else fail(); }
+  else if (c.id === 'rest' && st.mode !== 'sit' && st.floor && clear(st.x, st.floor.y, SIT_H + 4)) { st.mode = 'sit'; st.idleUntil = t + c.minT; if (env.night || n.energy < 0.3) st.pendGest = { name: 'nap', dur: c.minT }; }
+}
 function relStep(f) {
   const R = window.REL; if (!R || t < (st.relAt || 0) || st.dead || st.dazed || st.mode === 'crawl' || (st.crawlK || 0) > 0.05) return;   // no standing up under a low ceiling for the bird
   st.relAt = t + 0.75;
+  if (forage(f)) return;
   const d = window.__scion;
   const reach = !!d && d.mode === 'perch' && !d.held && d.y >= st.y - CFG.size * 2.2 && floors.some(q => Math.abs(q.y - d.y) < 6 && d.x > q.x1 && d.x < q.x2);
   const o = R.want('hugo', { reach, floorY: f.y });
-  if (!o) { if (st.relOrder) relClear(); return; }
+  if (!o) { if (st.relOrder) relClear(); autonomy(f); return; }
   if (o.id !== (st.relOrder && st.relOrder.id)) applyOrder(o);
   else if (st.relGap != null && st.goal && st.goal.rel === o.id && d && (d.mode === 'perch' || o.ex === 'chase')) relGoal(o, { x: d.x - (Math.sign(d.x - st.x) || 1) * st.relGap, y: d.y });   // the bird moved: after it
   const ph = R.phase; st.relBusy = !!(st.relOrder && ph && ph.stage !== 'resolve');
@@ -807,36 +895,17 @@ function step(dt) {
   if (!f.ground && st.mode !== 'prep' && !room() && !(phone() && performance.now() - scanAt > 100 && (scan(), room()))) { st.air = true; st.vx = 0; st.vy = 0; st.floor = null; st.mode = 'walk'; return; }   // phones: a stale scan (the hero settling a few px) is no reason to fall; look again first
   if ((st.markAt || 0) < t) { seenAt.set(cell(st.x, st.y), t); st.markAt = t + 1; }
   if (!st.anchor || Math.hypot(st.x - st.anchor.x, st.y - st.anchor.y) > 160) st.anchor = { x: st.x, y: st.y, t };
-  const bored = t - st.anchor.t > (st.boredAfter ??= 35 + Math.random() * 40) && st.mode !== 'sit';
   if (st.mode !== 'prep') relStep(f);
   if (st.dazed && st.mode === 'walk') { st.mode = 'idle'; st.idleUntil = t + 0.5; }   // seeing stars: he stands where he is
   if (st.mode === 'walk') {
     if (st.land > 0) { st.land -= dt; return; }
     if ((st.sitK || 0) > 0.04 || (st.crawlK || 0) > 0.05) { st.amt = 0; return; }   // still getting up
     if (st.throwing) { st.amt = Math.max(0, st.amt - dt * 6); return; }   // he plants his feet to throw or lift the bird
-    if (bored && !st.relBusy && (!st.goal || st.goal.f === f)) {   // seen enough of this spot: somewhere new, in view or beyond it
-      const g = pickFloor(true) || pickToward(Math.random() < 0.5 ? 1 : -1);
-      if (g) { st.goal = { f: g.f, x: g.x, until: t + 30 }; st.anchor = { x: st.x, y: st.y, t }; st.boredAfter = 35 + Math.random() * 40; }
-    }
-    // Purpose: the page is his home. Now and then he picks a divider or a box top he can see and goes there: along the
-    // floor, off a ledge to get down, a hop to get up when the next level is within reach. There he sits or looks around.
-    // Being seen. Off screen for a while (how long depends on him today) he wants back into the visitor's view and
-    // works his way there: down off ledges, or up a level at a time when it is within a hop. In view, he shies away
-    // from the very edges of the screen. Nothing forces it; it is a want that grows and that he can fail at.
+    // Purpose: where he walks comes from his drives (autonomy(), via the Mortal Agent kernel) or from REL; with no goal he
+    // does not wander off on a whim, he stands and the next beat decides. Being seen: back in view, he stops working his way there.
     const inView = st.y > scrollY + 30 && st.y - CFG.size < scrollY + innerHeight - 10;
-    st.away = inView ? 0 : (st.away || 0) + dt;
-    if (st.patience === undefined) st.patience = 2 + Math.random() * 10;
-    if (f.ground && !inView) st.away += dt * 2;   // stuck at the bottom with nobody around: he wants out
-    if (st.away > st.patience && (!st.goal || !st.goal.toView)) {
-      const g = pickToward(st.y < scrollY + 30 ? 1 : -1);
-      if (g) st.goal = { f: g.f, x: g.x, until: t + 15, toView: true }; else st.patience += 4 + Math.random() * 8;   // no way there from here; try again later
-    }
-    if (inView && st.goal?.toView) { st.goal = null; st.patience = 2 + Math.random() * 10; }
-    if (inView && !st.goal) {
-      const sx = st.x - scrollX;
-      if ((sx < 56 && st.dir < 0) || (sx > innerWidth - 56 && st.dir > 0)) st.dir = -st.dir;   // too close to the edge of the screen
-    }
-    if (!st.goal && !st.relBusy && Math.random() < dt / 5) { const g = pickFloor(true); if (g) st.goal = { f: g.f, x: g.x, until: t + 30 }; }
+    if (inView && st.goal?.toView) { st.goal = null; st.away = 0; }
+    if (!st.goal) { st.mode = 'idle'; st.idleUntil = t + 0.75; return; }
     if (st.goal) {
       const g = st.goal;
       if (!refloor(g.f) || t > g.until) { if (t > g.until && !g.rel) { avoid.set(g.f, t + 45 + Math.random() * 45); missed('never got there'); } st.goal = null; if (g.rel) relEnd('fail'); }   // could not get there: try elsewhere for a while
@@ -844,7 +913,10 @@ function step(dt) {
         if (Math.abs(g.x - st.x) < 8) {
           st.goal = null;
           if (g.rel) { relArrive(f); return; }
-          if (clear(st.x, f.y, SIT_H + 4) && Math.random() < 0.7) { st.mode = 'sit'; st.idleUntil = t + 10 + Math.random() * 20; }
+          if (g.food) { st.mode = 'idle'; st.idleUntil = t + 0.4; return; }   // the next beat leans in for the bite
+          const M = window.MORTAL; if (M) { if (g.goalId) M.goalDone('hugo', g.goalId); if (g.auto || g.toView) M.done('hugo'); }
+          const n = window.REL ? window.REL.needs('hugo') : { energy: 1 };   // there he sits if he is tired (or it is night), else stands and looks
+          if (clear(st.x, f.y, SIT_H + 4) && (n.energy < 0.6 || (M && M.env.night))) { st.mode = 'sit'; st.idleUntil = t + 10 + Math.random() * 20; }
           else { st.mode = 'idle'; st.idleUntil = t + 2 + Math.random() * 3; }
           return;
         }
@@ -867,7 +939,6 @@ function step(dt) {
         st.dir = Math.sign(tx - st.x) || st.dir;
       }
     }
-    if (!st.goal && !st.relBusy && st.amt > 0.5 && Math.random() < dt / 7) { st.mode = 'idle'; st.idleUntil = t + 2 + Math.random() * 6; return; }   // stops for no reason at all
     if (st.relOrder && st.relOrder.ex === 'stalk') { const d = window.__scion; if (d && d.face === Math.sign(st.x - d.x)) { st.amt = Math.max(0, st.amt - dt * 8); return; } }   // it is looking: freeze
     const go = 0.35 + 0.65 * st.amt;   // he eases into and out of his stride
     const k = (st.spdK || 1) * (window.REL ? window.REL.body('hugo').speedK : 1) * (st.carrying ? 0.7 : 1);   // a run, a creep, a sore leg, a bird in hand
@@ -904,11 +975,11 @@ function step(dt) {
     if (past) { if (dropTo(nx, f.y)) { st.air = true; st.hop = true; st.vx = st.dir * 60; st.vy = -60; st.x = nx; st.mode = 'walk'; } else st.dir = -st.dir; return; }
     if (clear(nx + st.dir * 10, f.y, CRAWL_H + 4)) { st.x = nx; st.ph += dt * 0.85 * k; }
     else { walls.push({ f, dir: st.dir, t, crawl: true }); st.dir = -st.dir; st.crawlT = t; poke('a dead end, even crawling'); missed('dead end'); }   // remembered, so he does not crawl straight back in   // too tight even on all fours: back out the way he came
-  } else if (st.mode === 'idle') { st.amt = Math.max(0, st.amt - dt * 4); if (t > st.idleUntil) { st.mode = 'walk'; restyle(); } }
+  } else if (st.mode === 'idle') { st.amt = Math.max(0, st.amt - dt * 4); if (t > st.idleUntil && st.goal) { st.mode = 'walk'; restyle(); } }
   else if (st.mode === 'sit') {
     st.swingV += (-st.swing * 9 - st.swingV * 1.6) * dt; st.swing += st.swingV * dt;
-    if (!st.dead && Math.random() < dt / 6) st.swingV += 2;
-    if (t > st.idleUntil) { st.mode = 'walk'; if (Math.random() < 0.5) st.dir = -st.dir; }
+    if (!st.dead && Math.sin(t * 1.3) * Math.sin(t * 0.37) > 0.995) st.swingV += 2;   // now and then a kick of the legs (a slow beat, not dice)
+    if (t > st.idleUntil && st.goal) st.mode = 'walk';   // he gets up when there is somewhere to go
   }
 }
 function frame(now) {
@@ -956,7 +1027,7 @@ function frame(now) {
   if ((st.hover || st.held) && !phone()) {   // phones: the readout covered the page and ran off the edge
     hud.style.opacity = 1; hud.style.transform = `translate(${Math.round(st.x - scrollX + HALF_W + 10)}px,${Math.round(sy - CFG.size)}px)`;
     const spd = Math.hypot(st.vx, st.vy);
-    hud.textContent = `hugo · ${st.held ? `held by the ${st.flip ? 'legs' : st.grip > 0.7 ? 'head' : 'body'} · ${(st.stress || 0) < 0.2 ? 'calm' : (st.stress || 0) < 0.45 ? 'uneasy' : (st.stress || 0) < 0.72 ? 'scared' : 'panicking'}` : st.air ? 'falling' : st.mode}\nv ${(spd / 100).toFixed(2)} m/s   tilt ${(st.tilt * 57.3).toFixed(0)}°\narm ${(limbs.armL[0] * 57.3).toFixed(0)}°/${(limbs.armR[0] * 57.3).toFixed(0)}°   leg ${(limbs.thighL[0] * 57.3).toFixed(0)}°/${(limbs.thighR[0] * 57.3).toFixed(0)}°${window.REL ? '\nwith the dove: ' + window.REL.describe('hugo') : ''}\n${st.held ? 'let go to drop · flick to toss' : 'press to pick up'}`;
+    hud.textContent = `hugo · ${st.held ? `held by the ${st.flip ? 'legs' : st.grip > 0.7 ? 'head' : 'body'} · ${(st.stress || 0) < 0.2 ? 'calm' : (st.stress || 0) < 0.45 ? 'uneasy' : (st.stress || 0) < 0.72 ? 'scared' : 'panicking'}` : st.air ? 'falling' : st.mode}\nv ${(spd / 100).toFixed(2)} m/s   tilt ${(st.tilt * 57.3).toFixed(0)}°\narm ${(limbs.armL[0] * 57.3).toFixed(0)}°/${(limbs.armR[0] * 57.3).toFixed(0)}°   leg ${(limbs.thighL[0] * 57.3).toFixed(0)}°/${(limbs.thighR[0] * 57.3).toFixed(0)}°${window.REL ? '\nwith the dove: ' + window.REL.describe('hugo') : ''}${lifeLine()}\n${st.held ? 'let go to drop · flick to toss' : 'press to pick up'}`;
   } else hud.style.opacity = 0;
   if (Math.random() < dt / 4) lookGoal = (Math.random() - 0.5) * 1.1;
   if (st.relOrder && st.relOrder.look != null && !gest) lookGoal = st.relOrder.look;
