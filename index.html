@@ -14,6 +14,7 @@ try { if (localStorage.getItem('theme') === 'light') document.documentElement.da
 <meta name="description" content="Full-stack and real-time systems engineer. Fintech, 3D simulation, live media. The products on this page are the real builds, running.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="frames.css?v=1">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;1,9..144,300&family=Inter:wght@400;500&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
 /* ---- tokens: re-skin here ---- */
@@ -83,11 +84,8 @@ nav a.cta{color:var(--accent)}
 
 .stage{position:relative;background:var(--rule);border:1px solid var(--line);border-radius:4px;overflow:hidden;aspect-ratio:16/9;max-height:78vh}
 .stage.tall{aspect-ratio:auto;height:min(78vh,860px)}
-.monitor{background:#0b0b0c;border-radius:14px;padding:14px 14px 0;box-shadow:0 30px 80px rgba(0,0,0,.35),inset 0 0 0 1px #2a2a2c}
-.monitor .stage.desk{border:0;border-radius:6px 6px 0 0}
-.monitor .chin{height:30px;display:grid;place-items:center}
-.monitor .chin i{width:9px;height:9px;border-radius:50%;background:#2e2e31;display:block}
-.foot{width:160px;height:14px;margin:0 auto;background:linear-gradient(#111,#0b0b0c);border-radius:0 0 10px 10px}
+/* device frames: .tiMonitor/.tiChin/.tiFoot and .tiPhone/.tiScreen/.tiBtn live in frames.css (shared with Read less); only page fit here */
+.monitor .stage.desk{border:0;border-radius:calc(8*var(--m,1px))}
 .stage.desk{aspect-ratio:16/10;height:auto;max-height:none}
 .stage.desk iframe{width:1440px;height:calc(100% / var(--k,1));transform:scale(var(--k,1));transform-origin:0 0}
 .stage iframe{position:absolute;inset:0;width:100%;height:100%;border:0;background:var(--stage)}
@@ -118,8 +116,8 @@ nav a.cta{color:var(--accent)}
 .spec b{font-family:var(--mono);font-weight:400;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);padding-top:3px}
 
 .phone-wrap{display:grid;place-items:center;align-self:start}
-.phone{position:relative;width:min(390px,100%,calc(78vh*390/818));aspect-ratio:390/818;height:auto;border-radius:63px;background:#000;padding:12px;box-shadow:0 30px 80px rgba(0,0,0,.35),inset 0 0 0 1px #333}
-.phone .screen{position:relative;width:100%;height:100%;border-radius:51px;overflow:hidden;background:#000;aspect-ratio:auto;max-height:none;border:0}
+.phone{width:min(390px,100%,calc(78vh*430/902));aspect-ratio:430/902;height:auto;margin:0}   /* body is .tiPhone (frames.css); --u set by script; side buttons overhang 8u */
+.phone .screen{aspect-ratio:auto;max-height:none;border:0}
 
 
 /* key legend */
@@ -156,7 +154,7 @@ nav a .rev b{width:5px;height:5px;margin-left:4px;vertical-align:2px}
 .phone .screen.scrollpage iframe{width:calc(100% + max(var(--sbw,0px), 16px))}   /* a live site we cannot style: its scrollbar (even an overlay one, which measures 0) falls outside the screen */ /* a scrolling web page: push its scrollbar outside the rounded screen; apps fit exactly */
 .phone .screen{scrollbar-width:none}
 .phone .screen iframe{top:0;height:100%} /* the real build fills the whole screen */
-.phone::after{content:"";position:absolute;left:50%;bottom:20px;transform:translateX(-50%);width:125px;height:5px;border-radius:3px;background:#fff;opacity:.8;z-index:5;pointer-events:none} /* home indicator */
+.phone .home{position:absolute;left:50%;transform:translateX(-50%);border-radius:99px;background:#fff;opacity:.8;z-index:5;pointer-events:none} /* home indicator */
 .phone .island{position:absolute;top:22px;left:50%;transform:translateX(-50%);width:117px;height:34px;border-radius:999px;background:#000;z-index:4;pointer-events:none}
 .phone .island::after{content:"";position:absolute;right:13px;top:50%;width:9px;height:9px;margin-top:-4.5px;border-radius:50%;background:radial-gradient(circle at 35% 35%,#2a3550,#05060a 70%)}
 /* a website (not an app) sits under the status bar in Safari; the bar takes the page header colour */
@@ -169,10 +167,8 @@ nav a .rev b{width:5px;height:5px;margin-left:4px;vertical-align:2px}
   linear-gradient(#fff,#fff) 22px 1px/20px 10px no-repeat;border-radius:2px;opacity:.95;filter:var(--sbinv,drop-shadow(0 0 3px rgba(0,0,0,.4)))}
 
 /* iPhone proportions are fixed ratios of the frame width (set as --pw by script); after the 390px defaults above so they win */
-.phone{border-radius:calc(var(--pw,390px)*.1615);padding:calc(var(--pw,390px)*.0308)}
-.phone .screen{border-radius:calc(var(--pw,390px)*.1308)}
-.phone::after{width:calc(var(--pw,390px)*.32);height:calc(var(--pw,390px)*.0128);bottom:calc(var(--pw,390px)*.0513)}
-.phone .island{top:calc(var(--pw,390px)*.0564);width:calc(var(--pw,390px)*.3);height:calc(var(--pw,390px)*.0872)}
+.phone .home{width:calc(var(--pw,430px)*.3442);height:calc(var(--pw,430px)*.0116);bottom:calc(var(--pw,430px)*.0465)}
+.phone .island{top:calc(var(--pw,430px)*.0488);width:calc(var(--pw,430px)*.2930);height:calc(var(--pw,430px)*.0860)}
 .phone .screen::before{left:calc(var(--pw,390px)*.0795);top:calc(var(--pw,390px)*.0487);font-size:calc(var(--pw,390px)*.041)}
 .phone .screen::after{right:calc(var(--pw,390px)*.0718);top:calc(var(--pw,390px)*.0538)}
 .phone .stage.unavailable::after{font-size:calc(var(--pw,390px)*.028);line-height:1.6;padding:calc(var(--pw,390px)*.3) 10% 20%}
@@ -197,9 +193,6 @@ nav a .rev b{width:5px;height:5px;margin-left:4px;vertical-align:2px}
 @media(min-width:900px){.stores{grid-template-columns:repeat(3,1fr)}}
 .stores figure{margin:0}
 @media(min-width:900px){.stores{align-items:start}.stores figure{transform-origin:top center}.stores figure:nth-child(1),.stores figure:nth-child(3){transform:translateY(36px) scale(.96)}.stores figure:nth-child(2){transform:translateY(0) scale(1)}}
-.stores .monitor{padding:8px 8px 0;border-radius:10px}
-.stores .chin{height:18px}.stores .chin i{width:6px;height:6px}
-.stores .foot{width:90px;height:10px}
 .stores figcaption{margin-top:16px;font-size:14px;color:var(--ink)}
 .stores figcaption b{display:block;font-family:var(--serif);font-weight:400;font-size:20px;margin-bottom:4px}
 .stores .tools a{padding:5px 8px;font-size:10px}
@@ -336,6 +329,7 @@ html{touch-action:manipulation}
   .mrow{display:flex;gap:14px;align-items:center;width:100%;padding:12px 0;border:0;border-top:1px solid var(--rule);background:none;color:var(--ink);text-align:left;cursor:pointer;font:inherit}
   .mrow:last-of-type{border-bottom:1px solid var(--rule)}
   .mrow .th{width:60px;height:60px;border-radius:12px;object-fit:cover;flex:0 0 auto;background:#0b0b0c}
+  .mrow .th.dv{border-radius:0;object-fit:contain;background:none}
   .mrow .ic{width:60px;height:60px;border-radius:12px;flex:0 0 auto;border:1px solid var(--line);display:grid;place-items:center;font:500 13px var(--mono);color:var(--muted)}
   .mrow .tx{display:flex;flex-direction:column;gap:3px;min-width:0;flex:1}
   .mrow .k{font:10.5px var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
@@ -362,7 +356,7 @@ html{touch-action:manipulation}
   .msheet .split.with-phone{display:flex;flex-direction:column;align-items:center;gap:12px}
   .msheet .split.with-phone>*{width:100%}
   .msheet .split.with-phone>.phone-wrap{order:-1;display:flex;justify-content:center}
-  .msheet .phone{width:min(100%,300px,max(200px,calc((96dvh - 360px) * 390 / 818)))}   /* the whole phone fits in the sheet; never hangs below the screen */
+  .msheet .phone{width:min(100%,300px,max(200px,calc((96dvh - 360px) * 430 / 902)))}   /* the whole phone fits in the sheet; never hangs below the screen */
   .msheet .split.with-phone .ctas,.msheet .split.with-phone details.fold{max-width:300px}
   .msheet #revelation .split.with-phone>.phone-wrap{order:0}
   .msheet .realm .top{margin-bottom:10px}
@@ -463,12 +457,12 @@ body.simple>section,body.simple>footer,body.simple>.mindex{display:none!importan
 
 <nav class="mindex" aria-label="Projects"><div class="wrap">
   <span class="lbl">Tap any product to open the real build</span>
-  <button class="mrow" type="button" data-open="void"><img class="th" src="realms/thumbs/void.jpg" alt=""><span class="tx"><span class="k">Live cams · mobile</span><span class="n">THE VOID</span><span class="sp">Supabase Postgres + PostGIS, RLS, HLS live streams, libsignal E2E DMs.</span></span><svg class="ch" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></button>
-  <button class="mrow" type="button" data-open="ezer"><img class="th" src="realms/thumbs/ezer.jpg" alt=""><span class="tx"><span class="k">Store-ready · fintech</span><span class="n">EZER</span><span class="sp">Fastify + Prisma (19 models), double-entry ledger, Plaid Transfer ACH.</span><span class="l">Subscriptions become decisions.</span></span><svg class="ch" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></button>
-  <button class="mrow" type="button" data-open="hugo"><img class="th" src="realms/thumbs/hugo.jpg" alt=""><span class="tx"><span class="k">Walkable · in dev</span><span class="n">Hugo</span><span class="sp">Three.js, 120 Hz fixed-step physics, MuJoCo skeleton over WebSocket.</span></span><svg class="ch" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></button>
-  <button class="mrow" type="button" data-open="trading"><img class="th" src="realms/thumbs/morgan.jpg" alt=""><span class="tx"><span class="k">Live bot · mobile</span><span class="n">Morgan Futures</span><span class="sp">Python + Flask on Railway, Kraken data, Claude API gate, Rithmic execution.</span></span><svg class="ch" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></button>
-  <button class="mrow" type="button" data-open="revelation"><img class="th" src="realms/thumbs/revelation.jpg" alt=""><span class="tx"><span class="k">Live site</span><span class="n">Revelation</span><span class="sp">Node + Express, live counts over SSE, failover across 3 storage backends.</span><span class="l">Publishing that survives losing its database.</span></span><svg class="ch" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></button>
-  <button class="mrow" type="button" data-open="impact"><img class="th" src="realms/thumbs/impact.jpg" alt=""><span class="tx"><span class="k">Three live stores</span><span class="n">Stores</span><span class="sp">Headless Shopify Storefront API, Astro static site, Express backend.</span><span class="l">Impact Threads, MAREN and Sly Sculpted.</span></span><svg class="ch" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></button>
+  <button class="mrow" type="button" data-open="void"><img class="th dv" src="realms/thumbs/dev-void.webp" alt="" width="60" height="60"><span class="tx"><span class="k">Live cams · mobile</span><span class="n">THE VOID</span><span class="sp">Supabase Postgres + PostGIS, RLS, HLS live streams, libsignal E2E DMs.</span></span><svg class="ch" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></button>
+  <button class="mrow" type="button" data-open="ezer"><img class="th dv" src="realms/thumbs/dev-ezer.webp" alt="" width="60" height="60"><span class="tx"><span class="k">Store-ready · fintech</span><span class="n">EZER</span><span class="sp">Fastify + Prisma (19 models), double-entry ledger, Plaid Transfer ACH.</span><span class="l">Subscriptions become decisions.</span></span><svg class="ch" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></button>
+  <button class="mrow" type="button" data-open="hugo"><img class="th dv" src="realms/thumbs/dev-hugo.png" alt="" width="60" height="60"><span class="tx"><span class="k">Walkable · in dev</span><span class="n">Hugo</span><span class="sp">Three.js, 120 Hz fixed-step physics, MuJoCo skeleton over WebSocket.</span></span><svg class="ch" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></button>
+  <button class="mrow" type="button" data-open="trading"><img class="th dv" src="realms/thumbs/dev-morgan.png" alt="" width="60" height="60"><span class="tx"><span class="k">Live bot · mobile</span><span class="n">Morgan Futures</span><span class="sp">Python + Flask on Railway, Kraken data, Claude API gate, Rithmic execution.</span></span><svg class="ch" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></button>
+  <button class="mrow" type="button" data-open="revelation"><img class="th dv" src="realms/thumbs/dev-revelation.png" alt="" width="60" height="60"><span class="tx"><span class="k">Live site</span><span class="n">Revelation</span><span class="sp">Node + Express, live counts over SSE, failover across 3 storage backends.</span><span class="l">Publishing that survives losing its database.</span></span><svg class="ch" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></button>
+  <button class="mrow" type="button" data-open="impact"><img class="th dv" src="realms/thumbs/dev-maren.png" alt="" width="60" height="60"><span class="tx"><span class="k">Three live stores</span><span class="n">Stores</span><span class="sp">Headless Shopify Storefront API, Astro static site, Express backend.</span><span class="l">Impact Threads, MAREN and Sly Sculpted.</span></span><svg class="ch" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></button>
   <button class="mrow" type="button" data-open="frame"><span class="ic">AI</span><span class="tx"><span class="k">Architecture</span><span class="n">Mortal Agent Frame</span><span class="l">The substrate under Hugo and AgentTube, and the worlds on it.</span></span><svg class="ch" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></button>
   <button class="mrow" type="button" data-open="work"><span class="ic">W</span><span class="tx"><span class="k">What I do</span><span class="n">What I've shipped</span><span class="l">Fintech backends, real-time 3D, live media, resilient services.</span></span><svg class="ch" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></button>
   <button class="mrow" type="button" data-open="concepts"><span class="ic">D</span><span class="tx"><span class="k">Designed</span><span class="n">Concepts</span><span class="l">SCION AI, THE PHXNE, glasses, Price Action and more.</span></span><svg class="ch" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></button>
@@ -532,7 +526,7 @@ body.simple>section,body.simple>footer,body.simple>.mindex{display:none!importan
         <div><b>Stack</b><span>Expo · Supabase · PostGIS · libsignal · hls.js · Three.js</span></div>
       </div>
     </div>
-    <div class="phone-wrap"><div class="phone"><div class="island"></div><div class="screen stage" data-src="__VOID__" data-allow="fullscreen; autoplay">
+    <div class="phone-wrap"><div class="phone tiPhone"><i class="tiBtn b1"></i><i class="tiBtn b2"></i><i class="tiBtn b3"></i><i class="tiBtn b4"></i><i class="home"></i><div class="island"></div><div class="screen tiScreen stage" data-src="__VOID__" data-allow="fullscreen; autoplay">
       <img class="poster" src="realms/posters/void.jpg" alt="The Void">
       <button class="enter" type="button"><span>Jump into The Void</span></button>
     </div></div></div>
@@ -553,7 +547,7 @@ body.simple>section,body.simple>footer,body.simple>.mindex{display:none!importan
       <div><b>Card</b><span>Pay-in-4 virtual card designed; sequenced debit-first until a sponsor bank is in place. Not marketed until the program exists.</span></div>
       <div><b>Stack</b><span>TypeScript · Fastify · Prisma · Postgres · Plaid · Expo · Railway</span></div>
     </div></div>
-    <div class="phone-wrap"><div class="phone"><div class="island"></div><div class="screen stage" data-src="__EZER__" data-allow="clipboard-write">
+    <div class="phone-wrap"><div class="phone tiPhone"><i class="tiBtn b1"></i><i class="tiBtn b2"></i><i class="tiBtn b3"></i><i class="tiBtn b4"></i><i class="home"></i><div class="island"></div><div class="screen tiScreen stage" data-src="__EZER__" data-allow="clipboard-write">
       <img class="poster" src="realms/posters/ezer.jpg" alt="EZER onboarding screen">
       <button class="enter" type="button"><span>Open EZER</span></button>
     </div></div></div>
@@ -568,14 +562,14 @@ body.simple>section,body.simple>footer,body.simple>.mindex{display:none!importan
   </div>
   <div class="split with-phone">
     <div>
-      <div class="monitor">
+      <div class="monitor tiMonitor">
         <div class="stage desk" data-src="https://revelati6n.com" data-allow="">
           <img class="poster" src="realms/posters/revelation.jpg" alt="">
           <button class="enter" type="button"><span>Open Revelation · desktop</span></button>
           <div class="tools"><a href="https://revelati6n.com" target="_blank" rel="noopener">Open full</a></div>
         </div>
-        <div class="chin"><i></i></div>
-      </div><div class="foot"></div>
+        <div class="chin tiChin"><i></i></div>
+      </div><div class="foot tiFoot"></div>
       <div class="spec" style="margin-top:24px">
       <div><b>Realtime</b><span>View counts and reactions stream over Server-Sent Events; no websocket dependency, reconnects for free.</span></div>
       <div><b>Storage</b><span>Three backends behind one interface. If the database is gone the site keeps serving and accepting comments, then reconciles.</span></div>
@@ -583,7 +577,7 @@ body.simple>section,body.simple>footer,body.simple>.mindex{display:none!importan
       <div><b>Stack</b><span>Node · Express · SSE · vanilla front end</span></div>
       </div>
     </div>
-    <div class="phone-wrap"><div class="phone"><div class="island"></div><div class="screen stage scrollpage" data-src="https://revelati6n.com" data-allow="">
+    <div class="phone-wrap"><div class="phone tiPhone"><i class="tiBtn b1"></i><i class="tiBtn b2"></i><i class="tiBtn b3"></i><i class="tiBtn b4"></i><i class="home"></i><div class="island"></div><div class="screen tiScreen stage scrollpage" data-src="https://revelati6n.com" data-allow="">
       <button class="enter" type="button"><span>Open Revelation · phone</span></button>
     </div></div></div>
   </div>
@@ -597,7 +591,7 @@ body.simple>section,body.simple>footer,body.simple>.mindex{display:none!importan
   </div>
   <div class="split with-phone browser" data-store="maren">
     <div>
-    <div class="monitor">
+    <div class="monitor tiMonitor">
       <div class="tabs" role="tablist" aria-label="Stores">
         <button type="button" role="tab" data-tab="maren" aria-selected="true"><i style="background:#ECEAE3"></i>MAREN</button>
         <button type="button" role="tab" data-tab="sly" aria-selected="false"><i style="background:#9A9890"></i>Sly Sculpted</button>
@@ -609,18 +603,18 @@ body.simple>section,body.simple>footer,body.simple>.mindex{display:none!importan
         <div class="stage desk" data-tab="sly" data-src="https://www.slysculpted.com/" data-allow="" hidden><div class="tools"><a href="https://www.slysculpted.com/" target="_blank" rel="noopener">Open</a></div></div>
         <div class="stage desk" data-tab="impact" data-src="https://impact-threads.com/" data-allow="" hidden><div class="tools"><a href="https://impact-threads.com/" target="_blank" rel="noopener">Open</a></div></div>
       </div>
-      <div class="chin"><i></i></div>
-    </div><div class="foot"></div>
+      <div class="chin tiChin"><i></i></div>
+    </div><div class="foot tiFoot"></div>
     <div class="spec storecaps">
       <div data-tab="maren"><b>MAREN</b><span>The Weekender Set. Astro on Netlify, Shopify checkout, Meta pixel and ads run by script.</span></div>
       <div data-tab="sly"><b>Sly Sculpted</b><span>Independent Dyson resale. Condition disclosure on every listing, Express backend for reviews, tracking and chat.</span></div>
       <div data-tab="impact"><b>Impact Threads</b><span>Streetwear as protest. Headless Shopify, generated SEO pages, checkout on Shopify.</span></div>
     </div>
     </div>
-    <div class="phone-wrap"><div class="phone"><div class="island"></div>
-      <div class="screen stage scrollpage" data-tab="maren" data-src="https://live-maren.com/" data-allow=""><button class="enter" type="button"><span>Open MAREN · phone</span></button></div>
-      <div class="screen stage scrollpage" data-tab="sly" data-src="https://www.slysculpted.com/" data-allow="" hidden><button class="enter" type="button"><span>Open Sly Sculpted · phone</span></button></div>
-      <div class="screen stage scrollpage" data-tab="impact" data-src="https://impact-threads.com/" data-allow="" hidden><button class="enter" type="button"><span>Open Impact Threads · phone</span></button></div>
+    <div class="phone-wrap"><div class="phone tiPhone"><i class="tiBtn b1"></i><i class="tiBtn b2"></i><i class="tiBtn b3"></i><i class="tiBtn b4"></i><i class="home"></i><div class="island"></div>
+      <div class="screen tiScreen stage scrollpage" data-tab="maren" data-src="https://live-maren.com/" data-allow=""><button class="enter" type="button"><span>Open MAREN · phone</span></button></div>
+      <div class="screen tiScreen stage scrollpage" data-tab="sly" data-src="https://www.slysculpted.com/" data-allow="" hidden><button class="enter" type="button"><span>Open Sly Sculpted · phone</span></button></div>
+      <div class="screen tiScreen stage scrollpage" data-tab="impact" data-src="https://impact-threads.com/" data-allow="" hidden><button class="enter" type="button"><span>Open Impact Threads · phone</span></button></div>
     </div></div>
   </div>
 </div></section>
@@ -640,7 +634,7 @@ body.simple>section,body.simple>footer,body.simple>.mindex{display:none!importan
       <div><b>Risk</b><span>Trailing drawdown, consistency rules, daily loss limits, three trades a day, stop after the first loss.</span></div>
       <div><b>Stack</b><span>Python · Flask · gunicorn · Railway · Kraken · yfinance · Lightweight Charts · Claude API</span></div>
           </div></aside>
-    <div class="phone-wrap"><div class="phone"><div class="island"></div><div class="screen stage" data-src="__MORGAN__" data-allow="">
+    <div class="phone-wrap"><div class="phone tiPhone"><i class="tiBtn b1"></i><i class="tiBtn b2"></i><i class="tiBtn b3"></i><i class="tiBtn b4"></i><i class="home"></i><div class="island"></div><div class="screen tiScreen stage" data-src="__MORGAN__" data-allow="">
       <button class="enter" type="button"><span>Open Morgan Futures</span></button>
     </div></div></div>
   </div>
@@ -858,9 +852,10 @@ fitDesk(); addEventListener('resize', fitDesk);
 })();
 </script>
 <script>
-(() => { const set = el => { el.style.setProperty('--pw', el.clientWidth + 'px'); el.style.setProperty('--sk', (el.clientWidth * .9384 / 390).toFixed(4)); };   // --sk: screen width / 390
+(() => { const set = el => { const w = el.offsetWidth; if (el.classList.contains('tiMonitor')) { for (const f of [el, el.nextElementSibling]) f && f.style.setProperty('--m', w / 1468 + 'px'); return; }   // --m: frames.css monitor unit (design 1468 wide)
+  el.style.setProperty('--pw', w + 'px'); el.style.setProperty('--u', w / 430 + 'px'); el.style.setProperty('--sk', (w * 402 / 430 / 390).toFixed(4)); };   // --u: frames.css iPhone unit (body 430 wide); --sk: screen width / 390
   const ro = window.ResizeObserver && new ResizeObserver(es => es.forEach(e => set(e.target)));
-  const all = () => document.querySelectorAll('.phone').forEach(el => { set(el); ro && ro.observe(el); });
+  const all = () => document.querySelectorAll('.phone,.tiMonitor').forEach(el => { set(el); ro && ro.observe(el); });
   all(); addEventListener('resize', all); })();
 </script>
 <script>
@@ -892,11 +887,12 @@ addEventListener('pageshow', () => fetch(location.pathname, { method: 'HEAD', ca
     if (on) { prev = prev || r.dataset.theme; r.dataset.theme = 'dark'; } else if (prev) { r.dataset.theme = prev; prev = null; }
     document.body.classList.toggle('simple', on); os.hidden = !on; b.setAttribute('aria-pressed', on);
     b.setAttribute('aria-label', on ? 'Read less view on. Switch to scroll view' : 'Scroll view on. Switch to read less view');
-    if (on && !f) { f = document.createElement('iframe'); const sm = new URLSearchParams(location.search).get('scrollMode'); const src = 'OS.dc.html?v=20261112fe&fb=74' + (sm ? '&scrollMode=' + encodeURIComponent(sm) : ''); f.title = 'Projects'; f.allow = 'fullscreen; pointer-lock; autoplay; clipboard-write';
+    if (on && !f) { f = document.createElement('iframe'); const sm = new URLSearchParams(location.search).get('scrollMode'); const src = 'OS.dc.html?v=20261112sk&fb=74' + (sm ? '&scrollMode=' + encodeURIComponent(sm) : ''); f.title = 'Projects'; f.allow = 'fullscreen; pointer-lock; autoplay; clipboard-write';
       // invisible until the frame's own dark page exists (it posts chaze-homed from its <head>): its blank first document never paints white
-      f.style.visibility = 'hidden'; f.onload = () => { if (f.getAttribute('src')) show(); }; os.append(f);
+      f.style.visibility = 'hidden'; f.onload = () => { if (f.getAttribute('src')) show(); }; os.append(f); showT = setTimeout(show, 1500);   // fail-safe: never left hidden
       // The frame loads these without a version token: revalidate them first so a phone never runs a cached old build.
-      Promise.allSettled([src, 'OSDevice.dc.html', 'support.js', 'image-slot.js', 'ios-frame.js?v=1'].map(u => fetch(u, { cache: 'no-cache' }).then(r => r.arrayBuffer()))).then(() => { f.src = src; }); }
+      // capped at 1.2 s: a stalled fetch on LTE must never keep the frame from loading
+      Promise.race([Promise.allSettled([src, 'OSDevice.dc.html', 'support.js', 'image-slot.js', 'ios-frame.js?v=1'].map(u => fetch(u, { cache: 'no-cache' }).then(r => r.arrayBuffer()))), new Promise(r => setTimeout(r, 1200))]).then(() => { if (!f.getAttribute('src')) f.src = src; }); }
     else if (f) { if (on) home(); else f.contentWindow.postMessage({ type: 'chaze-home' }, '*'); }   // left on a project: back to the Home screen while hidden, so coming back never shows it
     if (on) scrollTo(0, 0);
   };
@@ -905,7 +901,7 @@ addEventListener('pageshow', () => fetch(location.pathname, { method: 'HEAD', ca
   const home = () => { f.style.visibility = 'hidden'; f.contentWindow.postMessage({ type: 'chaze-home' }, '*'); clearTimeout(showT); showT = setTimeout(show, 700); };
   addEventListener('message', e => { if (f && e.source === f.contentWindow && e.data && e.data.type === 'chaze-homed') show(); });
   // back from a build that opened in this tab: the page comes back from the back/forward cache with the frame as it was left
-  addEventListener('pagehide', () => { if (f) f.style.visibility = 'hidden'; });
+  addEventListener('pagehide', () => { if (f) { f.style.visibility = 'hidden'; clearTimeout(showT); showT = setTimeout(show, 700); } });   // iOS can skip pageshow on resume: the timer still reveals it
   addEventListener('pageshow', e => { if (f && f.getAttribute('src')) e.persisted ? home() : show(); });
   b.onclick = () => set(!document.body.classList.contains('simple'));
   document.querySelector('nav[aria-label="Sections"]').addEventListener('click', e => {

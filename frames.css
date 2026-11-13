@@ -1,0 +1,20 @@
+/* The one set of device frames for the whole site (Read less, Scroll view, phone sheets). Linked by index.html and OS.dc.html; change frames here only.
+   Sizes are design px times a unit: --u = phone body width / 430, --m = monitor width / 1468. Defaults (1px) are the Read less full-size devices. */
+
+/* iPhone Pro body around the 402x874 screen: titanium rim with edge light, black glass border, side buttons, layered shadow. */
+.tiPhone{--u:1px;position:relative;flex:0 0 auto;width:calc(430*var(--u));height:calc(902*var(--u));margin:calc(8*var(--u));border-radius:calc(62*var(--u));background:#050506;border:calc(4*var(--u)) solid;border-color:#a3a5aa #55565b #2b2c30 #74767b;box-shadow:0 0 0 calc(1*var(--u)) #000,inset 0 0 0 calc(1*var(--u)) rgba(255,255,255,.08)}
+/* titanium = a 4px rim of solid side colours (lit top-left, shaded bottom-right), no big gradients or blurred box-shadows: the devices scale while scrolling and WebKit re-rasters those every frame. The drop shadow is one small gradient (::after). */
+.tiPhone::before{content:"";position:absolute;inset:0;border-radius:calc(58*var(--u));border:calc(1*var(--u)) solid rgba(255,255,255,.22);border-bottom-color:rgba(255,255,255,.06);pointer-events:none}
+.tiPhone::after{content:"";position:absolute;z-index:-1;left:-8%;right:-8%;top:6%;bottom:-9%;border-radius:50%;background:radial-gradient(closest-side,rgba(0,0,0,.75),rgba(0,0,0,.45) 55%,rgba(0,0,0,.18) 80%,rgba(0,0,0,0));pointer-events:none}
+.tiPhone .tiScreen,.tiScreen{position:absolute;inset:calc(10*var(--u));border-radius:calc(48*var(--u));overflow:hidden;background:#000;outline:calc(1*var(--u)) solid rgba(255,255,255,.07)}
+.tiBtn{position:absolute;width:calc(5*var(--u));border-radius:calc(2*var(--u));background:linear-gradient(90deg,#26272a,#86888d 45%,#34353a)}
+.tiBtn.b1{left:calc(-8*var(--u));top:calc(150*var(--u));height:calc(34*var(--u))}
+.tiBtn.b2{left:calc(-8*var(--u));top:calc(214*var(--u));height:calc(62*var(--u))}
+.tiBtn.b3{left:calc(-8*var(--u));top:calc(290*var(--u));height:calc(62*var(--u))}
+.tiBtn.b4{right:calc(-8*var(--u));top:calc(250*var(--u));height:calc(100*var(--u))}
+
+/* Monitor: 1440x900 screen in a 14px bezel, 44px chin with a dot, 260x22 foot. No drop shadow. */
+.tiMonitor{--m:1px;background:#0b0b0c;border-radius:calc(28*var(--m));padding:calc(14*var(--m)) calc(14*var(--m)) 0;box-shadow:inset 0 0 0 max(1px,calc(2*var(--m))) #2a2a2c}
+.tiMonitor .tiChin{height:calc(44*var(--m));display:grid;place-items:center}
+.tiMonitor .tiChin i{display:block;width:calc(12*var(--m));height:calc(12*var(--m));border-radius:50%;background:#2e2e31}
+.tiFoot{width:calc(260*var(--m));height:calc(22*var(--m));margin:0 auto;background:#0b0b0c;border-radius:0 0 calc(16*var(--m)) calc(16*var(--m))}
