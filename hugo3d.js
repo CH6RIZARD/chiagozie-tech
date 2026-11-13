@@ -454,7 +454,7 @@ hit.addEventListener('pointerdown', e => {
   const now = performance.now();
   if (st.held) return;
   {                                                // press: pick him up (release lets go)
-    st.held = true; st.hop = false; st.goal = null; st.air = false; st.floor = null; st.mode = 'walk'; st.amt = 0; st.vx = st.vy = 0;
+    st.held = true; st.dropF = null; st.hop = false; st.goal = null; st.air = false; st.floor = null; st.mode = 'walk'; st.amt = 0; st.vx = st.vy = 0;
     pointerId = e.pointerId; hit.style.cursor = 'grabbing'; document.body.style.cursor = 'grabbing';
     // He is held where you took him: by the head, the chest, or the legs (then he hangs upside down from your hand).
     st.grip = Math.max(0.3, Math.min(1, (st.y - (e.clientY + scrollY)) / CFG.size)); st.flip = false;   // held where you took him, always the right way up
@@ -551,7 +551,7 @@ function floorNear(x, y) {   // somewhere he can stand at or just under (x, y), 
 // The mind's wish, carried out with his own body. Never while he is held, airborne, climbing, crawling, mid-jump or busy
 // with the dove (REL leads there); a wish he cannot carry out is just dropped.
 window.__hugoAct = (act, target) => {
-  if (!act || st.dead || st.held || st.air || st.relOrder || ['climb', 'prep', 'crawl'].includes(st.mode) || (st.crawlK || 0) > 0.05) return 'busy';
+  if (!act || st.dead || st.held || st.air || st.relOrder || (gest && gest.name === 'mad') || ['climb', 'prep', 'crawl'].includes(st.mode) || (st.crawlK || 0) > 0.05) return 'busy';
   const p = target && target !== 'cursor' ? places.find((q, i) => 'p' + (i + 1) === target) : null;
   const cp = { x: pointer.cx + scrollX, y: pointer.cy + scrollY };
   const stand = (name, dur) => { if (st.mode === 'sit') return; st.mode = 'idle'; st.amt = 0; st.idleUntil = t + dur; gest = { name, t0: t, dur, side: Math.random() < 0.5 ? -1 : 1, amp: 0.8 + Math.random() * 0.3, f: 0.8 + Math.random() * 0.5 }; };
@@ -589,10 +589,10 @@ function poke(why) { pokes++; pokeWhy = why; }
 const misses = [];
 function missed(why) {
   misses.push(t); while (misses.length && t - misses[0] > 25) misses.shift();
-  if (misses.length < 3 || st.air || st.held || st.dead || st.mode === 'sit' || (gest && gest.rel)) return;
+  if (misses.length < 3 || st.air || st.held || st.dead || st.mode === 'sit' || (gest && gest.rel)) return false;
   misses.length = 0; poke('fed up: ' + why); window.REL?.ev('hugo', 'gesture', null, 0, { name: 'mad' });
   st.goal = null; st.mode = 'idle'; st.amt = 0; st.idleUntil = t + 3.2;
-  gest = { name: 'mad', t0: t, dur: 3, side: st.dir, amp: 1, f: 1 }; gestAt = t + 6;
+  gest = { name: 'mad', t0: t, dur: 3, side: st.dir, amp: 1, f: 1 }; gestAt = t + 6; return true;
 }
 // A wall ahead (words or a box he cannot walk or crawl under). A person does not walk into it over and over: he gets on
 // top of it if he can, lets go of a goal that lies past it, and remembers it; boxed in on both sides, he climbs out or
@@ -614,6 +614,7 @@ function blocked(f) {
   if (walls.some(w => w.f === f && w.dir === -st.dir && t - w.t < 30)) {   // walls both ways lately: hemmed in
     const g = pickToward(-1);
     if (g) { st.goal = { f: g.f, x: g.x, until: t + 20 }; return; }
+    if (missed('hemmed in')) return;   // boxed in with no way out: it builds up like any other failure
     if (clear(st.x, f.y, SIT_H + 4)) { st.mode = 'sit'; st.idleUntil = t + 15 + Math.random() * 20; }
     else { st.mode = 'idle'; st.idleUntil = t + 4 + Math.random() * 4; gest = { name: 'look', t0: t, dur: 3.5, side: -st.dir, amp: 1, f: 1 }; }
     return;
@@ -636,6 +637,8 @@ function pickToward(dir) {
   return c[0] || null;
 }
 const onFloor = (f, x) => x - HALF_W >= f.x1 && x + HALF_W <= f.x2;
+// Stepping off a ledge: phones never take a drop that ends a screen or more down at the page bottom (he vanished from view for good)
+const dropTo = (x, y) => { const f = landingBelow(x, y), ok = f && !(phone() && f.ground && f.y - y > innerHeight * 0.8); st.dropF = ok && phone() ? f : null; return ok ? f : null; };
 function landingBelow(x, y, vis) {   // nearest floor under (x, y) within a screen and a half; vis: a drop, so it must be one you can see
   let best = null;
   const visBottom = scrollY + innerHeight - 30, lim = vis && visBottom > y + 2 ? visBottom : Infinity;
@@ -753,8 +756,9 @@ function step(dt) {
     if (st.x < HALF_W) { st.x = HALF_W; st.vx = Math.abs(st.vx) * 0.5; } else if (st.x > W - HALF_W) { st.x = W - HALF_W; st.vx = -Math.abs(st.vx) * 0.5; }
     swingLimbs(dt, (st.vx - lastVx) / dt, (st.vy - lastVy) / dt + G, 0.7); lastVx = st.vx; lastVy = st.vy;
     st.tilt += ((st.vx * 0.0005) - st.tilt) * Math.min(1, dt * 4);
-    const f = landingBelow(st.x, py - 1, !st.hop && !st.pounce);
-    if (f && st.y >= f.y && st.vy > 0) { st.y = f.y; st.floor = f; st.air = false; st.vy = 0; st.vx = 0; st.land = st.hop ? 0.2 : 0.35; st.hop = false; st.mode = 'walk'; st.tilt = 0;
+    let f = landingBelow(st.x, py - 1, !st.hop && !st.pounce);
+    if (st.dropF && (!f || f.y > st.dropF.y)) f = st.dropF;   // phones: the ledge he chose to step down to catches him
+    if (f && st.y >= f.y && st.vy > 0) { if (f === st.dropF) st.x = Math.max(f.x1 + HALF_W, Math.min(f.x2 - HALF_W, st.x)); st.dropF = null; st.y = f.y; st.floor = f; st.air = false; st.vy = 0; st.vx = 0; st.land = st.hop ? 0.2 : 0.35; st.hop = false; st.mode = 'walk'; st.tilt = 0;
       if (st.pounce) { window.REL?.ev('hugo', 'pounceLand', 'dove', 0, { x: st.x, y: st.y }); st.pounce = null; relEnd('ok'); st.mode = 'idle'; st.idleUntil = t + 0.8; }
       else if (gest && gest.rel) st.mode = 'idle';
       if ((st.shaken || 0) > 0.35) { window.REL?.ev('hugo', 'fell', null, Math.min(0.8, st.shaken), { x: st.x, y: st.y }); poke('landed hard'); }
@@ -851,7 +855,7 @@ function step(dt) {
       const r = Math.random();
       if (!st.goal && !st.relBusy && r < 0.3 && clear(st.x, f.y, SIT_H + 4)) { st.mode = 'sit'; st.idleUntil = t + 6 + Math.random() * 14; return; }
       if (!st.goal && !st.relBusy && r < 0.5) { st.mode = 'idle'; st.idleUntil = t + 2 + Math.random() * 2; gest = { name: 'peer', t0: t, dur: 2 + Math.random() * 2, side: st.dir, amp: 1, f: 1 }; st.dir = -st.dir; return; }
-      if (landingBelow(nx, f.y)) { st.air = true; st.hop = true; st.vx = st.dir * walkSpeed() * 0.8; st.vy = -160; st.x = nx; return; }
+      if (dropTo(nx, f.y)) { st.air = true; st.hop = true; st.vx = st.dir * (phone() ? 20 : walkSpeed() * 0.8); st.vy = -160; st.x = nx; return; }   // phones: nearly straight down, onto the ledge he looked at, not past it
       st.dir = -st.dir; st.mode = 'idle'; st.idleUntil = t + 0.8 + Math.random() * 1.5; return;
     }
     if (clear(nx + st.dir * 10, f.y, CFG.size + 4)) { st.x = nx; st.ph += dt * sty.cadence * go * k; st.amt = Math.min(1, st.amt + dt * 2.2); }   // legs keep pace, so feet never slide
@@ -875,7 +879,7 @@ function step(dt) {
     const k = (window.REL ? window.REL.body('hugo').speedK : 1), nx = st.x + st.dir * walkSpeed() * 0.3 * dt * k;
     if (clear(st.x, f.y, CFG.size + 4) && clear(st.x + st.dir * 14, f.y, CFG.size + 4) && t - st.crawlT > 0.6) { st.mode = 'walk'; return; }   // headroom here and ahead: out the other side, he stands up
     const past = st.dir > 0 ? nx + HALF_W * 0.4 > f.x2 : nx - HALF_W * 0.4 < f.x1;
-    if (past) { if (landingBelow(nx, f.y)) { st.air = true; st.hop = true; st.vx = st.dir * 60; st.vy = -60; st.x = nx; st.mode = 'walk'; } else st.dir = -st.dir; return; }
+    if (past) { if (dropTo(nx, f.y)) { st.air = true; st.hop = true; st.vx = st.dir * 60; st.vy = -60; st.x = nx; st.mode = 'walk'; } else st.dir = -st.dir; return; }
     if (clear(nx + st.dir * 10, f.y, CRAWL_H + 4)) { st.x = nx; st.ph += dt * 0.85 * k; }
     else { walls.push({ f, dir: st.dir, t, crawl: true }); st.dir = -st.dir; st.crawlT = t; poke('a dead end, even crawling'); missed('dead end'); }   // remembered, so he does not crawl straight back in   // too tight even on all fours: back out the way he came
   } else if (st.mode === 'idle') { st.amt = Math.max(0, st.amt - dt * 4); if (t > st.idleUntil) { st.mode = 'walk'; restyle(); } }
@@ -918,7 +922,7 @@ function frame(now) {
   const sy = st.y - scrollY;
   if (sy < -CFG.size - 40 || sy > innerHeight + 60) { canvas.style.visibility = 'hidden'; hit.style.display = 'none'; hud.style.opacity = 0; return; }   // alive, just not in view
   // phones: a jump or fall across words fades him out, so he never covers text or takes its taps
-  const overText = phone() && !st.held && textInk.some(q => q.r > st.x - HALF_W && q.l < st.x + HALF_W && q.b > st.y - CFG.size && q.t < st.y);
+  const overText = phone() && !st.held && textInk.some(q => q.r > st.x - HALF_W && q.l < st.x + HALF_W && q.b > st.y - (st.air ? CFG.size : st.mode === 'sit' ? SIT_H : st.mode === 'crawl' ? CRAWL_H : CFG.size) && q.t < st.y - 2);   // his body as it is now: sitting or crawling he is shorter
   canvas.style.opacity = overText ? '0' : '';
   if (overText) { hit.style.display = 'none'; hud.style.opacity = 0; } else hit.style.display = '';
   hit.style.transform = `translate3d(${Math.round(st.x - scrollX - HALF_W)}px,${Math.round(sy - CFG.size)}px,0)`;

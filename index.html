@@ -515,7 +515,7 @@ body.simple>section,body.simple>footer,body.simple>.mindex{display:none!importan
 <section class="realm" id="void"><div class="wrap">
   <div class="top">
     <div><div class="kicker"><span class="st live">Live cams</span><span class="st">Mobile · social</span></div><h2>THE VOID</h2></div>
-    <div><p class="about">Designed to rank on the body, not just clicks. On-device sensing reads camera pulse (rPPG), fingertip heart rate and HRV, Bluetooth heart-rate straps, face (blink, gaze, smile), touch dynamics and hand tremor, scores each against your own baseline and maps it to arousal, attention and valence on the post you were watching. An on-device model learns from that behavior and serves more of what moves you, mixed by a fusion ranker (social, interest, behavioral, physio-affinity and controversy signals, Thompson-sampling weights) into an almost addictive feed. Built as a mobile app on Supabase Postgres with PostGIS and row-level security, HLS live streams and libsignal end-to-end encrypted DMs. Wrapped in the UI of international news, niche live streams, reels and feeds, and a unique polls and discussion module.</p><p class="how">Tap a nation · live rooms, polls and the feed · anonymous by default</p></div>
+    <div><p class="about">Designed as a physiological ranking algorithm rather than standard behavior modeling. On-device sensing reads camera pulse (rPPG), fingertip heart rate and HRV, Bluetooth heart-rate straps, facial expression, touch dynamics and hand tremor, scores each against your own baseline and maps it to arousal, attention and valence on the media the user engages with. An on-device model learns from that behavior and serves more of what moves you, mixed by a fusion ranker (social, interest, behavioral, physio-affinity and controversy signals, Thompson-sampling weights) into an almost addictive feed. Built as a mobile app on Supabase Postgres with PostGIS and row-level security, HLS live streams and libsignal end-to-end encrypted DMs. Wrapped in the UI of international news, niche live streams, reels and feeds, and a unique polls and discussion module.</p><p class="how">Tap a nation · live rooms, polls and the feed · anonymous by default</p></div>
   </div>
   <div class="split with-phone">
     <div class="aside">
@@ -867,7 +867,7 @@ const bootAgents = ext => {
   window.SCION_GLB = 'dove.glb' + ext;
   window.HUGO_CONFIG = { size: matchMedia('(max-width:760px)').matches ? 64 : 150, glb: 'realms/hugo/hugo.glb' + ext };
   const add = (src, type) => new Promise(r => { const s = document.createElement('script'); if (type) s.type = type; s.src = src; s.onload = r; s.onerror = r; document.head.append(s); });
-  add('bond.js?v=20261112frame').then(() => add('dove-agent.js?v=20261110q')).then(() => { add('dove3d.js?v=20261111s', 'module'); add('hugo3d.js?v=20261112mad', 'module'); });
+  add('bond.js?v=20261112frame').then(() => add('dove-agent.js?v=20261110q')).then(() => { add('dove3d.js?v=20261111s', 'module'); add('hugo3d.js?v=20261112land', 'module'); });
 };
 fetch('dove.glb', { method: 'HEAD' }).then(r => bootAgents(r.ok ? '' : '.wasm')).catch(() => bootAgents('.wasm'));
 
