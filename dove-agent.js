@@ -54,7 +54,7 @@ window.SCION_BOOT = R => {
 
   const css = document.createElement('style');
   css.textContent = `
-    #scion-dove{position:absolute;left:0;top:0;width:64px;height:${CFG.size}px;z-index:10001;cursor:grab;transform-origin:0 0;touch-action:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}   /* touch-action:none: a finger press grabs the bird instead of scrolling (else iOS cancels the pointer) */
+    #scion-dove{position:absolute;left:0;top:0;width:64px;height:${CFG.size}px;z-index:10001;cursor:grab;transform-origin:0 0;touch-action:none;pointer-events:auto;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}   /* touch-action:none: a finger press grabs the bird instead of scrolling (else iOS cancels the pointer) */
     #scion-dove::before{content:'';position:absolute;inset:-18px -10px}   /* a bigger target than the bird: easy to catch */
     #scion-dove.gone{pointer-events:none}
     #scion-shadow{position:absolute;left:0;top:0;z-index:9998;width:60px;height:8px;margin:-4px 0 0 -30px;pointer-events:none;
@@ -65,7 +65,7 @@ window.SCION_BOOT = R => {
       font:13px/1.4 system-ui,sans-serif;color:#15171C;background:#fff;border:1px solid #D8D8D2;border-radius:14px;
       box-shadow:0 8px 24px rgba(21,23,28,.16);opacity:0;transition:opacity .35s}
     #scion-say.on{opacity:1}
-    #scion-ask{position:absolute;left:0;top:0;z-index:10002;width:230px;padding:8px 11px;font:13px/1.3 system-ui,sans-serif;color:#15171C;
+    #scion-ask{position:absolute;left:0;top:0;z-index:10002;pointer-events:auto;width:230px;padding:8px 11px;font:13px/1.3 system-ui,sans-serif;color:#15171C;
       background:#fff;border:1px solid #2038C7;border-radius:12px;outline:none;box-shadow:0 8px 24px rgba(21,23,28,.16);display:none}
     ::highlight(scion){background-color:#E8EBFA;color:#2038C7}
     #scion-hud{position:fixed;left:16px;bottom:16px;z-index:9999;font:11px/1.45 ui-monospace,Menlo,Consolas,monospace;
@@ -86,7 +86,11 @@ window.SCION_BOOT = R => {
   hud.title = 'SCION on the Mortal Agent Frame. Click to inspect.';
   hud.innerHTML = '<div><span class="pulse"></span><span class="id"></span></div><div class="bar"><i></i></div><div class="log"></div>';
   hud.onclick = () => hud.classList.toggle('min'); hud.classList.add('min');
-  document.body.append(shadow, el, say, hud, ask);
+  // The agents' page-sized layer clips everything in it (overflow:clip), so a bird flying past the page bottom never makes the
+  // document taller (on WebKit it did: the page grew to 20 000 px). Created here first; dove3d/hugo3d reuse it.
+  const layer = document.getElementById('agent-layer') || document.body.appendChild(Object.assign(document.createElement('div'), { id: 'agent-layer' }));
+  Object.assign(layer.style, { position: 'absolute', left: 0, top: 0, right: 0, bottom: 0, overflow: 'clip', pointerEvents: 'none', zIndex: 9998 });
+  layer.append(shadow, el, say, ask); document.body.append(hud);
   const [hudId, hudBar, hudLog, pulse] = ['.id', '.bar i', '.log', '.pulse'].map(s => hud.querySelector(s));
 
   const pick = arr => arr[(Math.random() * arr.length) | 0];
@@ -111,7 +115,7 @@ window.SCION_BOOT = R => {
     sayTimer = setTimeout(() => say.classList.remove('on'), ms);
   }
   function burst(x, y) {
-    const b = mk(null, 'scion-burst'); document.body.append(b);
+    const b = mk(null, 'scion-burst'); layer.append(b);
     b.animate([{ transform: `translate(${x}px,${y}px) scale(.1)`, opacity: 1 }, { transform: `translate(${x}px,${y}px) scale(1.6)`, opacity: 0 }],
       { duration: 900, easing: 'ease-out' }).onfinish = () => b.remove();
   }
@@ -141,11 +145,11 @@ window.SCION_BOOT = R => {
   // Real flight. When serve-dove.py (MuJoCo, ws :8773) is up, flyTick takes the body's position, velocity, pitch, roll and wingbeat
   // phase from it (wing lift/drag, gravity, contacts with Hugo's proxies are simulated there); when it is down, flyTick falls back
   // to the old kinematic point mass and the HUD says "kinematic". Page px -> metres: 1 px = 0.0037 m; world x right, y depth, z up.
-  const phys = { url: CFG.physUrl || 'ws://127.0.0.1:8773', ws: null, up: false, st: null, recvAt: 0, flying: false, lastSend: 0, S: 0.0037, H0: 20000, hugoF: 0 };
+  const phys = { url: CFG.physUrl || (/^(127\.0\.0\.1|localhost)$/.test(location.hostname) ? 'ws://127.0.0.1:8773' : ''), ws: null, up: false, st: null, recvAt: 0, flying: false, lastSend: 0, S: 0.0037, H0: 20000, hugoF: 0 };
   const pw = (x, y, z) => [x * phys.S, z * phys.S, (phys.H0 - y) * phys.S];
   const physLive = now => phys.up && phys.st && now - phys.recvAt < 400;
   function physConnect() {
-    if (phys.ws || reduced) return;
+    if (phys.ws || reduced || !phys.url) return;
     let w; try { w = phys.ws = new WebSocket(phys.url); } catch { return void setTimeout(physConnect, 6000); }
     w.onopen = () => { phys.up = true; };
     w.onmessage = e => { try { const m = JSON.parse(e.data); if (m.t === 'state') { phys.st = m; phys.recvAt = performance.now(); phys.hugoF = Math.hypot(...m.hugoF); } } catch {} };
@@ -330,7 +334,7 @@ window.SCION_BOOT = R => {
     const top = scrollY + 50, bottom = scrollY + innerHeight - 20;
     for (const s of surfaces) {
       const r = surfRect(s); if (!r) continue;
-      const sy = r.top + scrollY; if (sy < top + 60 || sy > bottom) continue;  // room above for the bird
+      const sy = r.top + scrollY; if (sy < top + CFG.size * 2 || sy > bottom) continue;  // room above for the bird (its own height, so a phone screen has perches too)
       // only the stretch you can see: inside the screen, and inside its carousel's box (a card swiped off screen is not a perch)
       const c = s.clip, lo = Math.max(r.left + scrollX + 24, scrollX + 16, c ? c.l + 16 : -1e9), hi = Math.min(r.right + scrollX - 24, scrollX + innerWidth - 16, c ? c.r - 16 : 1e9);
       if (hi < lo || (c && (sy < c.t || sy > c.b))) continue;
@@ -394,7 +398,7 @@ window.SCION_BOOT = R => {
     const back = !!(a && a.mode === 'perch' && a.spot && a.spot.z < 0), want = back ? window.DEPTH.SCALE[-1] : 1;
     const ps = a ? (a.ps = (a.ps ?? want) + (want - (a.ps ?? want)) * 0.12) : 1;   // eased per frame toward the lane's scale
     const clip = back ? behindCards({ l: fx - CFG.size, r: fx + CFG.size, t: fy - CFG.size * 1.3, b: fy + 4 }) : '';
-    R.set({ mode: 'perch', x: fx, y: fy, z: 0, scale: ps, heading: heading(yaw, face), pitch: 0, roll: 0, row, walkPh, breath, opacity: 1, clip });
+    R.set({ mode: 'perch', x: fx, y: fy, z: 0, scale: ps, heading: heading(yaw, face), pitch: 0, roll: 0, row, walkPh, breath, clip });
     el.style.transform = `translate(${fx - 32}px,${fy - CFG.size}px)`;
     shadow.style.transform = `translate(${fx}px,${fy}px) scale(${ps.toFixed(2)})`; shadow.style.opacity = clip ? 0 : 0.9;
     placeBubble(fx, fy - CFG.size);
@@ -402,8 +406,7 @@ window.SCION_BOOT = R => {
   function drawFly(bx, by, z, view, face, flapPh, glide, pitch, roll, groundY) {
     const s = depthScale(z);
     const clip = z < -4 ? behindCards({ l: bx - CFG.size * 1.6 * s, r: bx + CFG.size * 1.6 * s, t: by - CFG.size * s, b: by + CFG.size * 0.6 * s }) : '';
-    R.set({ mode: 'fly', x: bx, y: by, z, scale: 1, heading: heading(view, face), pitch, roll, flapPh, glide,
-      opacity: z < 0 ? clamp(1 + z / 500, 0.7, 1) : 1, clip });
+    R.set({ mode: 'fly', x: bx, y: by, z, scale: 1, heading: heading(view, face), pitch, roll, flapPh, glide, clip });
     el.style.transform = `translate(${bx - 32 * s}px,${by - CFG.size / 2 * s}px) scale(${s})`;
     // Shadow on the page plane: smaller and fainter the higher (and nearer to you) it is.
     const gap = groundY - by + Math.max(z, 0) * 0.6;
@@ -411,7 +414,7 @@ window.SCION_BOOT = R => {
     shadow.style.opacity = z < -4 && clip ? 0 : clamp(1 - gap / 280, 0, 0.75);
     placeBubble(bx, by - 60 * s);
   }
-  // WebGL cannot see the page: "behind a card" means cutting the cards' shapes out of the canvas (even-odd clip).
+  // WebGL cannot see the page: "behind a card" means the cards' rects become depth-only quads in its renderer (dove3d.js).
   // Only what is in front of its lane and overlaps its body (page coords, from the scene depth.js shares; no layout read here):
   // behind a card while it crosses it, never behind every card on the screen at once.
   function behindCards(box) {
@@ -827,7 +830,6 @@ window.SCION_BOOT = R => {
     if (corpse) { // the body falls; nothing catches it
       corpse.vy += 1200 * dt; corpse.y += corpse.vy * dt; corpse.rot += 300 * dt;
       drawFly(corpse.x, corpse.y, corpse.z, corpse.yaw, corpse.face, 0.25, true, corpse.rot, corpse.rot * 0.4, corpse.y + 400);
-      R.set({ opacity: clamp(1 - (corpse.y - scrollY - innerHeight * 0.3) / innerHeight, 0, 1) });
       if (corpse.y > scrollY + innerHeight + 200) { corpse = null; R.set({ visible: false }); shadow.style.opacity = 0; }
       return;
     }

@@ -20,13 +20,15 @@ Object.assign(canvas.style, { position: 'absolute', left: 0, top: 0, width: BOX 
 const layer = document.getElementById('agent-layer') || document.body.appendChild(Object.assign(document.createElement('div'), { id: 'agent-layer' }));
 Object.assign(layer.style, { position: 'absolute', left: 0, top: 0, right: 0, bottom: 0, overflow: 'clip', pointerEvents: 'none', zIndex: 9998 });
 layer.append(canvas);
-// Phones (Scroll and Read less): same life and physics as desktop, minus the two cheats that left him over the content (landing in
-// front of words, the invisible floor at the screen bottom); he fades out whenever a jump or fall carries him across text.
+// One code path for phones and desktop: the same births, floors, drop-ins, ground and lanes; only body size (CFG.size), the
+// carousels and the frame scan differ. Read less is a one-screen room: its floor is the screen's bottom edge.
 const phoneQ = matchMedia('(max-width:760px)');
 const phone = () => phoneQ.matches;
-const groundY = () => document.documentElement.scrollHeight - 24;
-// phones: a ledge in a side-scrolling row ends at the screen edge, so he never walks off into the part you cannot see
+const simple = () => document.body.classList.contains('simple');
+const groundY = () => (simple() ? Math.min(document.documentElement.scrollHeight, innerHeight) : document.documentElement.scrollHeight) - 24;
+// a ledge in a side-scrolling row ends at the screen edge, so he never walks off into the part you cannot see
 const fit = f => { f.x1 = Math.max(f.x1, 0); f.x2 = Math.min(f.x2, document.documentElement.clientWidth); };
+const inView = () => st.y > scrollY + 30 && st.y - CFG.size < scrollY + innerHeight - 10;   // any of him on screen
 let renderer;
 try { renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true, powerPreference: 'low-power' }); }
 catch { canvas.remove(); throw new Error('Hugo needs WebGL; the page works without him.'); }
@@ -103,7 +105,7 @@ function applyArms(dt, k) {
 }
 // How he carries himself on this walk: re-rolled every time he sets off, so no two walks look the same.
 const sty = { arm: 0.35, hip: 0.38, cadence: 0.9, pockets: false, lean: 0 };
-function restyle() { sty.arm = 0.18 + Math.random() * 0.3; sty.hip = 0.3 + Math.random() * 0.16; sty.cadence = 0.78 + Math.random() * 0.3; sty.pockets = Math.random() < 0.18; sty.lean = (Math.random() - 0.4) * 0.12; }
+function restyle() { sty.arm = 0.18 + Math.random() * 0.3; sty.hip = 0.4 + Math.random() * 0.1; sty.cadence = 0.78 + Math.random() * 0.3; sty.pockets = Math.random() < 0.18; sty.lean = (Math.random() - 0.4) * 0.12; }
 // Gait geometry: one full cycle (two steps) covers 2 x step length, step length = 2 * leg * sin(hip swing). Moving the
 // body by exactly that per cycle keeps the planted foot from sliding: what read as shuffling was the legs cycling ~3x
 // faster than the body moved.
@@ -231,8 +233,8 @@ function capInset(el) {
 function scan() {
   floors = []; ink = []; textInk = []; seams = []; cards = []; scrollers.clear();
   const vh = innerHeight, near = r => r.bottom > -vh * 1.5 && r.top < vh * 2.5, memo = new Map();
-  // Phones in Read less: the page is one frame (OS.dc.html), so its cards, monitor and words are his world, not a solid wall.
-  const os = phone() && document.body.classList.contains('simple') && document.querySelector('#os iframe');
+  // Read less: the page is one frame (OS.dc.html), so its cards, monitor and words are his world, not a solid wall.
+  const os = simple() && document.querySelector('#os iframe');
   let od = null; try { od = os && os.contentDocument && os.contentDocument.body; } catch {}
   const pass = (root, fr) => {
     const fo = fr ? fr.getBoundingClientRect() : null, ox = scrollX + (fo ? fo.left : 0), oy = scrollY + (fo ? fo.top : 0), view = fr && fr.contentWindow;
@@ -253,8 +255,8 @@ function scan() {
       const wrapper = od && (fr ? r.width > view.innerWidth - 4 && r.height > view.innerHeight * 0.8 : e.contains(os));   // the frame and its page-sized wrappers: not walls, and their edge-to-edge tops are traps, not ledges
       const sc = clipFor(e);
       // A 1px rule with nothing behind it is a seam, not a shelf: no standing on it (support:false), food falls past it too.
-      if ((bt > 0 || boxed) && !wrapper) { const sup = card || bt >= 2; add(sup ? floors : seams, { y: r.top + oy, x1: r.left + ox, x2: r.right + ox, el: e, fr, support: sup }, sc); }
-      if (bb > 0 && !wrapper) { const sup = card || bb >= 2; add(sup ? floors : seams, { y: r.bottom + oy, x1: r.left + ox, x2: r.right + ox, el: e, fr, support: sup }, sc); }
+      if ((bt > 0 || boxed) && !wrapper) { const sup = support({ card, bt }); add(sup ? floors : seams, { y: r.top + oy, x1: r.left + ox, x2: r.right + ox, el: e, fr, support: sup }, sc); }
+      if (bb > 0 && !wrapper) { const sup = support({ card, bt: bb }); add(sup ? floors : seams, { y: r.bottom + oy, x1: r.left + ox, x2: r.right + ox, el: e, fr, support: sup }, sc); }
       if (card && r.height > 30 && !wrapper && r.width < pageW * 0.9) add(cards, { l: r.left + ox, t: r.top + oy, r: r.right + ox, b: r.bottom + oy }, sc);   // what hides the back lane
       if (boxed && r.height > 30 && !wrapper) add(ink, { l: r.left + ox, t: r.top + oy, r: r.right + ox, b: (fr ? Math.min(r.bottom, view.innerHeight) : r.bottom) + oy }, sc);   // boxes are solid
     }
@@ -262,31 +264,36 @@ function scan() {
       n.textContent.trim() && !n.parentElement.closest(skipSel) && !(phone() && hidden(n.parentElement)) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT });
     for (let n; (n = walk.nextNode());) {
       const range = n.ownerDocument.createRange(); range.selectNodeContents(n);
-      const cap = phone() && !fr ? capInset(n.parentElement) : 0;   // phones, the hero name: its ledge is the tops of the letters, not the line box
+      const pe = n.parentElement, cap = !fr ? capInset(pe) : 0;   // the hero name: its ledge is the tops of the letters, not the line box
       const sc = clipFor(n);
+      // Only the big headings (h1/h2, 28px+ type) are ledges; body text, labels and captions are ink he walks in front of, never on
+      const ledge = support({ text: true, heading: !!pe.closest('h1,h2'), fontSize: parseFloat(getComputedStyle(pe).fontSize) });
       for (const r of range.getClientRects()) if (r.width > 0 && near(fo ? { top: r.top + fo.top, bottom: r.bottom + fo.top } : r)) {
         const q = add(ink, { l: r.left + ox, t: r.top + oy + cap, r: r.right + ox, b: r.bottom + oy }, sc); if (!q) continue;
         textInk.push(q);
-        if (r.width > 120 || cap > 0) add(floors, { y: r.top + oy + cap, x1: r.left + ox, x2: r.right + ox, el: n.parentElement, text: true, fr, name: cap > 0, support: true, elTop: n.parentElement.getBoundingClientRect().top + oy }, sc);   // elTop now: set later, a shift in between was lost and the ledge sat px off its own line
+        if (ledge && (r.width > 120 || cap > 0)) add(floors, { y: r.top + oy + cap, x1: r.left + ox, x2: r.right + ox, el: pe, text: true, fr, name: cap > 0, support: true, elTop: pe.getBoundingClientRect().top + oy }, sc);   // elTop now: set later, a shift in between was lost and the ledge sat px off its own line
       }
     }
   };
   pass(document.body, null);
-  const bar = phone() && document.querySelector('nav[aria-label="Sections"]');   // phones: the bar is locked over the page; nothing stands under it
-  if (bar) { const r = bar.getBoundingClientRect(); ink.push({ l: r.left + scrollX, t: r.top + scrollY - 400, r: r.right + scrollX, b: r.bottom + scrollY, bar: true }); }
+  // The nav sits over the page on both renders (sticky/fixed at the top, above the agents' layer): a ceiling nothing stands under.
+  // Its wall is kept in viewport space (frame() moves it with every scroll), never a stale page-coordinate snapshot.
+  const bar = document.querySelector('nav[aria-label="Sections"]'); barInk = null;
+  if (bar) { const r = bar.getBoundingClientRect(); if (r.height) ink.push(barInk = { l: 0, t: scrollY - 400, r: pageW, b: scrollY + r.bottom, h: r.bottom, bar: true }); }
   if (od) pass(od, os);
-  if (!od) floors.push({ y: groundY(), x1: 0, x2: document.documentElement.scrollWidth, el: document.body, ground: true, support: true });   // phones, Read less: the page bottom is under the monitor and its caption, not a floor
-  if (phone()) { floors.forEach(fit); seams.forEach(fit);   // phones: only ledges with standing room somewhere along them (no climbing into a gap and crawling there)
-    floors = floors.filter(f => f.ground || f.x2 - f.x1 < 2 * HALF_W || [0, 1, 2, 3, 4, 5, 6, 7, 8].some(i => clear(f.x1 + HALF_W + (f.x2 - f.x1 - 2 * HALF_W) * i / 8, f.y, CFG.size + 4))); }
+  floors.push({ y: groundY(), x1: 0, x2: document.documentElement.scrollWidth, el: document.body, ground: true, support: true });   // the page bottom; Read less: the screen's bottom edge (a one-screen room has a solid floor)
+  floors.forEach(fit); seams.forEach(fit);   // only ledges with standing room somewhere along them (no climbing into a gap and crawling there)
+  floors = floors.filter(f => f.ground || f.x2 - f.x1 < 2 * HALF_W || [0, 1, 2, 3, 4, 5, 6, 7, 8].some(i => clear(f.x1 + HALF_W + (f.x2 - f.x1 - 2 * HALF_W) * i / 8, f.y, CFG.size + 4)));
   // The back lane's own floor: each section's bottom edge (support:false, so food never settles there)
   const secs = window.DEPTH ? window.DEPTH.sections : [];
   secs.forEach((sec, i) => { if (sec.top + sec.h < scrollY - vh * 1.5 || sec.top + sec.h > scrollY + vh * 2.5) return;
-    const q = { y: sec.top + sec.h, x1: 0, x2: pageW, el: secs[i + 1] ? secs[i + 1].el : sec.el, support: false, section: true }; if (phone()) fit(q); seams.push(q); });   // el: the edge it is glued to (the next section's top)
+    const q = { y: sec.top + sec.h, x1: 0, x2: pageW, el: secs[i + 1] ? secs[i + 1].el : sec.el, support: false, section: true }; fit(q); seams.push(q); });   // el: the edge it is glued to (the next section's top)
   allFloors = floors.concat(seams);
   window.DEPTH?.publish({ cards, text: textInk, floors, seams });   // one measured scene for both agents (page coords)
   dirty = false; scanAt = performance.now();
 }
-let allFloors = [];
+let allFloors = [], barInk = null;
+const support = q => window.DEPTH ? window.DEPTH.support(q) : !!(q.card || q.bt >= 2);   // depth.js: boxes, 2px+ rules and big headings only
 // Can he occupy this spot? Body box must be clear of every word and box above the floor (standing or sitting height).
 // Lane-filtered (Fez rule: collision stays flat 2D, per lane): behind or in front of the content, words and boxes are scenery,
 // not walls (only the phone's locked bar still is). z defaults to the lane he is in.
@@ -296,24 +303,27 @@ const clear = (x, y, h, z = st.z, bar = true) => !ink.some(q => (z === 0 || q.ba
 const seenAt = new Map(), avoid = new Map();
 const cell = (x, y) => `${Math.round(x / 140)}:${Math.round(y / 90)}`;
 const novelty = (x, y) => { const l = seenAt.get(cell(x, y)); return l === undefined ? 1 : 1 - Math.exp(-(t - l) / 75); };
-function pickFloor(furniture) {   // furniture: anywhere he can stand on purpose (box tops and lines of text), never the page bottom
+function pickFloor(furniture, z = st.z) {   // furniture: anywhere he can stand on purpose (box tops and big headings), never the page bottom; z: the lane it must be clear in
   const top = scrollY + 40, bot = scrollY + innerHeight - 40, c = [];
   for (const f of floors) {
     if (f.y < top || f.y > bot || f.x2 - f.x1 < 120 || (furniture && f.ground)) continue;
     // sample a few x along the rule; keep the floors that have standing room
-    const xs = []; for (let i = 0; i < 9; i++) { const x = f.x1 + HALF_W + 8 + (f.x2 - f.x1 - 2 * HALF_W - 16) * i / 8; if (clear(x, f.y, CFG.size + 4)) xs.push(x); }
+    const xs = []; for (let i = 0; i < 9; i++) { const x = f.x1 + HALF_W + 8 + (f.x2 - f.x1 - 2 * HALF_W - 16) * i / 8; if (clear(x, f.y, CFG.size + 4, z)) xs.push(x); }
     if (xs.length) c.push({ f, xs });
   }
   if (!c.length) return null;
   // weighted by novelty: somewhere he has not been for a while is far more likely than where he just was
   const opts = [];
-  for (const k of c) { if ((avoid.get(k.f) || 0) > t) continue; for (const x of k.xs) opts.push({ f: k.f, x, w: (0.05 + novelty(x, k.f.y) ** 2 + (Math.abs(x - st.x) + Math.abs(k.f.y - st.y)) / 4000) * (k.f.y < st.y - CFG.size * 2.2 ? 0.25 : k.f.y < st.y - 8 ? 1.7 : 1) }); }
+  for (const k of c) { if ((avoid.get(k.f) || 0) > t) continue; for (const x of k.xs) opts.push({ f: k.f, x, w: (0.05 + novelty(x, k.f.y) ** 2 + (Math.abs(x - st.x) + Math.abs(k.f.y - st.y)) / 900) * (Math.sign(x - st.x) === st.dir ? 1.6 : 1) * (k.f.y < st.y - CFG.size * 2.2 ? 0.25 : k.f.y < st.y - 8 ? 1.7 : 1) }); }
   if (!opts.length) return null;
   let r = Math.random() * opts.reduce((a, o) => a + o.w, 0);
   for (const o of opts) if ((r -= o.w) <= 0) return o;
   return opts[opts.length - 1];
 }
 
+// Somewhere to stand on purpose: a support with room on the content (lane 0); none in view, a support he can stand on behind the
+// words (lane -1: dimmer, smaller, the cards in front hide him). The page is dense, so the back lane is where most furniture is used.
+const pickPlace = () => { const p = pickFloor(true, 0); if (p) return p; const q = pickFloor(true, -1); return q ? { f: q.f, x: q.x, z: -1 } : null; };
 // ---------- the agent ----------
 // He is his own being: he walks the floors, steps off ledges and falls to the next floor, turns at text, sits when boxed in.
 // He never teleports and never follows the visitor. Off screen he keeps living; we just do not draw him.
@@ -347,7 +357,7 @@ const STAND = ['look', 'hips', 'scratch', 'cross', 'stretch', 'weight', 'tap', '
 const SIT = ['lean', 'chin', 'kick', 'look', 'kick', 'hands', 'nap', 'curious'];
 const forced = new URLSearchParams(location.search).get('pose');
 const pickOf = a => a[(Math.random() * a.length) | 0];
-let gest = null, gestAt = 0;
+let gest = null, gestAt = 0, lastGest = null;
 // Things worth a look: the dove, pictures, buttons and links within reach of his eyes.
 function interestNear() {
   const d = window.__scion, R = CFG.size * 3, here = { x: st.x, y: st.y - CFG.size * 0.6 };
@@ -377,16 +387,17 @@ function gesture(dt, sitting, still) {
   }
   if (!gest && st.pendGest && sitting) { gest = { side: 1, amp: 1, f: 1, ...st.pendGest, t0: t }; st.pendGest = null; }   // the nap his mind wanted, once he is down
   if (!gest && t > gestAt && !(st.goal && st.goal.rel) && !st.crouch) {
+    if (!inView() || Math.random() > 0.2) { gestAt = t + 1.5; return; }   // off camera nobody sees it (and nothing stale plays on re-entry); on camera a 20% roll per idle loop (Celeste)
     st.interest = interestNear();
-    const list = sitting ? SIT : STAND;
-    gest = { name: list[(Math.random() * list.length) | 0], t0: t, dur: 2.5 + Math.random() * 4.5, side: Math.random() < 0.5 ? -1 : 1, amp: 0.7 + Math.random() * 0.5, f: 0.8 + Math.random() * 0.6 };
+    const list = (sitting ? SIT : STAND).filter(n => n !== lastGest);   // never the same act twice running
+    gest = { name: list[(Math.random() * list.length) | 0], t0: t, dur: 2.5 + Math.random() * 4.5, side: Math.random() < 0.5 ? -1 : 1, amp: 0.7 + Math.random() * 0.5, f: 0.8 + Math.random() * 0.6 }; lastGest = gest.name;
     window.REL?.ev('hugo', 'gesture', null, 0, { name: gest.name });   // the dove may copy what he just did
   }
   if (!gest) return;
   const u = (t - gest.t0) / gest.dur;
   if (u >= 1) {
     if (gest.rel && st.relOrder && st.relOrder.id === gest.rel) { st.relOrder.gDone = true; relEnd('ok', { stayed: !!dv && Math.hypot(dv.x - st.x, dv.y - st.y) < CFG.size * 2 }); }
-    gest = null; gestAt = t + 1.5 + Math.random() * 5; return;
+    gest = null; gestAt = t + 3; return;   // 3 s of plain standing before the next variant may roll
   }
   const w = Math.min(1, u * 4, (1 - u) * 4), A = gest.amp, sd = gest.side, ph = (t - gest.t0) * (gest.f || 1);
   const S1 = sd > 0 ? 'R' : 'L';   // the arm on the gesture's side
@@ -636,7 +647,16 @@ window.__hugoLife = alive => { if (!alive === !!st.dead) return; st.dead = !aliv
 const shade = layer.appendChild(document.createElement('div')); let shadeCss = '';
 Object.assign(shade.style, { position: 'absolute', left: 0, top: 0, width: '64px', height: '12px', margin: '-6px 0 0 -32px', borderRadius: '50%', pointerEvents: 'none',
   background: 'radial-gradient(closest-side, rgba(0,0,0,.34), rgba(0,0,0,0))', opacity: 0 });
-let clipCss = '', clipOcc = [], clipAt = '';   // the canvas clip-path is rebuilt only when what is in front of him changes
+// Occluders in the renderer: a depth-only quad (no colour) just in front of the figure per card he is behind, so the GPU drops his
+// fragments there. 1 unit = 1 css px at z 0; a quad at z ZP is scaled by (P - ZP) / P to cover the same screen rect. No clip-path on
+// the canvas: a clipped composited WebGL layer rasterises as an opaque box on WebKit and some Android GPUs.
+const ZP = CFG.size * 0.6, occMat = new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: true }), occPool = [];
+function occlude(rects) {
+  const k = (CFG.perspective - ZP) / CFG.perspective;
+  for (let i = occPool.length; i < Math.min(rects.length, 6); i++) { const m = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), occMat); m.renderOrder = -1; scene.add(m); occPool.push(m); }
+  occPool.forEach((m, i) => { const q = rects[i]; m.visible = !!q; if (!q) return;
+    m.position.set(((q.l + q.r) / 2 - scrollX - innerWidth / 2) * k, (innerHeight / 2 - ((q.t + q.b) / 2 - scrollY)) * k, ZP); m.scale.set((q.r - q.l) * k, (q.b - q.t) * k, 1); });
+}
 const say = layer.appendChild(document.createElement('div')); let sayTimer;
 Object.assign(say.style, { position: 'absolute', left: 0, top: 0, maxWidth: '240px', padding: '9px 12px', font: '13px/1.4 system-ui,sans-serif', color: '#15171C', background: '#fff',
   border: '1px solid #D8D8D2', borderRadius: '14px', boxShadow: '0 8px 24px rgba(21,23,28,.16)', opacity: 0, transition: 'opacity .35s' });   // the dove's bubble (#scion-say), same look
@@ -660,14 +680,17 @@ let pokes = 0, pokeWhy = '';
 function poke(why) { pokes++; pokeWhy = why; }
 // Failing at the same thing again and again gets to him: three misses in 25 s and he loses his temper for a moment, stomping
 // and shaking his fists at it, then lets it go. Desktop and phones alike.
-const misses = [];
+const misses = []; let madAt = -1e9;
 function missed(why) {
   misses.push(t); while (misses.length && t - misses[0] > 25) misses.shift();
-  if (misses.length < 3 || st.air || st.held || st.dead || st.mode === 'sit' || (gest && gest.rel)) return false;
-  misses.length = 0; poke('fed up: ' + why); window.REL?.ev('hugo', 'gesture', null, 0, { name: 'mad' });
+  if (misses.length < 3 || st.air || st.held || st.dead || st.mode === 'sit' || (gest && gest.rel) || !inView() || t - madAt < 60) return false;   // off camera: no tantrum nobody sees; and not twice a minute
+  misses.length = 0; madAt = t; poke('fed up: ' + why); window.REL?.ev('hugo', 'gesture', null, 0, { name: 'mad' });
   st.goal = null; st.mode = 'idle'; st.amt = 0; st.idleUntil = t + 3.2;
   gest = { name: 'mad', t0: t, dur: 3, side: st.dir, amp: 1, f: 1 }; gestAt = t + 6; return true;
 }
+// A goal he cannot reach from here: struck off for a while; a miss only when someone (the bird, the visitor) wanted it, never a place
+// he picked himself (a blocked point is rejected and another chosen, Animal Crossing's wander)
+function giveUp(why) { const g = st.goal; st.goal = null; st.route = null; if (!g) return; if (g.rel) relEnd('fail'); else { avoid.set(g.f, t + 60 + Math.random() * 60); if (!g.auto) missed(why); } }
 // A wall ahead (words or a box he cannot walk or crawl under). A person does not walk into it over and over: he gets on
 // top of it if he can, lets go of a goal that lies past it, and remembers it; boxed in on both sides, he climbs out or
 // sits it out instead of pacing.
@@ -685,7 +708,7 @@ function blocked(f) {
   const wantsPast = st.goal && Math.sign(st.goal.x - st.x) === st.dir;
   if (st.z === 0 && !st.relBusy && (wantsPast || Math.random() < 0.6) && laneHop(-1)) return;   // words in the way: he passes behind them
   if (up && (wantsPast || Math.random() < 0.6)) { const dh = f.y - up.q.y; st.mode = 'prep'; st.amt = 0; st.prep = { f: up.q, dh, until: t + 0.18 + Math.random() * 0.14, climb: dh > CFG.size * 1.2, over: up.ux }; return; }
-  if (wantsPast) { const g = st.goal; st.goal = null; if (g.rel) relEnd('fail'); else avoid.set(g.f, t + 60 + Math.random() * 60); missed('no way past'); }   // no way past: not there, not now
+  if (wantsPast) giveUp('no way past');   // no way past: not there, not now
   if (walls.some(w => w.f === f && w.dir === -st.dir && t - w.t < 30)) {   // walls both ways lately: hemmed in
     const g = pickToward(-1);
     if (g) { st.goal = { f: g.f, x: g.x, until: t + 20 }; return; }
@@ -710,27 +733,30 @@ function laneHop(to) {
 function backOut(f) {   // in the back lane with the lane closing (or time to come out): walk to the nearest spot he fits on the content
   if (f.support !== false) for (let k = 0; k < 40; k++) for (const s of [1, -1]) { const x = st.x + s * k * 16;
     if (x - HALF_W >= f.x1 && x + HALF_W <= f.x2 && clear(x, f.y, CFG.size + 4, 0)) { if (k) goTo(f, x, { exit: 1 }); return k === 0; } }
-  const p = pickFloor(true); if (p) goTo(p.f, p.x, { exit: 1 }); return false;
+  const p = pickFloor(true, 0); if (p) goTo(p.f, p.x, { exit: 1, auto: 1 }); return false;   // somewhere with lane-0 room; none in view: he stays behind until the view moves on
 }
 // ---------- routes: a small graph (walk, fall, jump and depth links) and A* over it (depth.js) ----------
 // Cheap to step behind a card, dear to walk a hairline, a little cost jitter per plan so the routes vary. Targets are floors
 // (elements), not coordinates, so a reflow re-snaps the route instead of breaking it.
-function plan(f, x) {
+function plan(f, x, z = 0) {   // z: the lane to arrive in
   const D = window.DEPTH, cur = st.floor; if (!D || !cur || st.air) return null;
   const near = q => q.y > scrollY - innerHeight * 0.5 && q.y < scrollY + innerHeight * 1.5, fl = floors.filter(near), sm = seams.filter(near);
+  if (cur.screen) fl.push(cur);   // the screen's bottom edge: a route can start there
   if (!(fl.includes(cur) || sm.includes(cur)) || !fl.includes(f)) return null;
-  const seed = [[cur, st.x, st.z], [f, x, 0]]; if (cur.support !== false) seed.push([cur, st.x, st.z ? 0 : -1]);
+  const seed = [[cur, st.x, st.z], [f, x, z]]; if (cur.support !== false) seed.push([cur, st.x, st.z ? 0 : -1]);
   const g = D.buildGraph(fl, sm, { half: HALF_W, reach: CFG.size * 2.2, vh: innerHeight, seed, clear: (x, y, z) => clear(x, y, CFG.size + 4, z), lanes: y => D.at(y, { noFront: true }).lanes });
-  const a = g.node(cur, st.x, st.z), b = g.node(f, x, 0);
+  const a = g.node(cur, st.x, st.z), b = g.node(f, x, z);
   const p = D.astar(g, a, n => n === b, n => Math.abs(n.x - b.x) * 0.5 + Math.abs(n.y - b.y) * 0.3);
   if (!p) return null;
   const legs = p.slice(1).filter((n, i, L) => !(L[i + 1] && L[i + 1].f === n.f && L[i + 1].z === n.z && n.z === (i ? L[i - 1].z : st.z)));   // straight runs on one floor: one leg
   st.routeKinds = p.kinds;
   return legs;
 }
-function routeTo(f, x, extra) {   // by the graph when it has a way (lanes included), else straight there the old way
-  const r = plan(f, x); if (r && r.length) { st.route = r; if (nextLeg()) return; }
+function routeTo(f, x, extra, z = 0) {   // by the graph when it has a way (lanes included), else straight there the old way (a lane change first, when needed)
+  const r = plan(f, x, z); if (r && r.length) { st.route = r; if (nextLeg()) return true; }
   st.route = null; goTo(f, x, extra);
+  if (z !== st.z && !laneHop(z)) { st.goal = null; return false; }   // no such lane here right now
+  return true;
 }
 function nextLeg() {
   const r = st.route; if (!r || !r.length) { st.route = null; return false; }
@@ -745,7 +771,7 @@ function pickToward(dir) {
   for (const f of floors) {
     if (f === st.floor || f.x2 - f.x1 < 2 * HALF_W + 8) continue;
     const dy = st.y - f.y;
-    if (dir < 0 ? (dy > 6 && dy < CFG.size * 2.2) : (dy < -10 && f.y < scrollY + innerHeight)) {
+    if (dir < 0 ? (dy > 6 && dy < CFG.size * 2.2) : (dy < -10 && f.y < scrollY + innerHeight - 40)) {
       const x = Math.max(f.x1 + HALF_W + 6, Math.min(f.x2 - HALF_W - 6, st.x));
       if (clear(x, f.y, CFG.size + 4)) c.push({ f, x, score: dir < 0 ? -f.y : -Math.abs(f.y - (scrollY + innerHeight * 0.6)) });
     }
@@ -763,17 +789,10 @@ function landingBelow(x, y, vis) {   // nearest floor under (x, y) within a scre
   const visBottom = scrollY + innerHeight - 30, lim = vis && visBottom > y + 2 ? visBottom : Infinity;
   // The bottom of the page always catches him, words or not; otherwise he fell straight through it and out of the world.
   // Phones: not behind words (Read less: the monitor and its caption sit on it); past it he falls out of the world and is born again in view.
-  for (const f of (st.z < 0 ? allFloors : floors)) if (f.y > y + 2 && f.y <= lim && (f.ground || f.y < y + innerHeight * 1.5) && onFloor(f, x) && ((f.ground && !phone()) || clear(x, f.y, CFG.size + 4)) && (!best || f.y < best.y)) best = f;
-  // Dropped over a dense page, almost no ledge has a body-sized gap above it. If the strict search found nothing near, he lands on
-  // the nearest ledge below him anyway, standing in front of the words, as a small figure on a page would.
-  if (!phone() && (!best || (best.ground && best.y > y + innerHeight * 0.9))) {   // phones: never in front of words
-    let near = null;
-    for (const f of floors) if (!f.ground && f.y > y + 2 && f.y <= Math.min(lim, y + innerHeight * 0.9) && f.x2 - f.x1 > HALF_W * 1.4 && x > f.x1 + 4 && x < f.x2 - 4 && (!near || f.y < near.y)) near = f;
-    if (near) best = near;
-  }
-  // Nothing visible to land on: the bottom edge of the screen catches him, so a drop never ends out of sight.
-  // Phones: no invisible floor; once scrolled it left him standing on air in the middle of the page. He falls to a real one.
-  if (vis && lim !== Infinity && (!best || best.y > lim) && !phone()) best = { y: lim, x1: 0, x2: document.documentElement.scrollWidth, el: document.body, screen: true };
+  for (const f of (st.z < 0 ? allFloors : floors)) if (f.y > y + 2 && f.y <= lim && (f.ground || f.y < y + innerHeight * 1.5) && onFloor(f, x) && (f.ground || clear(x, f.y, CFG.size + 4)) && (!best || f.y < best.y)) best = f;
+  // Nothing visible to land on: the bottom edge of the screen catches him, so a drop never ends out of sight (both renders; once the
+  // view moves on, refloor() lets go of it and he falls to a real ledge, Shimeji's fall-then-recover).
+  if (vis && lim !== Infinity && (!best || best.y > lim)) best = { y: lim, x1: 0, x2: pageW, el: document.body, screen: true, support: true };
   return best;
 }
 // ---------- him and the dove ----------
@@ -792,10 +811,24 @@ function relGoal(o, p) {
 }
 function relClear() { if (st.goal && st.goal.rel) st.goal = null; st.relOrder = null; st.spdK = 1; st.crouch = 0; st.relBusy = false; st.relGap = null; }
 function relEnd(result, data) { const o = st.relOrder; if (!o) return; relClear(); st.relAt = result === 'fail' ? t + 0.75 : 0; window.REL.done('hugo', o.id, result, data || {}); }
-// Phones: the view went below him and every ledge between is words he cannot stand in front of. Out of sight he moves over a
-// clear ledge in view and drops in from just above the top edge onto it (a fall you see, never a pop-in or a fall through text).
-function dropIn() { const p = pickFloor(true); if (!p) return false;
-  st.goal = null; st.route = null; st.floor = null; st.x = p.x; st.y = scrollY - 12; st.air = true; st.hop = false; st.vx = 0; st.vy = 0; st.dropF = p.f; st.dropIn = true; st.mode = 'walk'; st.away = 0; return true; }
+// Out of sight (never while any of him shows), he moves over a clear support in view and drops in from just above the top edge
+// onto it: a fall you see entering the frame, never a pop-in. Nothing to stand on in view: the screen's bottom edge catches him.
+// A column that crosses a picture or card is fallen behind (lane -1), so he never materialises inside one.
+function dropIn(p = pickPlace()) {
+  const crossing = p => cards.some(q => q.r > p.x - HALF_W * 1.7 && q.l < p.x + HALF_W * 1.7 && q.b > scrollY && q.t < p.f.y - 2);
+  for (let i = 0; p && !p.z && crossing(p) && i < 5; i++) { const q = pickFloor(true, 0); if (q && !crossing(q)) p = q; }   // a column clear of pictures, when there is one
+  if (!p) p = { f: { y: scrollY + innerHeight - 30, x1: 0, x2: pageW, el: document.body, screen: true, support: true }, x: scrollX + innerWidth * (0.3 + Math.random() * 0.4) };
+  const behind = p.z === -1 || crossing(p);
+  st.goal = null; st.route = null; st.floor = null; st.x = p.x; st.y = scrollY - 12; st.air = true; st.hop = false; st.vx = 0; st.vy = 0; st.dropF = p.f; st.dropIn = true; st.mode = 'walk'; st.away = 0;
+  if (behind && st.z === 0) { st.z = st.zs = -1; st.backUntil = t + (p.z === -1 ? 6 + Math.random() * 8 : 1.5 + Math.random() * 2); }
+  return true; }
+// Back into the visitor's view like a game character (the viewport is the level): by the route graph when a support in view is
+// reachable (walk, climb, drop), else the drop-in. Elizabeth's rule: relocate only while unseen, and always enter the frame.
+function comeBack() {
+  const p = pickPlace(); st.goal = null; st.route = null; st.toView = true;
+  if (p) { const r = plan(p.f, p.x, p.z || 0); if (r && r.length) { st.route = r; if (nextLeg()) return; } }
+  st.route = null; dropIn(p);
+}
 function hopUp(vy) { if (!st.floor || st.mode === 'sit' || (st.sitK || 0) > 0.04) return; st.dropF = st.floor; st.air = true; st.hop = true; st.floor = null; st.vx = 0; st.vy = -vy; st.mode = 'walk'; }   // a hop on the spot comes down on the ledge it left, never past it
 function applyOrder(o) {
   relClear(); st.relOrder = o; st.spdK = o.spdK || 1; st.crouch = o.crouch || 0;
@@ -855,11 +888,15 @@ function forage(f) {
 // His own life between orders: drives -> goals -> actions through the Mortal Agent kernel (no dice, no timers). Self-directed
 // moves wait for the frame's pressure (>= .45); keeping himself in the visitor's view is a body reflex, like the dove's.
 function autonomy(f) {
-  const M = window.MORTAL, R = window.REL; if (!M || !M.alive('hugo') || st.goal || st.relOrder || st.food || st.held || st.air || st.dead) return;
+  const M = window.MORTAL, R = window.REL; if (!M || !M.alive('hugo') || st.relOrder || st.food || st.held || st.air || st.dead) return;
+  // Off camera for a moment while the visitor is not scrolling: back into view (a reflex, not a choice); AI otherwise sleeps off camera
+  if (st.away >= 1.5 && performance.now() - scrolledAt > 400 && !['prep', 'climb', 'lane', 'crawl'].includes(st.mode) && !(st.toView && (st.goal || (st.route && st.route.length)))) { comeBack(); return; }
+  if (st.goal) return;
   if (!(st.mode === 'idle' || st.mode === 'sit' || (st.mode === 'walk' && st.amt < 0.05))) return;
   const cur = M.current('hugo'); if (cur && cur.move) M.done('hugo');   // no goal left: that walk is over, however it ended (arrived, blocked, gave up)
-  const patience = 3 + 9 * (R.P ? R.P.hugo.patience : 0.5);
-  if (st.away > patience) { const g = pickToward(st.y < scrollY + 30 ? 1 : -1); if (g) { goTo(g.f, g.x, { toView: true }); return; } if (st.y < scrollY && dropIn()) return; st.away = 0; }
+  if (!inView()) return;   // off camera he waits for the come-back
+  if ((f.screen || f.ground) && !(st.catchTry > t)) { st.catchTry = t + 4; const p = pickPlace(); if (p && routeTo(p.f, p.x, { auto: 1 }, p.z || 0)) return; }   // the screen's bottom edge (and the page bottom) is a catch, not a home: onto real furniture as soon as any is in view
+  if (t < st.idleUntil) return;   // a dwell (8-20 s where he arrived) runs its course
   const n = R.needs('hugo'), mo = M.mot('hugo'), env = M.env, g = M.goal('hugo');
   const gh = g && g.title ? [...document.querySelectorAll('h1,h2,h3')].find(h => h.textContent.replace(/\s+/g, ' ').trim().slice(0, 60) === g.title && h.getClientRects().length) : null;
   const c = M.choose('hugo', [
@@ -872,23 +909,25 @@ function autonomy(f) {
   ]);
   if (!c) return;
   const fail = () => M.done('hugo');
-  if (c.id === 'wander') { const p = pickFloor(true) || pickToward(st.dir); if (!p) fail(); else routeTo(p.f, p.x, { auto: 1 }); }
+  if (c.id === 'wander') {   // a place, not a direction: up to four draws, the first the graph has a way to wins (else the straight try, as before)
+    let p = null, r = null; for (let i = 0; i < 4 && !r; i++) { const q = pickPlace(); if (q && (r = plan(q.f, q.x, q.z || 0)) && !r.length) r = null; if (q) p = p || q; if (r) p = q; }
+    if (!p) p = pickToward(st.dir);
+    if (!p) fail(); else if (r) { st.route = r; nextLeg(); } else if (!routeTo(p.f, p.x, { auto: 1 }, p.z || 0)) fail(); }
   else if (c.id === 'behind') { if (!laneHop(-1)) fail(); }
   else if (c.id === 'goal') { const r = gh.getBoundingClientRect(), p = floorNear(r.left + scrollX + Math.min(r.width, 300) / 2, r.top + scrollY);
     if (p && (g.tries = (g.tries || 0) + 1) <= 3) goTo(p.f, p.x, { auto: 1, goalId: g.id }); else { M.goalDone('hugo', g.id); fail(); } }   // three tries, then it lets that goal go
   else if (c.id === 'visitor') { const p = floorNear(pointer.cx + scrollX, pointer.cy + scrollY); if (p) goTo(p.f, p.x, { auto: 1 }); else fail(); }
-  else if (c.id === 'rest' && st.mode !== 'sit' && st.floor && clear(st.x, st.floor.y, SIT_H + 4)) { st.mode = 'sit'; st.idleUntil = t + c.minT; if (env.night || n.energy < 0.3) st.pendGest = { name: 'nap', dur: c.minT }; }
+  else if (c.id === 'rest' && st.mode !== 'sit' && st.floor && inView() && clear(st.x, st.floor.y, SIT_H + 4)) { st.mode = 'sit'; st.idleUntil = t + c.minT; if (env.night || n.energy < 0.3) st.pendGest = { name: 'nap', dur: c.minT }; }
 }
 function relStep(f) {
   const R = window.REL; if (!R || t < (st.relAt || 0) || st.dead || st.dazed || st.mode === 'crawl' || (st.crawlK || 0) > 0.05) return;   // no standing up under a low ceiling for the bird
   st.relAt = t + 0.75;
   if (forage(f)) return;
-  const inView = st.y > scrollY + 30 && st.y - CFG.size < scrollY + innerHeight - 10;   // counted here, not in autonomy(): a long sulk off screen still counts
-  st.away = inView ? 0 : (st.away || 0) + 0.75 * (f.ground ? 3 : 1);
+  st.away = inView() ? 0 : (st.away || 0) + 0.75;
   const d = window.__scion;
   const reach = !!d && d.mode === 'perch' && !d.held && d.y >= st.y - CFG.size * 2.2 && floors.some(q => Math.abs(q.y - d.y) < 6 && d.x > q.x1 && d.x < q.x2);
   const o = R.want('hugo', { reach, floorY: f.y });
-  if (!o || (st.away > 3 && !o.goal && !o.pounce)) { if (st.relOrder) relEnd('interrupted'); autonomy(f); return; }   // out of view, an order that keeps him standing (a sulk, a stare) yields to getting back where he is seen
+  if (!o || (st.away >= 1.5 && !o.goal && !o.pounce)) { if (st.relOrder) relEnd('interrupted'); autonomy(f); return; }   // out of view, an order that keeps him standing (a sulk, a stare) yields to getting back where he is seen
   if (o.id !== (st.relOrder && st.relOrder.id)) applyOrder(o);
   else if (st.relGap != null && st.goal && st.goal.rel === o.id && d && (d.mode === 'perch' || o.ex === 'chase')) relGoal(o, { x: d.x - (Math.sign(d.x - st.x) || 1) * st.relGap, y: d.y });   // the bird moved: after it
   const ph = R.phase; st.relBusy = !!(st.relOrder && ph && ph.stage !== 'resolve');
@@ -897,18 +936,12 @@ let bornTries = 0, lastSY = 0, curSY = 0, jumpAt = -1e9;   // lastSY: the scroll
 function born() {   // first appearance: a floor in view with standing room
   const spots = inView => { const c = [];
     for (const f of floors) if ((!inView || (f.y > scrollY && f.y < scrollY + innerHeight)) && f.x2 - f.x1 > 160 && (inView || !f.ground)) {
-      const n = phone() ? Math.ceil((f.x2 - f.x1) / 6) : 8;   // phones: small clear gaps are often all there is, so look along the whole ledge
+      const n = Math.ceil((f.x2 - f.x1) / 6);   // small clear gaps are often all there is, so look along the whole ledge
       for (let i = 1; i < n; i++) { const x = f.x1 + (f.x2 - f.x1) * i / n; if (onFloor(f, x) && clear(x, f.y, CFG.size + 4)) c.push({ f, x }); }
     }
     return c; };
-  // First appearance on a wide screen: sitting on the end of the hero's grey divider, legs over the edge.
-  const ledge = allFloors.find(f => !f.text && f.el.matches && f.el.matches('#mast .facts') && f.y > scrollY && f.y < scrollY + Math.max(innerHeight, 900));
-  if (ledge && !bornTries) {
-    for (let x = ledge.x2 - HALF_W * 0.4 - 2; x > ledge.x1 + HALF_W; x -= 8)   // the clear spot nearest the end
-      if (clear(x, ledge.y, SIT_H + 4)) { st.floor = ledge; st.x = x; st.y = ledge.y; st.dir = -1; st.mode = 'sit'; st.sitK = 1; st.idleUntil = t + 14 + Math.random() * 10; return true; }
-  }
-  // Phones, first appearance: sitting on top of the hero name, somewhere new along it each load, in one of his sitting poses.
-  if (phone() && !bornTries && !st.bornOnce) {
+  // First appearance: sitting on top of the hero name, somewhere new along it each load, in one of his sitting poses.
+  if (!bornTries && !st.bornOnce) {
     const xs = []; for (const nm of floors) if (nm.name && nm.y > scrollY && nm.y < scrollY + innerHeight) for (let x = nm.x1 + HALF_W * 0.6; x <= nm.x2 - HALF_W * 0.6; x += 6) if (clear(x, nm.y, SIT_H + 4)) xs.push({ nm, x });   // both words, end to end
     if (xs.length) { const { nm, x } = xs[(Math.random() * xs.length) | 0]; st.bornOnce = true; st.floor = nm; st.x = x; st.y = nm.y; st.dir = Math.random() < 0.5 ? -1 : 1; st.mode = 'sit'; st.sitK = 1;
       st.idleUntil = t + 8 + Math.random() * 10; st.pendGest = { name: SIT[(Math.random() * SIT.length) | 0], dur: 3 + Math.random() * 4, side: Math.random() < 0.5 ? -1 : 1, amp: 0.7 + Math.random() * 0.5 }; return true; }
@@ -916,17 +949,17 @@ function born() {   // first appearance: a floor in view with standing room
   let c = spots(true);
   if (!c.length && (bornTries = (bornTries || 0) + 1) > 90) c = spots(false);   // nothing in view for ~1.5 s: start anywhere he fits
   if (!c.length) return false;
-  const p = c[(Math.random() * c.length) | 0]; st.floor = p.f; st.x = p.x; st.y = p.f.y; st.dir = Math.random() < 0.5 ? -1 : 1; return true;
+  const p = c[(Math.random() * c.length) | 0]; st.floor = p.f; st.x = p.x; st.y = p.f.y; st.dir = Math.random() < 0.5 ? -1 : 1; st.bornOnce = true; return true;
 }
 function refloor(f) {   // the page reflows; keep the floor glued to its element
-  if (f.screen) return true;
-  if (f.fr && (!document.body.classList.contains('simple') || !f.fr.getClientRects().length)) return false;   // a ledge in the Read less frame is gone once the frame is
-  if (f.ground) { if (phone() && document.body.classList.contains('simple')) return false; f.y = groundY(); f.x2 = document.documentElement.scrollWidth; if (phone()) fit(f); return true; }
-  if (!f.el.isConnected || (phone() && !f.el.getClientRects().length)) return false;   // phones: its element was hidden (a view switch): the floor is gone, he falls
+  if (f.screen) return Math.abs(f.y - (scrollY + innerHeight - 30)) < 40;   // the screen's bottom edge: once the view moves on he falls to a real ledge
+  if (f.fr && (!simple() || !f.fr.getClientRects().length)) return false;   // a ledge in the Read less frame is gone once the frame is
+  if (f.ground) { f.y = groundY(); f.x2 = document.documentElement.scrollWidth; fit(f); return true; }
+  if (!f.el.isConnected || !f.el.getClientRects().length) return false;   // its element was hidden (a view switch): the floor is gone, he falls
   const fo = f.fr ? f.fr.getBoundingClientRect() : null, ox = scrollX + (fo ? fo.left : 0), oy = scrollY + (fo ? fo.top : 0);   // fo: a floor inside the Read less frame
   if (f.text) { const r = f.el.getBoundingClientRect(); const dy = (r.top + oy) - (f.elTop ?? (f.elTop = r.top + oy)); if (dy) { f.y += dy; f.elTop += dy; } return true; }
   const r = f.el.getBoundingClientRect(), top = r.top + oy, bottom = r.bottom + oy;
-  f.x1 = f.u1 = r.left + ox; f.x2 = f.u2 = r.right + ox; clipX(f); if (phone()) fit(f); f.y = Math.abs(f.y - bottom) < Math.abs(f.y - top) ? bottom : top; return true;
+  f.x1 = f.u1 = r.left + ox; f.x2 = f.u2 = r.right + ox; clipX(f); fit(f); f.y = Math.abs(f.y - bottom) < Math.abs(f.y - top) ? bottom : top; return true;
 }
 function step(dt) {
   if (st.held) {   // he hangs from the hand: a stiff spring to the pointer, so the body lags and swings a little
@@ -946,13 +979,16 @@ function step(dt) {
   if (st.air) {
     st.vy += G * dt; const py = st.y; st.y += st.vy * dt; st.x += st.vx * dt;
     st.vx *= Math.max(0, 1 - 0.3 * dt);   // a little air drag
-    const W = phone() ? document.documentElement.clientWidth : document.documentElement.scrollWidth;
+    const W = document.documentElement.clientWidth;
     if (st.x < HALF_W) { st.x = HALF_W; st.vx = Math.abs(st.vx) * 0.5; } else if (st.x > W - HALF_W) { st.x = W - HALF_W; st.vx = -Math.abs(st.vx) * 0.5; }
     swingLimbs(dt, (st.vx - lastVx) / dt, (st.vy - lastVy) / dt + G, 0.7); lastVx = st.vx; lastVy = st.vy;
     st.tilt += ((st.vx * 0.0005) - st.tilt) * Math.min(1, dt * 4);
     let f = st.dropIn && st.dropF ? null : landingBelow(st.x, py - 1, !st.hop && !st.pounce);   // dropping in from above the screen: only the ledge he aimed for
+    if (f && f.screen && st.z === 0) { let s = null; for (const q of seams) if (q.section && q.y > py && q.y <= f.y && onFloor(q, st.x) && (!s || q.y < s.y)) s = q;   // nothing in view to land on: the section's floor, behind the page, before the screen's edge
+      if (s) { f = s; st.z = -1; st.backUntil = t + 6 + Math.random() * 8; } }
     if (st.dropF && (!f || f.y > st.dropF.y)) f = st.dropF;   // the ledge he chose to step down to catches him
-    if (f && st.y >= f.y && st.vy > 0) { if (f === st.dropF) st.x = Math.max(f.x1 + HALF_W, Math.min(f.x2 - HALF_W, st.x)); st.dropF = null; st.dropIn = false; st.y = f.y; st.floor = f; st.air = false; st.vy = 0; st.vx = 0; st.land = st.hop ? 0.2 : 0.35; st.hop = false; st.mode = 'walk'; st.tilt = 0;
+    st.landF = f;   // where his shadow falls while he is up
+    if (f && st.y >= f.y && st.vy > 0) { if (f === st.dropF) st.x = Math.max(f.x1 + HALF_W, Math.min(f.x2 - HALF_W, st.x)); st.dropF = null; st.dropIn = false; st.y = f.y; st.floor = f; st.air = false; st.squash = Math.max(0.4, Math.min(1, st.vy / 600)); st.vy = 0; st.vx = 0; st.land = 0.23; st.hop = false; st.mode = 'walk'; st.tilt = 0;   // land: a squash (x1.3, y0.7) recovering in ~0.23 s (Celeste's 1.75/s)
       if (st.pounce) { window.REL?.ev('hugo', 'pounceLand', 'dove', 0, { x: st.x, y: st.y }); st.pounce = null; relEnd('ok'); st.mode = 'idle'; st.idleUntil = t + 0.8; }
       else if (gest && gest.rel) st.mode = 'idle';
       if ((st.shaken || 0) > 0.35) { window.REL?.ev('hugo', 'fell', null, Math.min(0.8, st.shaken), { x: st.x, y: st.y }); poke('landed hard'); }
@@ -974,11 +1010,11 @@ function step(dt) {
     return;
   }
   const f = st.floor; if (!f) return;
-  if (!refloor(f)) { st.floor = null; if (phone()) { if (performance.now() - jumpAt < 800) st.y += scrollY - lastSY; jumpAt = -1e9; st.air = true; st.hop = false; st.vx = 0; st.vy = 0; st.mode = 'walk'; } return; }   // phones (a view switch): same spot on screen, then he drops into the new page
+  if (!refloor(f)) { st.floor = null; if (!f.screen && performance.now() - jumpAt < 800) st.y += scrollY - lastSY; jumpAt = -1e9; st.air = true; st.hop = false; st.vx = 0; st.vy = 0; st.mode = 'walk'; return; }   // his ledge is gone (a view switch, the screen edge moved on): same spot on screen, then he drops to the next one
   st.y = f.y;
   // the page shifted under him (an app loaded, a block grew): if his spot now runs through words, step off and fall to a clear floor
-  const room = () => clear(st.x, f.y - 4, (st.mode === 'sit' ? SIT_H : st.mode === 'crawl' || (st.crawlK || 0) > 0.05 ? CRAWL_H : CFG.size) + 4, st.z, false);   // staying needs less than arriving: his own line settling a few px (fonts, the hero) is no reason to fall; nor is the phone bar sliding over him as you scroll (the page passing under it)
-  if (!f.ground && st.mode !== 'prep' && !room() && !(phone() && performance.now() - scanAt > 100 && (scan(), room()))) { st.air = true; st.vx = 0; st.vy = 0; st.floor = null; st.mode = 'walk'; return; }   // phones: a stale scan (the hero settling a few px) is no reason to fall; look again first
+  const room = () => clear(st.x, f.y - 4, (st.mode === 'sit' ? SIT_H : st.mode === 'crawl' || (st.crawlK || 0) > 0.05 ? CRAWL_H : CFG.size) + 4);   // staying needs less than arriving: his own line settling a few px (fonts, the hero) is no reason to fall; the nav sliding over him is (he steps down out of it)
+  if (!f.ground && !f.screen && st.mode !== 'prep' && !room() && !(performance.now() - scanAt > 100 && (scan(), room()))) { st.air = true; st.vx = 0; st.vy = 0; st.floor = null; st.mode = 'walk'; return; }   // a stale scan (the hero settling a few px) is no reason to fall; look again first
   if ((st.markAt || 0) < t) { seenAt.set(cell(st.x, st.y), t); st.markAt = t + 1; }
   if (!st.anchor || Math.hypot(st.x - st.anchor.x, st.y - st.anchor.y) > 160) st.anchor = { x: st.x, y: st.y, t };
   if (st.mode === 'lane') {   // mid-hop between lanes: nothing else happens until he lands in the new one
@@ -1000,12 +1036,12 @@ function step(dt) {
     if (st.throwing) { st.amt = Math.max(0, st.amt - dt * 6); return; }   // he plants his feet to throw or lift the bird
     // Purpose: where he walks comes from his drives (autonomy(), via the Mortal Agent kernel) or from REL; with no goal he
     // does not wander off on a whim, he stands and the next beat decides. Being seen: back in view, he stops working his way there.
-    const inView = st.y > scrollY + 30 && st.y - CFG.size < scrollY + innerHeight - 10;
-    if (inView && st.goal?.toView) { st.goal = null; st.away = 0; }
+    if (inView() && st.toView) { st.toView = false; st.away = 0; if (st.goal?.toView) st.goal = null; }
     if (!st.goal) { st.mode = 'idle'; st.idleUntil = t + 0.75; return; }
+    const d0 = st.dir;
     if (st.goal) {
       const g = st.goal;
-      if (!refloor(g.f) || t > g.until) { st.route = null; if (t > g.until && !g.rel) { avoid.set(g.f, t + 45 + Math.random() * 45); missed('never got there'); } st.goal = null; if (g.rel) relEnd('fail'); }   // could not get there: try elsewhere for a while
+      if (!refloor(g.f) || t > g.until) giveUp('never got there');   // could not get there: try elsewhere for a while
       else if (g.f === f) {
         if (Math.abs(g.x - st.x) < 8) {
           st.goal = null;
@@ -1013,48 +1049,50 @@ function step(dt) {
           if (g.rel) { relArrive(f); return; }
           if (g.food) { st.mode = 'idle'; st.idleUntil = t + 0.4; return; }   // the next beat leans in for the bite
           const M = window.MORTAL; if (M) { if (g.goalId) M.goalDone('hugo', g.goalId); if (g.auto || g.toView) M.done('hugo'); }
-          const n = window.REL ? window.REL.needs('hugo') : { energy: 1 };   // there he sits if he is tired (or it is night), else stands and looks
-          if (clear(st.x, f.y, SIT_H + 4) && (n.energy < 0.6 || (M && M.env.night))) { st.mode = 'sit'; st.idleUntil = t + 10 + Math.random() * 20; }
-          else { st.mode = 'idle'; st.idleUntil = t + 2 + Math.random() * 3; }
+          const n = window.REL ? window.REL.needs('hugo') : { energy: 1 };   // there he sits if he is tired (or it is night), else stands a while and looks (a trip ends in a dwell)
+          if (inView() && clear(st.x, f.y, SIT_H + 4) && (n.energy < 0.6 || (M && M.env.night))) { st.mode = 'sit'; st.idleUntil = t + 10 + Math.random() * 20; }
+          else { st.mode = 'idle'; st.idleUntil = t + 8 + Math.random() * 12; }
           return;
         }
         st.dir = Math.sign(g.x - st.x) || st.dir;
       } else if (g.f.y < f.y - 4) {   // above him
-        const dh = f.y - g.f.y, under = st.x > g.f.x1 + HALF_W && st.x < g.f.x2 - HALF_W;
+        const dh = f.y - g.f.y, under = st.x > g.f.x1 + HALF_W && st.x < g.f.x2 - HALF_W && clear(st.x, g.f.y, CFG.size + 4);   // under it, and with room on top right here (else he walks to the spot he chose first)
         if (dh > CFG.size * 2.2) {   // too high in one go: climb the highest thing he can reach from here, a stepping stone toward it
           const reach = CFG.size * 2.2; let q = null;
-          for (const c of floors) if (c !== f && !c.ground && c.y < f.y - 8 && c.y >= f.y - reach && st.x > c.x1 + HALF_W && st.x < c.x2 - HALF_W && (!q || c.y < q.y)) q = c;
+          for (const c of floors) if (c !== f && !c.ground && c.y < f.y - 8 && c.y >= f.y - reach && st.x > c.x1 + HALF_W && st.x < c.x2 - HALF_W && clear(st.x, c.y, CFG.size + 4) && (!q || c.y < q.y)) q = c;
           if (q) { st.mode = 'prep'; st.prep = { f: q, dh: f.y - q.y, until: t + 0.18 + Math.random() * 0.14, climb: f.y - q.y > CFG.size * 1.2 }; st.amt = 0; return; }
           let nb = null;   // none right above him: walk to the nearest one he could climb, then climb it
-          for (const c of floors) if (c !== f && !c.ground && c.y < f.y - 8 && c.y >= f.y - reach && c.x2 - c.x1 > 2 * HALF_W + 24 && (!nb || Math.min(Math.abs(st.x - c.x1), Math.abs(st.x - c.x2)) < Math.min(Math.abs(st.x - nb.x1), Math.abs(st.x - nb.x2)))) nb = c;
+          for (const c of floors) if (c !== f && !c.ground && c.y < f.y - 8 && c.y >= f.y - reach && c.x2 - c.x1 > 2 * HALF_W + 24 && clear(Math.max(c.x1 + HALF_W + 10, Math.min(c.x2 - HALF_W - 10, st.x)), c.y, CFG.size + 4) && (!nb || Math.min(Math.abs(st.x - c.x1), Math.abs(st.x - c.x2)) < Math.min(Math.abs(st.x - nb.x1), Math.abs(st.x - nb.x2)))) nb = c;
           if (nb && !g.rel) { st.goal = { f: nb, x: Math.max(nb.x1 + HALF_W + 10, Math.min(nb.x2 - HALF_W - 10, st.x)), until: t + 30, mind: 'step up' }; return; }
-          st.goal = null; if (g.rel) relEnd('fail'); missed('too high');   // nothing to step up on
+          giveUp('too high');   // nothing to step up on
         }
         else if (under) { st.mode = 'prep'; st.prep = { f: g.f, dh, until: t + 0.18 + Math.random() * 0.14, climb: dh > CFG.size * 1.2 }; st.amt = 0; return; }   // wind up first
-        else st.dir = Math.sign(Math.max(g.f.x1 + HALF_W + 6, Math.min(g.f.x2 - HALF_W - 6, st.x)) - st.x) || st.dir;
+        else st.dir = Math.sign(g.x - st.x) || st.dir;   // toward the spot he chose on it, then up
       } else {   // below him: head for the edge of this floor nearest to it and step off
         const tx = g.x > f.x1 && g.x < f.x2 ? (g.x - f.x1 < f.x2 - g.x ? f.x1 - 20 : f.x2 + 20) : g.x;
         st.dir = Math.sign(tx - st.x) || st.dir;
       }
     }
     if (st.relOrder && st.relOrder.ex === 'stalk') { const d = window.__scion; if (d && d.face === Math.sign(st.x - d.x)) { st.amt = Math.max(0, st.amt - dt * 8); return; } }   // it is looking: freeze
-    const go = 0.35 + 0.65 * st.amt;   // he eases into and out of his stride
+    if (st.dir !== d0 && st.amt > 0.5) { st.skid = t + 0.15; st.amt = 0; }   // reversing at speed: a skid, then off the other way (at a walk he just turns)
+    if (st.skid > t) return;
+    const go = 0.35 + 0.65 * st.amt;   // he eases into and out of his stride (~0.1 s up, ~0.2 s down)
     const k = (st.spdK || 1) * (window.REL ? window.REL.body('hugo').speedK : 1) * (st.carrying ? 0.7 : 1);   // a run, a creep, a sore leg, a bird in hand
     const nx = st.x + st.dir * walkSpeed() * go * dt * k;
-    const past = st.dir > 0 ? nx + HALF_W * 0.4 > f.x2 : nx - HALF_W * 0.4 < f.x1;
-    if (past) {   // a ledge: sit on it with his legs over, peer down, step off, or turn back
-      const r = Math.random();
-      if (!st.goal && !st.relBusy && st.z === 0 && r < 0.5 && laneHop(-1)) return;   // the end of a rule is a seam: he steps behind the page
-      if (!st.goal && !st.relBusy && r < 0.3 && clear(st.x, f.y, SIT_H + 4)) { st.mode = 'sit'; st.idleUntil = t + 6 + Math.random() * 14; return; }
-      if (!st.goal && !st.relBusy && r < 0.5) { st.mode = 'idle'; st.idleUntil = t + 2 + Math.random() * 2; gest = { name: 'peer', t0: t, dur: 2 + Math.random() * 2, side: st.dir, amp: 1, f: 1 }; st.dir = -st.dir; return; }
+    const past = st.dir > 0 ? nx + HALF_W * 0.4 > Math.min(f.x2, scrollX + innerWidth - HALF_W * 0.7) : nx - HALF_W * 0.4 < Math.max(f.x1, scrollX + HALF_W * 0.7);
+    if (past) {   // a ledge (or the side of the screen): stand at the edge a moment and look down (Shimeji, Celeste's teeter), then step off onto the ledge below or turn back
+      if (!(st.edgeAt > 0)) { st.edgeAt = t + 0.3 + Math.random() * 0.3; st.mode = 'idle'; st.idleUntil = st.edgeAt; st.amt = 0; if (inView()) gest = { name: 'peer', t0: t, dur: 1, side: st.dir, amp: 1, f: 1 }; return; }
+      st.edgeAt = 0;
       if (dropTo(nx, f.y)) { st.air = true; st.hop = true; st.vx = st.dir * 20; st.vy = -160; st.x = nx; return; }   // nearly straight down, onto the ledge he looked at, not past it
       if (st.goal && st.goal.toView && st.y < scrollY && dropIn()) return;   // left above the view with no ledge he can step down to: he drops in from the top edge
+      if (st.goal) giveUp('no way down');   // nothing to step down to: that place is not reachable from here (no pacing to the edge and back)
       st.dir = -st.dir; st.mode = 'idle'; st.idleUntil = t + 0.8 + Math.random() * 1.5; return;
     }
-    if (clear(nx + st.dir * 10, f.y, CFG.size + 4)) { st.x = nx; st.ph += dt * sty.cadence * go * k; st.amt = Math.min(1, st.amt + dt * 2.2); }   // legs keep pace, so feet never slide
-    else if (!st.relBusy && clear(nx + st.dir * 10, f.y, CRAWL_H + 4) && clear(st.x, f.y, CRAWL_H + 4) && !walls.some(w => w.crawl && w.f === f && w.dir === st.dir && t - w.t < 30)) { st.mode = 'crawl'; st.crawlT = t; st.amt = 0; }   // too low to walk under, room to crawl: down on his hands and knees
+    st.edgeAt = 0;
+    if (clear(nx + st.dir * 10, f.y, CFG.size + 4)) { st.x = nx; st.ph += dt * sty.cadence * go * k; st.amt = Math.min(1, st.amt + dt * 10); }   // the walk phase advances with distance (one cycle per cycleLen), so feet never slide
+    else if (!st.relBusy && inView() && clear(nx + st.dir * 10, f.y, CRAWL_H + 4) && clear(st.x, f.y, CRAWL_H + 4) && !walls.some(w => w.crawl && w.f === f && w.dir === st.dir && t - w.t < 30)) { st.mode = 'crawl'; st.crawlT = t; st.amt = 0; }   // too low to walk under, room to crawl (a gap you can see): down on his hands and knees
     else {
-      st.amt = Math.max(0, st.amt - dt * 4);
+      st.amt = Math.max(0, st.amt - dt * 5);
       if (st.amt === 0) blocked(f);
     }
   } else if (st.mode === 'prep') {   // knees bend, arms swing back: the wind-up before a jump
@@ -1075,7 +1113,7 @@ function step(dt) {
     if (past) { if (dropTo(nx, f.y)) { st.air = true; st.hop = true; st.vx = st.dir * 60; st.vy = -60; st.x = nx; st.mode = 'walk'; } else st.dir = -st.dir; return; }
     if (clear(nx + st.dir * 10, f.y, CRAWL_H + 4)) { st.x = nx; st.ph += dt * 0.85 * k; }
     else { walls.push({ f, dir: st.dir, t, crawl: true }); st.dir = -st.dir; st.crawlT = t; poke('a dead end, even crawling'); missed('dead end'); }   // remembered, so he does not crawl straight back in   // too tight even on all fours: back out the way he came
-  } else if (st.mode === 'idle') { st.amt = Math.max(0, st.amt - dt * 4); if (t > st.idleUntil && st.goal) { st.mode = 'walk'; restyle(); } }
+  } else if (st.mode === 'idle') { st.amt = Math.max(0, st.amt - dt * 5); if (t > st.idleUntil && st.goal) { st.mode = 'walk'; restyle(); } }
   else if (st.mode === 'sit') {
     st.swingV += (-st.swing * 9 - st.swingV * 1.6) * dt; st.swing += st.swingV * dt;
     if (!st.dead && Math.sin(t * 1.3) * Math.sin(t * 0.37) > 0.995) st.swingV += 2;   // now and then a kick of the legs (a slow beat, not dice)
@@ -1088,8 +1126,10 @@ function frame(now) {
   // living at the right speed, and in step with REL's clock, instead of moving in slow motion. Physics runs in 50 ms slices.
   const dt = Math.min((now - last) / 1000, 0.25); last = now; t += dt;
   // not on every scroll frame, and not mid-scroll at all (a full-page layout read then stutters the scroll), unless very stale
-  if ((now - scrolledAt > 250 && ((dirty && now - scanAt > 400) || now - scanAt > 2500)) || now - scanAt > 6000) scan();
-  if (!st.floor && !st.air && !st.held && st.mode !== 'climb') { if (!born()) { canvas.style.visibility = 'hidden'; return; } }
+  if (simple() !== st.simple) { st.simple = simple(); scan(); }   // Scroll / Read less flipped: his world changed under him, look now (not after the scroll settles)
+  else if ((now - scrolledAt > 250 && ((dirty && now - scanAt > 400) || now - scanAt > 2500)) || now - scanAt > 6000) scan();
+  if (barInk) { barInk.t = scrollY - 400; barInk.b = scrollY + barInk.h; }   // the nav's wall in viewport space, every frame
+  if (!st.floor && !st.air && !st.held && st.mode !== 'climb') { if (!(st.bornOnce ? dropIn() : born())) { canvas.style.visibility = 'hidden'; return; } }   // born once; after that a lost floor is a visible drop-in, never a vanish
   if (window.REL) {   // H10: what REL's contact did to him; he animates it himself
     const hb = window.REL.body('hugo'); st.dazed = hb.dazed > 0; st.carrying = window.REL.body('dove').heldBy === 'hugo';
     if (hb.hits !== st.hitsSeen) {
@@ -1116,17 +1156,12 @@ function frame(now) {
   st.look = look; st.gestName = gest ? gest.name : null; st.headH = Math.min(CFG.size + (SIT_H - CFG.size) * sitE, CFG.size + (CRAWL_H - CFG.size) * crawlE);   // H1: what the dove and REL read off him
   st.vxw = st.mode === 'walk' && !st.air ? (st.amt < 0.05 ? 0 : 1) * st.dir * walkSpeed() * (0.35 + 0.65 * st.amt) * (st.spdK || 1) : st.vx;
   const sy = st.y - scrollY;
-  const DP = window.DEPTH, here = DP ? DP.at(st.y, { noFront: phone() }) : { w: 0.5, lanes: [0] };   // his section's phase w and the lanes it has now
+  const DP = window.DEPTH, here = DP ? DP.at(st.y, { noFront: true }) : { w: 0.5, lanes: [0] };   // his section's phase w and the lanes it has now (no front lane: he would cover words)
   st.w = here.w; st.lanes = here.lanes;
   if (st.mode !== 'lane') st.zs += (st.z - st.zs) * Math.min(1, dt * 8);   // displayed depth eases to his lane (a hop drives it itself)
   st.par *= Math.exp(-dt * (free() ? 2.5 : 14));   // scroll parallax fades; standing on something he is glued to it
   if (sy < -CFG.size - 40 || sy > innerHeight + 60) { canvas.style.visibility = 'hidden'; hit.style.display = 'none'; hud.style.opacity = 0; if (shadeCss) { shade.style.opacity = 0; shadeCss = ''; } return; }   // alive, just not in view
-  // phones: a jump or fall across words fades him out, so he never covers text or takes its taps
-  const over = phone() && !st.held && textInk.some(q => q.r > st.x - HALF_W && q.l < st.x + HALF_W && q.b > st.y - (st.air ? CFG.size : st.mode === 'sit' ? SIT_H : st.mode === 'crawl' ? CRAWL_H : CFG.size) && q.t < st.y - 2);   // his body as it is now: sitting or crawling he is shorter
-  st.overN = over ? Math.min(6, (st.overN || 0) + 1) : Math.max(0, (st.overN || 0) - 1);   // a few frames either way before he fades, so a word grazing his edge does not leave him flickering half-seen
-  const overText = over ? st.overN >= 4 || !!st.faded : st.overN > 2 && !!st.faded; st.faded = overText;
-  // phones: a jump across words no longer fades him out; the words are in front of him (lane -1 occlusion, below)
-  if (overText) { hit.style.display = 'none'; hud.style.opacity = 0; } else hit.style.display = '';
+  hit.style.display = '';
   hit.style.transform = `translate3d(${Math.round(st.x - scrollX - HALF_W)}px,${Math.round(sy - CFG.size)}px,0)`;
   if ((st.hover || st.held) && !phone()) {   // phones: the readout covered the page and ran off the edge
     hud.style.opacity = 1; hud.style.transform = `translate(${Math.round(st.x - scrollX + HALF_W + 10)}px,${Math.round(sy - CFG.size)}px)`;
@@ -1141,6 +1176,7 @@ function frame(now) {
   else if (st.mode === 'lane') { poseHop(st.hopL && t - st.hopL.t0 < st.hopL.dur / 2 ? -1 : 260); inner.position.copy(feet).multiplyScalar(-S); }   // a little hop into the other lane
   else if (st.mode === 'prep') { posePrep(st.prep.t0 != null ? (t - st.prep.t0) / (st.prep.until - st.prep.t0) : (t - (st.prep.until - 0.25)) / 0.25); inner.position.copy(feet).multiplyScalar(-S); }
   else if (st.mode === 'climb') { poseClimb(st.climb); inner.position.copy(feet).multiplyScalar(-S); }
+  else if (st.skid > t) { posePrep(0.5); mix(B.chest, -0.3, 0, 0, 1); inner.position.copy(feet).multiplyScalar(-S); }   // the skid: low, leaning back against his own speed
   else if (sitE > 0.999) { poseLean = 0; poseSit(st.swing); inner.position.copy(seat).multiplyScalar(-S); }
   else if (sitE > 0.001) { poseSitting(sitE); inner.position.lerpVectors(feet, seat, sitE).multiplyScalar(-S); }   // on his way down or up
   else if (crawlE > 0.001) { poseLean = 0; poseCrawl(st.ph, crawlE); inner.position.lerpVectors(feet, hip, crawlE).multiplyScalar(-S); }   // on all fours, pivoting at the hips
@@ -1168,13 +1204,20 @@ function frame(now) {
   applyPose(dt, st.held || st.air ? 30 : 12); applyArms(dt, st.held || st.air ? 30 : 10);
   const yawGoal = st.mode === 'lane' && st.hopL ? (st.hopL.to < 0 ? st.dir * (Math.PI / 2 + 0.7) : st.dir * (Math.PI / 2 - 0.9)) :   // into the page or out of it, through profile
     st.mode === 'climb' ? Math.PI : crawlE > 0.3 ? (st.dir > 0 ? Math.PI / 2 : -Math.PI / 2) :(st.mode === 'sit' || sitE > 0.5) && !st.air ? -0.35 : st.dir > 0 ? Math.PI / 2 - 0.45 : -Math.PI / 2 + 0.45;
-  let dyaw = yawGoal - (st.yaw ?? yawGoal); dyaw = Math.atan2(Math.sin(dyaw), Math.cos(dyaw));
-  st.yaw = (st.yaw ?? yawGoal) + dyaw * Math.min(1, dt * 7); inner.rotation.y = st.yaw;   // turns take a moment, like a person turning
+  if (st.yaw == null) st.yaw = yawGoal;
+  // A reversal is never a mirror flip: he turns through profile over 0.2 s (eased), the direction locked for the turn; small
+  // changes of bearing ease in as before.
+  if (Math.abs(Math.atan2(Math.sin(yawGoal - st.yaw), Math.cos(yawGoal - st.yaw))) > 0.6 && !(st.turn && st.turn.to === yawGoal)) st.turn = { from: st.yaw, to: yawGoal, t0: t, dur: 0.2 };
+  if (st.turn) { const u = Math.min(1, (t - st.turn.t0) / st.turn.dur), d = Math.atan2(Math.sin(st.turn.to - st.turn.from), Math.cos(st.turn.to - st.turn.from)); st.yaw = st.turn.from + d * u * u * (3 - 2 * u); if (u >= 1) st.turn = null; }
+  else { let dyaw = yawGoal - st.yaw; dyaw = Math.atan2(Math.sin(dyaw), Math.cos(dyaw)); st.yaw += dyaw * Math.min(1, dt * 7); }
+  inner.rotation.y = st.yaw;
   const bob = st.mode === 'walk' && !st.air ? (1 - Math.cos(4 * Math.PI * st.ph)) * 0.5 * CFG.size * 0.022 * st.amt : 0;
   const crouch = st.land > 0 ? -st.land * 20 : 0;
   view.rotation.z = st.held || st.air ? -st.tilt : -st.dir * PITCH * crawlE;   // leans into the motion; crawling, his back tips forward over his hands
   const vy = sy - (st.hopY || 0) + st.par, lsc = DP ? DP.scaleOf(st.zs) : 1;   // vy: drawn height (lane-hop arc, parallax); lsc: lane scale
-  view.scale.setScalar(lsc);
+  const sq = st.land > 0 && !st.air ? (st.squash || 0) * Math.min(1, st.land / 0.23) : 0;   // landing squash, recovering linearly
+  view.scale.set(lsc * (1 + 0.3 * sq), lsc * (1 - 0.3 * sq), lsc);
+  renderer.toneMappingExposure = 1 - 0.22 * Math.max(0, -st.zs);   // the back lane sits in the page's haze: a little dimmer (Inside, Silksong)
   view.position.set(st.x - scrollX - innerWidth / 2, innerHeight / 2 - vy + bob + crouch + THIGH * crawlE, 0);
   { const d = window.__scion; let best = null;   // H1: his hand (the one nearer the bird) in page coords
     for (const b of [B.handL || B.foreL, B.handR || B.foreR]) { if (!b) continue; b.getWorldPosition(_hv);
@@ -1187,17 +1230,15 @@ function frame(now) {
   camera.setViewOffset(innerWidth, innerHeight, ox, oy, BOX, BOX);
   canvas.style.transform = `translate3d(${ox + scrollX}px,${oy + scrollY}px,0)`; if (canvas.style.visibility) canvas.style.visibility = '';
   if (say.style.opacity === '1') say.style.transform = `translate(${Math.max(scrollX + 8, Math.min(scrollX + W - 250, st.x - 30))}px,${Math.max(scrollY + 4, st.y - CFG.size - say.offsetHeight - 6)}px)`;   // over his head, kept on screen
-  // Occlusion: behind the content (lane -1, or a phone jump across words) the cards and lines of text in front of him are cut
-  // out of his own canvas. The page is not touched; only rects that overlap him count.
-  { const behind = st.zs < -0.3 || overText, hh = (st.headH || CFG.size) * lsc, py = st.y - (st.hopY || 0) + st.par;
+  // Occlusion: behind the content (lane -1) the cards in front of him hide him, drawn as depth-only quads in his own renderer.
+  // The page is not touched; only cards that overlap him count, and never text.
+  { const behind = st.zs < -0.3, hh = (st.headH || CFG.size) * lsc, py = st.y - (st.hopY || 0) + st.par;
     const box = { l: st.x - HALF_W * 1.7 * lsc, r: st.x + HALF_W * 1.7 * lsc, t: py - hh - 18, b: py + 8 };
-    const occ = behind && DP ? DP.occluders(box, -1) : [], at = ox + ',' + (oy + scrollY);
-    if (occ.length !== clipOcc.length || occ.some((q, i) => q !== clipOcc[i]) || (occ.length && at !== clipAt)) {
-      clipOcc = occ; clipAt = at; const c = DP ? DP.clipPath(occ, ox + scrollX, oy + scrollY, BOX) : '';
-      if (c !== clipCss) canvas.style.clipPath = clipCss = c; }
-    // contact shadow under his feet
-    const fy = st.floor ? st.floor.y : st.y, lift = (st.hopY || 0) + (st.air ? 1e3 : 0), k = Math.max(0, 1 - lift / 90);
-    const sx = st.x - st.zs * 6, sy2 = fy + st.zs * 4 + st.par, hidden = st.held || k <= 0 || overText || (st.zs < -0.3 && occ.length > 0) || st.mode === 'climb';
+    const occ = behind && DP ? DP.occluders(box, -1) : [];
+    occlude(occ);
+    // contact shadow: on the floor under his feet, shrinking with his height above it (a hop, a fall)
+    const lf = st.air ? st.landF : st.floor, fy = lf ? lf.y : st.y, lift = (st.hopY || 0) + (st.air ? Math.max(0, fy - st.y) : 0), k = Math.max(0, 1 - lift / 400);
+    const sx = st.x - st.zs * 6, sy2 = fy + st.zs * 4 + st.par, hidden = st.held || k <= 0 || (st.air && !lf) || (st.zs < -0.3 && occ.length > 0) || st.mode === 'climb';
     const css = hidden ? '' : `translate(${Math.round(sx)}px,${Math.round(sy2)}px) scale(${(lsc * (0.55 + 0.45 * k)).toFixed(2)},${(lsc * (0.55 + 0.45 * k)).toFixed(2)})|${(0.85 * k).toFixed(2)}`;
     if (css !== shadeCss) { shadeCss = css; if (css) { const [tr, op] = css.split('|'); shade.style.transform = tr; shade.style.opacity = op; } else shade.style.opacity = 0; } }
   renderer.render(scene, camera);
@@ -1216,7 +1257,7 @@ document.addEventListener('scroll', e => {
   const c = scrollers.get(sc); if (!c) return;
   const d = sc.scrollLeft - c.sl; if (!d) return; c.sl += d;
   const f = st.floor, items = new Set([...floors, ...seams, ...ink, ...cards]); if (f) items.add(f);
-  for (const q of items) if (q.sc === sc) { q.u1 -= d; q.u2 -= d; clipX(q); if (phone() && 'y' in q) fit(q); }
+  for (const q of items) if (q.sc === sc) { q.u1 -= d; q.u2 -= d; clipX(q); if ('y' in q) fit(q); }
   window.DEPTH?.publish({ cards, text: textInk, floors, seams });
   if (f && f.sc === sc && !st.air && !st.held && st.mode !== 'climb') {
     st.x -= d;
@@ -1224,7 +1265,7 @@ document.addEventListener('scroll', e => {
       const tw = floors.find(q => q !== f && Math.abs(q.y - f.y) < 6 && onFloor(q, st.x));
       if (tw) st.floor = tw;
       else if (f.x2 - f.x1 >= 2 * HALF_W) st.x = Math.max(f.x1 + HALF_W, Math.min(f.x2 - HALF_W, st.x));
-      else { st.air = true; st.hop = true; st.floor = null; st.vx = 0; st.vy = -160; st.mode = 'walk'; }
+      else { st.air = true; st.hop = !!dropTo(st.x, f.y); st.floor = null; st.vx = 0; st.vy = -160; st.mode = 'walk'; }
     }
   }
 }, { capture: true, passive: true });

@@ -41,18 +41,18 @@
     }
     return out;
   }
-  // The rects in front of an agent at lane z whose box (page coords) they overlap. Cards and text are on the content plane
-  // (z 0): they hide lane -1 only. Nothing hides lane +1 but the sticky nav, which already sits above the agents' layer.
+  // The cards in front of an agent at lane z whose box (page coords) they overlap: boxes on the content plane hide lane -1 only.
+  // Text never occludes (he passes behind words unhidden); nothing hides lane +1 but the sticky nav, above the agents' layer.
+  // The agents draw these as depth-only quads in their own renderers: a clip-path on a composited WebGL canvas rasterises as an
+  // opaque box on WebKit and some Android GPUs (the owner's "dark box").
   const overlaps = (q, box) => q.r > box.l && q.l < box.r && q.b > box.t && q.t < box.b;
   function occluders(box, z, scene = D.scene) {
     if (z >= -0.5 || !scene) return [];
-    const out = [];
-    for (const q of scene.cards) if (overlaps(q, box)) out.push(q);
-    for (const q of scene.text) if (overlaps(q, box)) out.push(q);
-    return out;
+    return scene.cards.filter(q => overlaps(q, box));
   }
-  // even-odd clip-path for an agent canvas at page (ox, oy), size BOX: the canvas minus the rects in front of it
-  const clipPath = (rects, ox, oy, W, H = W) => rects.length ? `path(evenodd, "M0 0H${W}V${H}H0Z${rects.map(q => `M${Math.round(q.l - ox)} ${Math.round(q.t - oy)}H${Math.round(q.r - ox)}V${Math.round(q.b - oy)}H${Math.round(q.l - ox)}Z`).join('')}")` : '';
+  // Lane-0 supports (what a reader accepts as a platform): boxes (cards, images, frames), rules of 2px or more, and the big
+  // headings (h1/h2, or 28px+ type). Body text, captions, labels, list items and hairlines are never a floor (ink only).
+  const support = q => !!(q.card || q.bt >= 2 || (q.text && (q.heading || q.fontSize >= 28)));
 
   // ---------------------------------------------------------------- the graph (walk, fall, jump, depth links) and A*
   // Nodes sit at platform ends and along wide platforms, per lane. Lane 0 walks only on supports and collides with ink;
@@ -131,7 +131,7 @@
   }
 
   // ---------------------------------------------------------------- the shared scene (page coords), measured, never per frame
-  const D = { clipOf, SCALE, scaleOf, W_RANGE, phase, lanesFor, sectionAt, merge, occluders, clipPath, buildGraph, astar,
+  const D = { clipOf, SCALE, scaleOf, W_RANGE, phase, lanesFor, sectionAt, merge, occluders, support, buildGraph, astar,
     sections: [], scene: { cards: [], text: [], floors: [], seams: [], at: 0 },
     // Hugo's scan publishes what it measured; the dove reads the same cards and text instead of measuring its own each frame
     publish(s) { D.scene = { cards: s.cards, text: merge(s.text), floors: s.floors, seams: s.seams, at: Date.now() }; },

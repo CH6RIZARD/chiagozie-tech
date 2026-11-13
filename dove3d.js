@@ -75,14 +75,24 @@ inner.add(model); inner.scale.setScalar(S); group.add(inner); view.add(group); s
 group.rotation.order = 'YZX';   // heading, then pitch, then roll about the body's own axis
 
 const st = { visible: true, mode: 'perch', x: 0, y: 0, z: 0, heading: -90, pitch: 0, roll: 0, row: 'look', walkPh: 0, flapPh: 0,
-  glide: false, breath: 0, opacity: 1, clip: '', puff: 0 };   // puff 0..1: feathers fluffed (a threat, a display, ruffled after a hit)
+  glide: false, breath: 0, clip: '', puff: 0 };
+// Occluders in the renderer: a depth-only quad (no colour) in front of the bird per card it is behind, so the GPU drops its fragments
+// there. 1 unit = 1 css px at z 0; a quad at z ZP is scaled by (P - ZP) / P to cover the same viewport rect. No clip-path and no
+// opacity on the canvas: a clipped or faded composited WebGL layer rasterises as an opaque box on WebKit and some Android GPUs.
+const ZP = CFG.size * 1.2, occMat = new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: true }), occPool = [];
+function occlude(rects) {
+  const k = (CFG.perspective - ZP) / CFG.perspective;
+  for (let i = occPool.length; i < Math.min(rects.length, 6); i++) { const m = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), occMat); m.renderOrder = -1; scene.add(m); occPool.push(m); }
+  occPool.forEach((m, i) => { const q = rects[i]; m.visible = !!q; if (!q) return;
+    m.position.set(((q.left + q.right) / 2 - innerWidth / 2) * k, (innerHeight / 2 - (q.top + q.bottom) / 2) * k, ZP); m.scale.set((q.right - q.left) * k, (q.bottom - q.top) * k, 1); });
+}   // puff 0..1: feathers fluffed (a threat, a display, ruffled after a hit)
 const R = {
   bodyAbove: (center.y - foot.y) * S,   // px from the feet up to the body centre
   set(o) { Object.assign(st, o); },
 };
 
 const D2R = Math.PI / 180;
-let last = performance.now(), shown = true, clip = '', op = '';
+let last = performance.now(), shown = true;
 function frame(now) {
   requestAnimationFrame(frame);
   const dt = Math.min((now - last) / 1000, 0.05); last = now;
@@ -111,10 +121,7 @@ function frame(now) {
   const ox = Math.max(0, Math.min(W - BOX, Math.round(st.x - scrollX - BOX / 2))), oy = Math.round(sy - 20 - BOX / 2);
   camera.setViewOffset(innerWidth, innerHeight, ox, oy, BOX, BOX);
   canvas.style.transform = `translate3d(${ox + scrollX}px,${oy + scrollY}px,0)`;
-  // Behind cards: st.clip lists the cards (viewport rects) it is flying behind; cut them out of this canvas.
-  const c = st.clip && st.clip.length ? `path(evenodd, "M0 0H${BOX}V${BOX}H0Z${st.clip.map(q => `M${q.left - ox} ${q.top - oy}H${q.right - ox}V${q.bottom - oy}H${q.left - ox}Z`).join('')}")` : '';
-  if (c !== clip) canvas.style.clipPath = clip = c;
-  const o = String(st.opacity); if (o !== op) canvas.style.opacity = op = o;
+  occlude(st.clip || []);   // behind cards: st.clip lists the cards (viewport rects) it is flying behind
   renderer.render(scene, camera);
 }
 requestAnimationFrame(frame);
