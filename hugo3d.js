@@ -20,13 +20,13 @@ Object.assign(canvas.style, { position: 'absolute', left: 0, top: 0, width: BOX 
 const layer = document.getElementById('agent-layer') || document.body.appendChild(Object.assign(document.createElement('div'), { id: 'agent-layer' }));
 Object.assign(layer.style, { position: 'absolute', left: 0, top: 0, right: 0, bottom: 0, overflow: 'clip', pointerEvents: 'none', zIndex: 9998 });
 layer.append(canvas);
-// Phones in Scroll view: he lives in a strip along the bottom of the screen, never out in the middle of the content. That strip
-// is drawn from a fixed layer, so it stays put while the page scrolls under it (an absolute canvas would trail the scroll a frame).
+// Phones in Scroll view: same life and physics as desktop, minus the two cheats that left him over the content (landing in
+// front of words, the invisible floor at the screen bottom); he fades out whenever a jump or fall carries him across text.
 const phoneQ = matchMedia('(max-width:760px)');
-const stripMode = () => phoneQ.matches && !document.body.classList.contains('simple');
-const groundY = () => stripMode() ? scrollY + innerHeight - 30 : document.documentElement.scrollHeight - 24;
-const fixedLayer = document.body.appendChild(document.createElement('div'));
-Object.assign(fixedLayer.style, { position: 'fixed', left: 0, top: 0, right: 0, bottom: 0, overflow: 'clip', pointerEvents: 'none', zIndex: 9998 });
+const phoneScroll = () => phoneQ.matches && !document.body.classList.contains('simple');
+const groundY = () => document.documentElement.scrollHeight - 24;
+// phones: a ledge in a side-scrolling row ends at the screen edge, so he never walks off into the part you cannot see
+const fit = f => { f.x1 = Math.max(f.x1, 0); f.x2 = Math.min(f.x2, document.documentElement.clientWidth); };
 let renderer;
 try { renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true, powerPreference: 'low-power' }); }
 catch { canvas.remove(); throw new Error('Hugo needs WebGL; the page works without him.'); }
@@ -206,7 +206,7 @@ view.rotation.x = CFG.viewTilt * Math.PI / 180;
 
 // ---------- the world: floors and solids, in page coordinates ----------
 let floors = [], ink = [], textInk = [], dirty = true, scanAt = 0;
-const skipSel = '#scion-hud,#scion-say,#scion-ask,#scion-dove,#agent-layer,script,style,svg,canvas,nav,.msheet';   // .msheet: the phone sheet is invisible until opened
+const skipSel = '#scion-hud,#scion-say,#scion-ask,#scion-dove,#agent-layer,script,style,svg,canvas,nav:not(.mindex),.msheet';   // .msheet: the phone sheet is invisible until opened; .mindex: the phone project list is content, not chrome (hidden on desktop)
 function scan() {
   floors = []; ink = [];
   const vh = innerHeight, near = r => r.bottom > -vh * 1.5 && r.top < vh * 2.5;
@@ -231,9 +231,8 @@ function scan() {
     }
   }
   floors.push({ y: groundY(), x1: 0, x2: document.documentElement.scrollWidth, el: document.body, ground: true });
-  textInk = stripMode() ? ink.slice(k0) : [];
-  if (stripMode()) { floors = floors.slice(-1); ink = [];   // the strip is his whole world: no ledges, nothing in his way
-    if (st.floor && !st.floor.ground && !st.air && !st.held) { st.floor = floors[0]; st.y = st.floor.y; st.goal = null; st.climb = null; if (st.mode === 'climb' || st.mode === 'prep') st.mode = 'walk'; } }
+  textInk = phoneScroll() ? ink.slice(k0) : [];
+  if (phoneScroll()) floors.forEach(fit);
   dirty = false; scanAt = performance.now();
 }
 // Can he occupy this spot? Body box must be clear of every word and box above the floor (standing or sitting height).
@@ -614,13 +613,14 @@ function landingBelow(x, y, vis) {   // nearest floor under (x, y) within a scre
   for (const f of floors) if (f.y > y + 2 && f.y <= lim && (f.ground || f.y < y + innerHeight * 1.5) && onFloor(f, x) && (f.ground || clear(x, f.y, CFG.size + 4)) && (!best || f.y < best.y)) best = f;
   // Dropped over a dense page, almost no ledge has a body-sized gap above it. If the strict search found nothing near, he lands on
   // the nearest ledge below him anyway, standing in front of the words, as a small figure on a page would.
-  if (!best || (best.ground && best.y > y + innerHeight * 0.9)) {
+  if (!phoneScroll() && (!best || (best.ground && best.y > y + innerHeight * 0.9))) {   // phones: never in front of words
     let near = null;
     for (const f of floors) if (!f.ground && f.y > y + 2 && f.y <= Math.min(lim, y + innerHeight * 0.9) && f.x2 - f.x1 > HALF_W * 1.4 && x > f.x1 + 4 && x < f.x2 - 4 && (!near || f.y < near.y)) near = f;
     if (near) best = near;
   }
   // Nothing visible to land on: the bottom edge of the screen catches him, so a drop never ends out of sight.
-  if (vis && lim !== Infinity && (!best || best.y > lim)) best = { y: lim, x1: 0, x2: document.documentElement.scrollWidth, el: document.body, screen: true };
+  // Phones: no invisible floor; once scrolled it left him standing on air in the middle of the page. He falls to a real one.
+  if (vis && lim !== Infinity && (!best || best.y > lim) && !phoneScroll()) best = { y: lim, x1: 0, x2: document.documentElement.scrollWidth, el: document.body, screen: true };
   return best;
 }
 // ---------- him and the dove ----------
@@ -694,11 +694,11 @@ function born() {   // first appearance: a floor in view with standing room
 }
 function refloor(f) {   // the page reflows; keep the floor glued to its element
   if (f.screen) return true;
-  if (f.ground) { f.y = groundY(); f.x2 = document.documentElement.scrollWidth; return true; }
+  if (f.ground) { f.y = groundY(); f.x2 = document.documentElement.scrollWidth; if (phoneScroll()) fit(f); return true; }
   if (!f.el.isConnected) return false;
   if (f.text) { const r = f.el.getBoundingClientRect(); const dy = (r.top + scrollY) - (f.elTop ?? (f.elTop = r.top + scrollY)); if (dy) { f.y += dy; f.elTop += dy; } return true; }
   const r = f.el.getBoundingClientRect(), top = r.top + scrollY, bottom = r.bottom + scrollY;
-  f.x1 = r.left + scrollX; f.x2 = r.right + scrollX; f.y = Math.abs(f.y - bottom) < Math.abs(f.y - top) ? bottom : top; return true;
+  f.x1 = r.left + scrollX; f.x2 = r.right + scrollX; if (phoneScroll()) fit(f); f.y = Math.abs(f.y - bottom) < Math.abs(f.y - top) ? bottom : top; return true;
 }
 function step(dt) {
   if (st.held) {   // he hangs from the hand: a stiff spring to the pointer, so the body lags and swings a little
@@ -718,7 +718,7 @@ function step(dt) {
   if (st.air) {
     st.vy += G * dt; const py = st.y; st.y += st.vy * dt; st.x += st.vx * dt;
     st.vx *= Math.max(0, 1 - 0.3 * dt);   // a little air drag
-    const W = document.documentElement.scrollWidth;
+    const W = phoneScroll() ? document.documentElement.clientWidth : document.documentElement.scrollWidth;
     if (st.x < HALF_W) { st.x = HALF_W; st.vx = Math.abs(st.vx) * 0.5; } else if (st.x > W - HALF_W) { st.x = W - HALF_W; st.vx = -Math.abs(st.vx) * 0.5; }
     swingLimbs(dt, (st.vx - lastVx) / dt, (st.vy - lastVy) / dt + G, 0.7); lastVx = st.vx; lastVy = st.vy;
     st.tilt += ((st.vx * 0.0005) - st.tilt) * Math.min(1, dt * 4);
@@ -886,8 +886,8 @@ function frame(now) {
   st.vxw = st.mode === 'walk' && !st.air ? (st.amt < 0.05 ? 0 : 1) * st.dir * walkSpeed() * (0.35 + 0.65 * st.amt) * (st.spdK || 1) : st.vx;
   const sy = st.y - scrollY;
   if (sy < -CFG.size - 40 || sy > innerHeight + 60) { canvas.style.visibility = 'hidden'; hit.style.display = 'none'; hud.style.opacity = 0; return; }   // alive, just not in view
-  // in the bottom strip the page scrolls under him: he fades out while words pass behind him, so he never covers text
-  const overText = stripMode() && !st.held && textInk.some(q => q.r > st.x - HALF_W && q.l < st.x + HALF_W && q.b > st.y - CFG.size && q.t < st.y);
+  // phones: a jump or fall across words fades him out, so he never covers text or takes its taps
+  const overText = phoneScroll() && !st.held && textInk.some(q => q.r > st.x - HALF_W && q.l < st.x + HALF_W && q.b > st.y - CFG.size && q.t < st.y);
   canvas.style.opacity = overText ? '0' : '';
   if (overText) { hit.style.display = 'none'; hud.style.opacity = 0; } else hit.style.display = '';
   hit.style.transform = `translate3d(${Math.round(st.x - scrollX - HALF_W)}px,${Math.round(sy - CFG.size)}px,0)`;
@@ -944,8 +944,7 @@ function frame(now) {
   const W = pageW;
   const ox = Math.max(0, Math.min(W - BOX, Math.round(st.x - scrollX - BOX / 2))), oy = Math.round(sy - CFG.size * 0.5 - BOX / 2);
   camera.setViewOffset(innerWidth, innerHeight, ox, oy, BOX, BOX);
-  const fx = stripMode(), home = fx ? fixedLayer : layer; if (canvas.parentNode !== home) home.append(canvas);
-  canvas.style.transform = fx ? `translate3d(${ox}px,${oy}px,0)` : `translate3d(${ox + scrollX}px,${oy + scrollY}px,0)`; if (canvas.style.visibility) canvas.style.visibility = '';
+  canvas.style.transform = `translate3d(${ox + scrollX}px,${oy + scrollY}px,0)`; if (canvas.style.visibility) canvas.style.visibility = '';
   if (say.style.opacity === '1') say.style.transform = `translate(${Math.max(scrollX + 8, Math.min(scrollX + W - 250, st.x - 30))}px,${Math.max(scrollY + 4, st.y - CFG.size - say.offsetHeight - 6)}px)`;   // over his head, kept on screen
   renderer.render(scene, camera);
 }
