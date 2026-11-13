@@ -869,7 +869,7 @@ const bootAgents = ext => {
   window.SCION_GLB = 'dove.glb' + ext;
   window.HUGO_CONFIG = { size: matchMedia('(max-width:760px)').matches ? 64 : 150, glb: 'realms/hugo/hugo.glb' + ext };
   const add = (src, type) => new Promise(r => { const s = document.createElement('script'); if (type) s.type = type; s.src = src; s.onload = r; s.onerror = r; document.head.append(s); });
-  add('mortal-kernel.js?v=20261113e1').then(() => add('depth.js?v=20261113d8')).then(() => add('bond.js?v=20261113e1')).then(() => add('dove-agent.js?v=20261113e1')).then(() => { add('dove3d.js?v=20261113d4', 'module'); add('hugo3d.js?v=20261113e1', 'module'); });
+  add('mortal-kernel.js?v=20261113e1').then(() => add('depth.js?v=20261113d8')).then(() => add('bond.js?v=20261113e1')).then(() => add('dove-agent.js?v=20261113f1')).then(() => { add('dove3d.js?v=20261113d4', 'module'); add('hugo3d.js?v=20261113f1', 'module'); });
 };
 fetch('dove.glb', { method: 'HEAD' }).then(r => bootAgents(r.ok ? '' : '.wasm')).catch(() => bootAgents('.wasm'));
 

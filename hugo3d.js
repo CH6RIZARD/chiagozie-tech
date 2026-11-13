@@ -267,7 +267,7 @@ function scan() {
       for (const r of range.getClientRects()) if (r.width > 0 && near(fo ? { top: r.top + fo.top, bottom: r.bottom + fo.top } : r)) {
         const q = add(ink, { l: r.left + ox, t: r.top + oy + cap, r: r.right + ox, b: r.bottom + oy }, sc); if (!q) continue;
         textInk.push(q);
-        if (r.width > 120 || cap > 0) add(floors, { y: r.top + oy + cap, x1: r.left + ox, x2: r.right + ox, el: n.parentElement, text: true, fr, name: cap > 0, support: true }, sc);
+        if (r.width > 120 || cap > 0) add(floors, { y: r.top + oy + cap, x1: r.left + ox, x2: r.right + ox, el: n.parentElement, text: true, fr, name: cap > 0, support: true, elTop: n.parentElement.getBoundingClientRect().top + oy }, sc);   // elTop now: set later, a shift in between was lost and the ledge sat px off its own line
       }
     }
   };
@@ -290,7 +290,7 @@ let allFloors = [];
 // Can he occupy this spot? Body box must be clear of every word and box above the floor (standing or sitting height).
 // Lane-filtered (Fez rule: collision stays flat 2D, per lane): behind or in front of the content, words and boxes are scenery,
 // not walls (only the phone's locked bar still is). z defaults to the lane he is in.
-const clear = (x, y, h, z = st.z) => !ink.some(q => (z === 0 || q.bar) && q.r > x - HALF_W && q.l < x + HALF_W && q.b > y - h && q.t < y - 2);
+const clear = (x, y, h, z = st.z, bar = true) => !ink.some(q => (z === 0 || q.bar) && (bar || !q.bar) && q.r > x - HALF_W && q.l < x + HALF_W && q.b > y - h && q.t < y - 2);
 // Where he has been: coarse cells with the last time he was there. New places are more interesting than ones he just
 // left, so he spreads out instead of wearing a groove into one corner.
 const seenAt = new Map(), avoid = new Map();
@@ -792,7 +792,11 @@ function relGoal(o, p) {
 }
 function relClear() { if (st.goal && st.goal.rel) st.goal = null; st.relOrder = null; st.spdK = 1; st.crouch = 0; st.relBusy = false; st.relGap = null; }
 function relEnd(result, data) { const o = st.relOrder; if (!o) return; relClear(); st.relAt = result === 'fail' ? t + 0.75 : 0; window.REL.done('hugo', o.id, result, data || {}); }
-function hopUp(vy) { if (!st.floor || st.mode === 'sit' || (st.sitK || 0) > 0.04) return; st.air = true; st.hop = true; st.floor = null; st.vx = 0; st.vy = -vy; st.mode = 'walk'; }
+// Phones: the view went below him and every ledge between is words he cannot stand in front of. Out of sight he moves over a
+// clear ledge in view and drops in from just above the top edge onto it (a fall you see, never a pop-in or a fall through text).
+function dropIn() { const p = pickFloor(true); if (!p) return false;
+  st.goal = null; st.route = null; st.floor = null; st.x = p.x; st.y = scrollY - 12; st.air = true; st.hop = false; st.vx = 0; st.vy = 0; st.dropF = p.f; st.dropIn = true; st.mode = 'walk'; st.away = 0; return true; }
+function hopUp(vy) { if (!st.floor || st.mode === 'sit' || (st.sitK || 0) > 0.04) return; st.dropF = st.floor; st.air = true; st.hop = true; st.floor = null; st.vx = 0; st.vy = -vy; st.mode = 'walk'; }   // a hop on the spot comes down on the ledge it left, never past it
 function applyOrder(o) {
   relClear(); st.relOrder = o; st.spdK = o.spdK || 1; st.crouch = o.crouch || 0;
   const d = window.__scion;
@@ -854,10 +858,8 @@ function autonomy(f) {
   const M = window.MORTAL, R = window.REL; if (!M || !M.alive('hugo') || st.goal || st.relOrder || st.food || st.held || st.air || st.dead) return;
   if (!(st.mode === 'idle' || st.mode === 'sit' || (st.mode === 'walk' && st.amt < 0.05))) return;
   const cur = M.current('hugo'); if (cur && cur.move) M.done('hugo');   // no goal left: that walk is over, however it ended (arrived, blocked, gave up)
-  const inView = st.y > scrollY + 30 && st.y - CFG.size < scrollY + innerHeight - 10;
-  st.away = inView ? 0 : (st.away || 0) + 0.75 * (f.ground ? 3 : 1);
   const patience = 3 + 9 * (R.P ? R.P.hugo.patience : 0.5);
-  if (st.away > patience) { const g = pickToward(st.y < scrollY + 30 ? 1 : -1); if (g) { goTo(g.f, g.x, { toView: true }); return; } st.away = 0; }
+  if (st.away > patience) { const g = pickToward(st.y < scrollY + 30 ? 1 : -1); if (g) { goTo(g.f, g.x, { toView: true }); return; } if (st.y < scrollY && dropIn()) return; st.away = 0; }
   const n = R.needs('hugo'), mo = M.mot('hugo'), env = M.env, g = M.goal('hugo');
   const gh = g && g.title ? [...document.querySelectorAll('h1,h2,h3')].find(h => h.textContent.replace(/\s+/g, ' ').trim().slice(0, 60) === g.title && h.getClientRects().length) : null;
   const c = M.choose('hugo', [
@@ -881,10 +883,12 @@ function relStep(f) {
   const R = window.REL; if (!R || t < (st.relAt || 0) || st.dead || st.dazed || st.mode === 'crawl' || (st.crawlK || 0) > 0.05) return;   // no standing up under a low ceiling for the bird
   st.relAt = t + 0.75;
   if (forage(f)) return;
+  const inView = st.y > scrollY + 30 && st.y - CFG.size < scrollY + innerHeight - 10;   // counted here, not in autonomy(): a long sulk off screen still counts
+  st.away = inView ? 0 : (st.away || 0) + 0.75 * (f.ground ? 3 : 1);
   const d = window.__scion;
   const reach = !!d && d.mode === 'perch' && !d.held && d.y >= st.y - CFG.size * 2.2 && floors.some(q => Math.abs(q.y - d.y) < 6 && d.x > q.x1 && d.x < q.x2);
   const o = R.want('hugo', { reach, floorY: f.y });
-  if (!o) { if (st.relOrder) relClear(); autonomy(f); return; }
+  if (!o || (st.away > 3 && !o.goal && !o.pounce)) { if (st.relOrder) relEnd('interrupted'); autonomy(f); return; }   // out of view, an order that keeps him standing (a sulk, a stare) yields to getting back where he is seen
   if (o.id !== (st.relOrder && st.relOrder.id)) applyOrder(o);
   else if (st.relGap != null && st.goal && st.goal.rel === o.id && d && (d.mode === 'perch' || o.ex === 'chase')) relGoal(o, { x: d.x - (Math.sign(d.x - st.x) || 1) * st.relGap, y: d.y });   // the bird moved: after it
   const ph = R.phase; st.relBusy = !!(st.relOrder && ph && ph.stage !== 'resolve');
@@ -946,9 +950,9 @@ function step(dt) {
     if (st.x < HALF_W) { st.x = HALF_W; st.vx = Math.abs(st.vx) * 0.5; } else if (st.x > W - HALF_W) { st.x = W - HALF_W; st.vx = -Math.abs(st.vx) * 0.5; }
     swingLimbs(dt, (st.vx - lastVx) / dt, (st.vy - lastVy) / dt + G, 0.7); lastVx = st.vx; lastVy = st.vy;
     st.tilt += ((st.vx * 0.0005) - st.tilt) * Math.min(1, dt * 4);
-    let f = landingBelow(st.x, py - 1, !st.hop && !st.pounce);
+    let f = st.dropIn && st.dropF ? null : landingBelow(st.x, py - 1, !st.hop && !st.pounce);   // dropping in from above the screen: only the ledge he aimed for
     if (st.dropF && (!f || f.y > st.dropF.y)) f = st.dropF;   // the ledge he chose to step down to catches him
-    if (f && st.y >= f.y && st.vy > 0) { if (f === st.dropF) st.x = Math.max(f.x1 + HALF_W, Math.min(f.x2 - HALF_W, st.x)); st.dropF = null; st.y = f.y; st.floor = f; st.air = false; st.vy = 0; st.vx = 0; st.land = st.hop ? 0.2 : 0.35; st.hop = false; st.mode = 'walk'; st.tilt = 0;
+    if (f && st.y >= f.y && st.vy > 0) { if (f === st.dropF) st.x = Math.max(f.x1 + HALF_W, Math.min(f.x2 - HALF_W, st.x)); st.dropF = null; st.dropIn = false; st.y = f.y; st.floor = f; st.air = false; st.vy = 0; st.vx = 0; st.land = st.hop ? 0.2 : 0.35; st.hop = false; st.mode = 'walk'; st.tilt = 0;
       if (st.pounce) { window.REL?.ev('hugo', 'pounceLand', 'dove', 0, { x: st.x, y: st.y }); st.pounce = null; relEnd('ok'); st.mode = 'idle'; st.idleUntil = t + 0.8; }
       else if (gest && gest.rel) st.mode = 'idle';
       if ((st.shaken || 0) > 0.35) { window.REL?.ev('hugo', 'fell', null, Math.min(0.8, st.shaken), { x: st.x, y: st.y }); poke('landed hard'); }
@@ -973,7 +977,7 @@ function step(dt) {
   if (!refloor(f)) { st.floor = null; if (phone()) { if (performance.now() - jumpAt < 800) st.y += scrollY - lastSY; jumpAt = -1e9; st.air = true; st.hop = false; st.vx = 0; st.vy = 0; st.mode = 'walk'; } return; }   // phones (a view switch): same spot on screen, then he drops into the new page
   st.y = f.y;
   // the page shifted under him (an app loaded, a block grew): if his spot now runs through words, step off and fall to a clear floor
-  const room = () => clear(st.x, f.y, (st.mode === 'sit' ? SIT_H : st.mode === 'crawl' || (st.crawlK || 0) > 0.05 ? CRAWL_H : CFG.size) + 4);
+  const room = () => clear(st.x, f.y - 4, (st.mode === 'sit' ? SIT_H : st.mode === 'crawl' || (st.crawlK || 0) > 0.05 ? CRAWL_H : CFG.size) + 4, st.z, false);   // staying needs less than arriving: his own line settling a few px (fonts, the hero) is no reason to fall; nor is the phone bar sliding over him as you scroll (the page passing under it)
   if (!f.ground && st.mode !== 'prep' && !room() && !(phone() && performance.now() - scanAt > 100 && (scan(), room()))) { st.air = true; st.vx = 0; st.vy = 0; st.floor = null; st.mode = 'walk'; return; }   // phones: a stale scan (the hero settling a few px) is no reason to fall; look again first
   if ((st.markAt || 0) < t) { seenAt.set(cell(st.x, st.y), t); st.markAt = t + 1; }
   if (!st.anchor || Math.hypot(st.x - st.anchor.x, st.y - st.anchor.y) > 160) st.anchor = { x: st.x, y: st.y, t };
@@ -1044,6 +1048,7 @@ function step(dt) {
       if (!st.goal && !st.relBusy && r < 0.3 && clear(st.x, f.y, SIT_H + 4)) { st.mode = 'sit'; st.idleUntil = t + 6 + Math.random() * 14; return; }
       if (!st.goal && !st.relBusy && r < 0.5) { st.mode = 'idle'; st.idleUntil = t + 2 + Math.random() * 2; gest = { name: 'peer', t0: t, dur: 2 + Math.random() * 2, side: st.dir, amp: 1, f: 1 }; st.dir = -st.dir; return; }
       if (dropTo(nx, f.y)) { st.air = true; st.hop = true; st.vx = st.dir * 20; st.vy = -160; st.x = nx; return; }   // nearly straight down, onto the ledge he looked at, not past it
+      if (st.goal && st.goal.toView && st.y < scrollY && dropIn()) return;   // left above the view with no ledge he can step down to: he drops in from the top edge
       st.dir = -st.dir; st.mode = 'idle'; st.idleUntil = t + 0.8 + Math.random() * 1.5; return;
     }
     if (clear(nx + st.dir * 10, f.y, CFG.size + 4)) { st.x = nx; st.ph += dt * sty.cadence * go * k; st.amt = Math.min(1, st.amt + dt * 2.2); }   // legs keep pace, so feet never slide

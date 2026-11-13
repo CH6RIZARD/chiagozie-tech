@@ -59,8 +59,6 @@ window.SCION_BOOT = R => {
     #scion-dove.gone{pointer-events:none}
     #scion-shadow{position:absolute;left:0;top:0;z-index:9998;width:60px;height:8px;margin:-4px 0 0 -30px;pointer-events:none;
       border-radius:50%;background:radial-gradient(rgba(21,23,28,.28),transparent 70%)}
-    .scion-feather{position:absolute;left:0;top:0;width:9px;height:20px;z-index:9998;pointer-events:none;
-      border-radius:50% 50% 50% 50%/70% 70% 30% 30%;background:linear-gradient(#fff,#dfe3f6);box-shadow:0 0 6px rgba(32,56,199,.35)}
     .scion-burst{position:absolute;left:0;top:0;width:260px;height:260px;margin:-130px 0 0 -130px;z-index:9997;pointer-events:none;
       border-radius:50%;background:radial-gradient(circle,rgba(255,255,255,.95),rgba(32,56,199,.35) 40%,transparent 70%)}
     #scion-say{position:absolute;left:0;top:0;z-index:10000;pointer-events:none;max-width:240px;padding:9px 12px;
@@ -111,17 +109,6 @@ window.SCION_BOOT = R => {
     let i = 0; say.textContent = ''; say.classList.add('on');
     typeTimer = setInterval(() => { say.textContent = text.slice(0, ++i); if (i >= text.length) clearInterval(typeTimer); }, 28);
     sayTimer = setTimeout(() => say.classList.remove('on'), ms);
-  }
-  function feathers(x, y, n, spread = 1) {
-    for (let i = 0; i < n; i++) {
-      const f = mk(null, 'scion-feather'); document.body.append(f);
-      const dx = (Math.random() - 0.5) * 160 * spread, dy = 80 + Math.random() * 160, r = Math.random() * 720 - 360;
-      f.animate([
-        { transform: `translate(${x}px,${y}px) rotate(0deg)`, opacity: 1 },
-        { transform: `translate(${x + dx * 0.6}px,${y + dy * 0.3}px) rotate(${r / 2}deg)`, opacity: 0.9, offset: 0.3 },
-        { transform: `translate(${x + dx}px,${y + dy}px) rotate(${r}deg)`, opacity: 0 },
-      ], { duration: 1800 + Math.random() * 1400, easing: 'ease-out' }).onfinish = () => f.remove();
-    }
   }
   function burst(x, y) {
     const b = mk(null, 'scion-burst'); document.body.append(b);
@@ -451,14 +438,13 @@ window.SCION_BOOT = R => {
     REL.newBody('dove', a.id, link.mode);   // a new life: what the last dove felt about Hugo is not this one's
     a.hitsSeen = REL.body('dove').hits;
     el.classList.remove('gone'); R.set({ visible: true });
-    // born quietly: no burst of feathers
+    // born quietly
     emit('BIRTH', `${link.mode === 'agent' ? 'agent' : 'local'} identity ${a.id.slice(0, 8)}`);
     speak(link.mode === 'agent' ? `${a.id.slice(0, 8)}. New body. Nothing carried over.` : pick(['I am awake.', 'New body. New name. Nothing carried over.']), 3200);
   }
   function end(reason) {
     emit('ENDED', `${a.id.slice(0, 8)} · ${reason} · δt ${a.dt.toFixed(1)}s`);
     speak(`${a.id.slice(0, 8)} ended: ${reason}. No save. No reload.`, 3800);
-    feathers(a.x, a.y - 30, 14, 1.6);
     corpse = { x: a.x, y: a.y - 40, z: a.z || 0, vy: -120, rot: 0, face: a.face, yaw: a.yaw };
     a = null; window.__scion = null; el.classList.add('gone'); clearPeck();
     if (link.mode === 'agent') return;   // the next being is the agent's next life (linkTick births it)
@@ -469,10 +455,10 @@ window.SCION_BOOT = R => {
   }
   window.MORTAL?.on('dove', (type, cause) => { if (type === 'ENDED' && a && link.mode !== 'agent') end(cause === 'energy_depleted' ? 'energy spent' : cause === 'lifespan_expired' ? 'its time ran out' : cause); });
 
-  // Two takeoffs: relaxed (the slow first stage) and panic (straight up, frantic wings, a few feathers).
+  // Two takeoffs: relaxed (the slow first stage) and panic (straight up, frantic wings).
   function takeOff(target, why, panic) {
     if (a.mode === 'perch') { a.vy = panic ? -420 : -260; const tx = target?.spot ? target.spot.x : mouse ? mouse.x : a.x + a.face; a.vx = (Math.sign(tx - a.x) || a.face) * 80; a.y -= R.bodyAbove; }
-    if (a.mode === 'perch') { a.vz = 160; a.toT = panic ? 0.2 : 0.7; a.view = a.yaw; if (panic) { a.panic = 1.2; feathers(a.x, a.y - 20, 3); speak('!!', 700); } }
+    if (a.mode === 'perch') { a.vz = 160; a.toT = panic ? 0.2 : 0.7; a.view = a.yaw; if (panic) { a.panic = 1.2; speak('!!', 700); } }
     a.mode = 'fly'; a.target = target; a.spot = null; a.walk = null; clearPeck();
     a.arc = target?.spot ? rand(-160, CFG.arcZ) : CFG.arcZ;
     if (why) emit('ACTION', why);
@@ -480,11 +466,10 @@ window.SCION_BOOT = R => {
   function landOn(sp) {
     const pos = spotPos(sp); if (!pos) return;
     a.mode = 'perch'; a.spot = sp; a.x = pos.x; a.y = pos.y; a.vx = a.vy = 0; a.idle = rand(0.8, 2); perchedAt.set(sp.s, performance.now()); a.perchSince = performance.now();
-    if (sp.s.kind === 'hugo') { feathers(pos.x, pos.y - 20, 1, 0.4); emit('PAGE', 'perched on Hugo'); REL.ev('dove', 'landedNear', 'hugo', 0.1, { ride: 1 }); return; }
+    if (sp.s.kind === 'hugo') { emit('PAGE', 'perched on Hugo'); REL.ev('dove', 'landedNear', 'hugo', 0.1, { ride: 1 }); return; }
     // It has weight: whatever it lands on gives a little.
     const host = sp.s.kind === 'card' ? sp.s.el : sp.s.el.closest('h1,h2,h3,p,li,td') || sp.s.el;
     host.animate({ translate: ['0 0', '0 3px', '0 0'] }, { duration: 420, easing: 'cubic-bezier(.3,1.6,.5,1)' });
-    feathers(pos.x, pos.y - 20, 2, 0.5);
     const title = headingOf(sp.s);
     emit('PAGE', `perched on ${sp.s.kind}${title ? ` · "${title.slice(0, 22)}"` : ''}`);
     if (title && !a.seen.has(title) && performance.now() - a.spoke > 5000) {
@@ -723,7 +708,7 @@ window.SCION_BOOT = R => {
       case 'freeze': a.walk = null; a.restT = o.dur || 2; a.watchHugo = o.dur || 2; R0.hold = o.dur || 2;   // still, eyes on him; then the "seen you" bob
         setTimeout(() => { const H = window.__hugo; if (a && a.mode === 'perch' && !a.held && H && Math.hypot(a.x - H.x, a.y - H.y) < 500) { a.seenT = 1.5; REL.ev('dove', 'seenYou', 'hugo', 0.2); } }, (o.dur || 2) * 1000);
         break;
-      case 'strike_back': R0.hold = 1; if (a.mode === 'perch') { a.peckT = 0.9; puff(1.5); a.watchHugo = 1; } feathers(a.x, a.y - 30, 2, 0.6); speak('!', 500); break;   // REL fired the peck itself
+      case 'strike_back': R0.hold = 1; if (a.mode === 'perch') { a.peckT = 0.9; puff(1.5); a.watchHugo = 1; } speak('!', 500); break;   // REL fired the peck itself
       default: R0.hold = 1;
     }
   }
@@ -742,25 +727,25 @@ window.SCION_BOOT = R => {
   }
   function relStep(now) {
     const B = REL.body('dove');
-    if (B.hits !== a.hitsSeen) {   // struck: feathers fly, it jumps, and it is shaken (never more than that)
+    if (B.hits !== a.hitsSeen) {   // struck: it jumps, and it is shaken (never more than that)
       a.hitsSeen = B.hits; const s = B.lastHit ? B.lastHit.sev : 0.3;
-      feathers(a.x, a.y - 30, 2 + Math.round(6 * s)); a.stress = Math.min(1, (a.stress || 0) + 0.5 * s); a.jump = 0.45;
+      a.stress = Math.min(1, (a.stress || 0) + 0.5 * s); a.jump = 0.45;
     }
     if (B.heldBy === 'hugo' && !a.held) {   // Hugo caught it: pinned in his hand for a moment
-      a.held = true; a.heldBy = 'hugo'; a.temper = 1; a.flee = 0; takeOff({ hand: true }, 'caught by Hugo'); feathers(a.x, a.y - 20, 2, 0.5); speak('!!', 700);
+      a.held = true; a.heldBy = 'hugo'; a.temper = 1; a.flee = 0; takeOff({ hand: true }, 'caught by Hugo'); speak('!!', 700);
     } else if (a.heldBy === 'hugo' && B.heldBy !== 'hugo') {   // out of his hands: lifted free, thrown, or slapped its way out
       a.held = false; a.heldBy = null;
       const h = window.__hugo, away = h ? Math.sign(a.x - h.x) || a.face : a.face, st = a.stress || 0, R = B.release, fresh = R && REL.t - R.t < 2;
       if (fresh && R.kind === 'throw') {   // flung: it tumbles end over end, then catches the air and gets well away
         const dir = Math.sign(R.vx) || away; a.vx = R.vx; a.vy = R.vy; a.tumble = 0.45 + 0.5 * Math.min(1, Math.abs(R.vx) / 1000); a.tumbleDir = dir;
-        a.panic = 1.6; a.stress = Math.min(1, st + 0.35); feathers(a.x, a.y - 20, 6, 1.2); speak(pick(['!!', 'Hey!', 'Krr!']), 900);
+        a.panic = 1.6; a.stress = Math.min(1, st + 0.35); speak(pick(['!!', 'Hey!', 'Krr!']), 900);
         const sp = landingNear(a.x + dir * rand(320, 520), a.y - rand(60, 200)); a.target = sp ? { spot: sp } : null; emit('ACTION', 'thrown by Hugo');
       } else if (fresh && R.kind === 'lift') {   // lifted up out of his hands: it simply flies, nowhere far
         a.vx = R.vx; a.vy = R.vy; a.stress = st * 0.5; const sp = landingNear(a.x + away * rand(80, 200), a.y - rand(20, 120)); a.target = sp ? { spot: sp } : null; emit('ACTION', 'let go by Hugo');
       } else {
         a.vx = away * (240 + 260 * st); a.vy = -200 - 200 * st; if (st > 0.45) a.panic = 1.2;
         const sp = landingNear(a.x + away * (260 + 300 * st), a.y - 140); a.target = sp ? { spot: sp } : null;
-        feathers(a.x, a.y - 20, 3); emit('ACTION', 'out of Hugo\'s hands');
+        emit('ACTION', 'out of Hugo\'s hands');
       }
     }
     if (a.held && a.heldBy !== 'hugo') return;   // in the visitor's hand nothing else matters
@@ -821,7 +806,7 @@ window.SCION_BOOT = R => {
     // while; calm, it settles somewhere close and watches you.
     const away = Math.sign(a.x - hand.x) || a.face;
     if (st > 0.45) { a.vx = away * (260 + st * 300); a.vy = -220 - st * 200; a.wary = performance.now() + 8000 + st * 20000;
-      a.target = { spot: landingNear(a.x + away * (300 + st * 400), a.y - 160) }; feathers(a.x, a.y - 20, 3 + Math.round(st * 6), 0.8); speak(pick(['Never again.', 'Hmph.', '…']), 1600); }
+      a.target = { spot: landingNear(a.x + away * (300 + st * 400), a.y - 160) }; speak(pick(['Never again.', 'Hmph.', '…']), 1600); }
     else { a.vx = a.face * 90; a.vy = -140; a.target = { spot: landingNear(hand.x + rand(-160, 160), hand.y + 20) }; if (Math.random() < 0.5) speak(pick(['Thank you.', 'That was nice.', 'Again?']), 1600); }
     emit('ACTION', `released · ${st > 0.45 ? 'bolted' : 'settled nearby'}`);
   };
