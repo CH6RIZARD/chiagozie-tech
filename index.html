@@ -14,7 +14,7 @@ try { if (localStorage.getItem('theme') === 'light') document.documentElement.da
 <meta name="description" content="Full-stack and real-time systems engineer. Fintech, 3D simulation, live media. The products on this page are the real builds, running.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="frames.css?v=1">
+<link rel="stylesheet" href="frames.css?v=2">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;1,9..144,300&family=Inter:wght@400;500&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
 /* ---- tokens: re-skin here ---- */
@@ -887,12 +887,12 @@ addEventListener('pageshow', () => fetch(location.pathname, { method: 'HEAD', ca
     if (on) { prev = prev || r.dataset.theme; r.dataset.theme = 'dark'; } else if (prev) { r.dataset.theme = prev; prev = null; }
     document.body.classList.toggle('simple', on); os.hidden = !on; b.setAttribute('aria-pressed', on);
     b.setAttribute('aria-label', on ? 'Read less view on. Switch to scroll view' : 'Scroll view on. Switch to read less view');
-    if (on && !f) { f = document.createElement('iframe'); const sm = new URLSearchParams(location.search).get('scrollMode'); const src = 'OS.dc.html?v=20261112sk&fb=74' + (sm ? '&scrollMode=' + encodeURIComponent(sm) : ''); f.title = 'Projects'; f.allow = 'fullscreen; pointer-lock; autoplay; clipboard-write';
+    if (on && !f) { f = document.createElement('iframe'); const sm = new URLSearchParams(location.search).get('scrollMode'); const src = 'OS.dc.html?v=20261112fr&fb=74' + (sm ? '&scrollMode=' + encodeURIComponent(sm) : ''); f.title = 'Projects'; f.allow = 'fullscreen; pointer-lock; autoplay; clipboard-write';
       // invisible until the frame's own dark page exists (it posts chaze-homed from its <head>): its blank first document never paints white
       f.style.visibility = 'hidden'; f.onload = () => { if (f.getAttribute('src')) show(); }; os.append(f); showT = setTimeout(show, 1500);   // fail-safe: never left hidden
       // The frame loads these without a version token: revalidate them first so a phone never runs a cached old build.
       // capped at 1.2 s: a stalled fetch on LTE must never keep the frame from loading
-      Promise.race([Promise.allSettled([src, 'OSDevice.dc.html', 'support.js', 'image-slot.js', 'ios-frame.js?v=1'].map(u => fetch(u, { cache: 'no-cache' }).then(r => r.arrayBuffer()))), new Promise(r => setTimeout(r, 1200))]).then(() => { if (!f.getAttribute('src')) f.src = src; }); }
+      Promise.race([Promise.allSettled([src, 'OSDevice.dc.html', 'support.js', 'image-slot.js', 'ios-frame.js?v=1', 'frames.css?v=2'].map(u => fetch(u, { cache: 'no-cache' }).then(r => r.arrayBuffer()))), new Promise(r => setTimeout(r, 1200))]).then(() => { if (!f.getAttribute('src')) f.src = src; }); }
     else if (f) { if (on) home(); else f.contentWindow.postMessage({ type: 'chaze-home' }, '*'); }   // left on a project: back to the Home screen while hidden, so coming back never shows it
     if (on) scrollTo(0, 0);
   };

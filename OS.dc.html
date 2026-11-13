@@ -6,16 +6,10 @@
 <meta name="color-scheme" content="dark">
 <style>html,body{margin:0;height:100%;background:#161615;color-scheme:dark}</style><!-- dark before support.js loads React + Babel: on a phone over LTE that takes seconds, and the unstyled page showed as a white box -->
 <script>parent !== window && parent.postMessage({ type: 'chaze-homed' }, '*')</script><!-- the site keeps this frame invisible until its dark page exists, so its blank first document never shows -->
+<link rel="stylesheet" href="./frames.css?v=2"><!-- iPhone (.tiPhone) and monitor (.tiMonitor) frames, shared with the Scroll view -->
 <style>x-dc{display:none}
 @keyframes skel{from{background-position:200% 0}to{background-position:-200% 0}}
 .sk{background:linear-gradient(90deg,#222226 25%,#33333a 50%,#222226 75%);background-size:200% 100%;animation:skel 1.4s linear infinite}
-/* iPhone Pro body around the 402x874 screen, in design px (--u): titanium rim with edge light, black glass border, side buttons, layered shadow. The boot skeleton sets --u in container units so it sits exactly on the real one. */
-.tiPhone{--u:1px;position:relative;flex:0 0 auto;width:calc(430*var(--u));height:calc(902*var(--u));margin:calc(8*var(--u));border-radius:calc(62*var(--u));background:#050506;border:calc(4*var(--u)) solid;border-color:#a3a5aa #55565b #2b2c30 #74767b;box-shadow:0 0 0 calc(1*var(--u)) #000,inset 0 0 0 calc(1*var(--u)) rgba(255,255,255,.08)}
-/* titanium = a 4px rim of solid side colours (lit top-left, shaded bottom-right), no big gradients or blurred box-shadows: the devices scale while scrolling and WebKit re-rasters those every frame. The drop shadow is one small gradient (::after). */
-.tiPhone::before{content:"";position:absolute;inset:0;border-radius:calc(58*var(--u));border:calc(1*var(--u)) solid rgba(255,255,255,.22);border-bottom-color:rgba(255,255,255,.06)}
-.tiPhone::after{content:"";position:absolute;z-index:-1;left:-8%;right:-8%;top:6%;bottom:-9%;border-radius:50%;background:radial-gradient(closest-side,rgba(0,0,0,.75),rgba(0,0,0,.45) 55%,rgba(0,0,0,.18) 80%,rgba(0,0,0,0))}
-.tiScreen{position:absolute;inset:calc(10*var(--u));border-radius:calc(48*var(--u));overflow:hidden;background:#000;outline:calc(1*var(--u)) solid rgba(255,255,255,.07)}
-.tiBtn{position:absolute;width:calc(5*var(--u));border-radius:calc(2*var(--u));background:linear-gradient(90deg,#26272a,#86888d 45%,#34353a)}
 </style>
 <script src="./support.js"></script>
 </head>
