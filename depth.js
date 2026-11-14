@@ -107,7 +107,7 @@
     // depth links: lane 0 <-> -1 at the same spot. Cheap where the way ahead is blocked by a card or words (going behind it is
     // the point), dearer in open space; never on a seam (there is no lane-0 floor there).
     for (const a of nodes) if (a.z === 0) {
-      const b = byKey.get(`-1:f${floors.indexOf(a.f)}:${a.x}`); if (!b) continue;
+      const b = byKey.get(`-1:f${floors.indexOf(a.f)}:${a.x}`); if (!b || (o.clear && !o.clear(a.x, a.y, 0))) continue;   // a hop out needs standing room on the content: no link where words are
       const blocked = o.clear && (!o.clear(a.x + 2 * half, a.y, 0) || !o.clear(a.x - 2 * half, a.y, 0));
       const c = blocked ? 12 : 45; link(a, b, c, 'depth'); link(b, a, c, 'depth');
     }

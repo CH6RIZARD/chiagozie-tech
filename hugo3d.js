@@ -321,9 +321,9 @@ function pickFloor(furniture, z = st.z) {   // furniture: anywhere he can stand 
   return opts[opts.length - 1];
 }
 
-// Somewhere to stand on purpose: a support with room on the content (lane 0); none in view, a support he can stand on behind the
-// words (lane -1: dimmer, smaller, the cards in front hide him). The page is dense, so the back lane is where most furniture is used.
-const pickPlace = () => { const p = pickFloor(true, 0); if (p) return p; const q = pickFloor(true, -1); return q ? { f: q.f, x: q.x, z: -1 } : null; };
+// Somewhere to stand on purpose: a support with room on the content (lane 0, his home). The back lane is never a place to stand:
+// only a transit behind a card (a route's depth link, a wall of words) or a short peek, each with its exit planned.
+const pickPlace = () => pickFloor(true, 0);
 // ---------- the agent ----------
 // He is his own being: he walks the floors, steps off ledges and falls to the next floor, turns at text, sits when boxed in.
 // He never teleports and never follows the visitor. Off screen he keeps living; we just do not draw him.
@@ -706,7 +706,8 @@ function blocked(f) {
     if (onFloor(q, ux) && clear(ux, q.y, CFG.size + 4) && (!up || q.y > up.q.y)) up = { q, ux };   // the lowest top he can stand on
   }
   const wantsPast = st.goal && Math.sign(st.goal.x - st.x) === st.dir;
-  if (st.z === 0 && !st.relBusy && (wantsPast || Math.random() < 0.6) && laneHop(-1)) return;   // words in the way: he passes behind them
+  if (st.z === 0 && !st.relBusy && wantsPast && !st.goal.rel) { const r = plan(st.goal.f, st.goal.x, 0); if (r && r.length) { st.route = r; if (nextLeg()) return; } }   // words in the way: a route past them (behind, with the way back out planned), when the graph has one
+  if (st.z === 0 && !st.relBusy && !wantsPast && !f.screen && !f.ground && t > (st.peekAt || 0) && Math.random() < 0.4 && laneHop(-1)) { st.peek = true; return; }   // or a peek behind the page, back out where he stands
   if (up && (wantsPast || Math.random() < 0.6)) { const dh = f.y - up.q.y; st.mode = 'prep'; st.amt = 0; st.prep = { f: up.q, dh, until: t + 0.18 + Math.random() * 0.14, climb: dh > CFG.size * 1.2, over: up.ux }; return; }
   if (wantsPast) giveUp('no way past');   // no way past: not there, not now
   if (walls.some(w => w.f === f && w.dir === -st.dir && t - w.t < 30)) {   // walls both ways lately: hemmed in
@@ -805,7 +806,7 @@ const TRACK = new Set(['approach', 'follow', 'chase', 'stalk', 'groom', 'comfort
 const relLeft = o => Math.max(1, o.until - window.REL.t);   // seconds left on an order (engine clock)
 const faceDove = () => { const d = window.__scion; if (d) st.dir = Math.sign(d.x - st.x) || st.dir; };
 function relGoal(o, p) {
-  const f = p && floorFor(p); if (!f || f.y < st.y - CFG.size * 2.2) return false;   // no floor there, or one too high to climb to
+  const f = p && floorFor(p); if (!f || f.y < st.y - CFG.size * 2.2 || f.y > scrollY + innerHeight - 10) return false;   // no floor there, one too high to climb to, or one below the screen (the page bottom under a flying bird): he stays and faces it instead
   st.goal = { f, x: Math.max(f.x1 + HALF_W, Math.min(f.x2 - HALF_W, p.x)), until: t + relLeft(o), rel: o.id };
   return true;
 }
@@ -814,19 +815,20 @@ function relEnd(result, data) { const o = st.relOrder; if (!o) return; relClear(
 // Out of sight (never while any of him shows), he moves over a clear support in view and drops in from just above the top edge
 // onto it: a fall you see entering the frame, never a pop-in. Nothing to stand on in view: the screen's bottom edge catches him.
 // A column that crosses a picture or card is fallen behind (lane -1), so he never materialises inside one.
+// A fall whose column crosses a picture or card is fallen behind it (lane -1, out again right after landing): never through an image
+const crossesCard = (x, y0, y1) => cards.some(q => q.r > x - HALF_W * 1.7 && q.l < x + HALF_W * 1.7 && q.b > y0 && q.t < y1 - 2);
+function fallBehind(x, y0, y1) { if (st.z === 0 && crossesCard(x, y0, y1)) { st.z = -1; st.backUntil = t + 1.5 + Math.random() * 2; } }
 function dropIn(p = pickPlace()) {
-  const crossing = p => cards.some(q => q.r > p.x - HALF_W * 1.7 && q.l < p.x + HALF_W * 1.7 && q.b > scrollY && q.t < p.f.y - 2);
-  for (let i = 0; p && !p.z && crossing(p) && i < 5; i++) { const q = pickFloor(true, 0); if (q && !crossing(q)) p = q; }   // a column clear of pictures, when there is one
+  for (let i = 0; p && crossesCard(p.x, scrollY, p.f.y) && i < 5; i++) { const q = pickFloor(true, 0); if (q && !crossesCard(q.x, scrollY, q.f.y)) p = q; }   // a column clear of pictures, when there is one
   if (!p) p = { f: { y: scrollY + innerHeight - 30, x1: 0, x2: pageW, el: document.body, screen: true, support: true }, x: scrollX + innerWidth * (0.3 + Math.random() * 0.4) };
-  const behind = p.z === -1 || crossing(p);
   st.goal = null; st.route = null; st.floor = null; st.x = p.x; st.y = scrollY - 12; st.air = true; st.hop = false; st.vx = 0; st.vy = 0; st.dropF = p.f; st.dropIn = true; st.mode = 'walk'; st.away = 0;
-  if (behind && st.z === 0) { st.z = st.zs = -1; st.backUntil = t + (p.z === -1 ? 6 + Math.random() * 8 : 1.5 + Math.random() * 2); }
+  st.z = st.zs = 0; st.peek = false; fallBehind(p.x, scrollY, p.f.y); if (st.z === -1) st.zs = -1;   // a fresh entry comes in on the content (lane 0 is home), behind a picture only when the column crosses one
   return true; }
 // Back into the visitor's view like a game character (the viewport is the level): by the route graph when a support in view is
 // reachable (walk, climb, drop), else the drop-in. Elizabeth's rule: relocate only while unseen, and always enter the frame.
 function comeBack() {
   const p = pickPlace(); st.goal = null; st.route = null; st.toView = true;
-  if (p) { const r = plan(p.f, p.x, p.z || 0); if (r && r.length) { st.route = r; if (nextLeg()) return; } }
+  if (p) { const r = plan(p.f, p.x); if (r && r.length) { st.route = r; if (nextLeg()) return; } }
   st.route = null; dropIn(p);
 }
 function hopUp(vy) { if (!st.floor || st.mode === 'sit' || (st.sitK || 0) > 0.04) return; st.dropF = st.floor; st.air = true; st.hop = true; st.floor = null; st.vx = 0; st.vy = -vy; st.mode = 'walk'; }   // a hop on the spot comes down on the ledge it left, never past it
@@ -901,7 +903,7 @@ function autonomy(f) {
   const gh = g && g.title ? [...document.querySelectorAll('h1,h2,h3')].find(h => h.textContent.replace(/\s+/g, ' ').trim().slice(0, 60) === g.title && h.getClientRects().length) : null;
   const c = M.choose('hugo', [
     { id: 'wander', drive: 'curiosity', u: Math.min(1, 0.25 + 1.2 * mo.c * (1 - novelty(st.x, st.y))), move: true, minT: 4 },
-    st.z === 0 && st.lanes.includes(-1) && { id: 'behind', drive: 'curiosity', u: Math.min(1, 0.15 + 0.7 * mo.c), move: true, minT: 6 },   // w: the back lane is open here now
+    st.z === 0 && st.lanes.includes(-1) && t > (st.peekAt || 0) && !f.screen && !f.ground && { id: 'behind', drive: 'curiosity', u: Math.min(1, 0.15 + 0.7 * mo.c), move: true, minT: 6 },   // w: the back lane is open here now; a peek, not more often than every 20 s
     gh && { id: 'goal', drive: 'curiosity', u: g.pri, move: true, minT: 6 },
     pointer.in && { id: 'visitor', drive: 'consequence', u: mo.s, move: true, minT: 6 },
     { id: 'rest', drive: 'survival', u: Math.min(1, M.fatigue(n.energy) * 0.9 + env.sleepy * 0.5), move: false, minT: 8, maxT: 15, urgent: n.energy < 0.2 },
@@ -913,11 +915,11 @@ function autonomy(f) {
     let p = null, r = null; for (let i = 0; i < 4 && !r; i++) { const q = pickPlace(); if (q && (r = plan(q.f, q.x, q.z || 0)) && !r.length) r = null; if (q) p = p || q; if (r) p = q; }
     if (!p) p = pickToward(st.dir);
     if (!p) fail(); else if (r) { st.route = r; nextLeg(); } else if (!routeTo(p.f, p.x, { auto: 1 }, p.z || 0)) fail(); }
-  else if (c.id === 'behind') { if (!laneHop(-1)) fail(); }
+  else if (c.id === 'behind') { if (laneHop(-1)) st.peek = true; else fail(); }
   else if (c.id === 'goal') { const r = gh.getBoundingClientRect(), p = floorNear(r.left + scrollX + Math.min(r.width, 300) / 2, r.top + scrollY);
     if (p && (g.tries = (g.tries || 0) + 1) <= 3) goTo(p.f, p.x, { auto: 1, goalId: g.id }); else { M.goalDone('hugo', g.id); fail(); } }   // three tries, then it lets that goal go
   else if (c.id === 'visitor') { const p = floorNear(pointer.cx + scrollX, pointer.cy + scrollY); if (p) goTo(p.f, p.x, { auto: 1 }); else fail(); }
-  else if (c.id === 'rest' && st.mode !== 'sit' && st.floor && inView() && clear(st.x, st.floor.y, SIT_H + 4)) { st.mode = 'sit'; st.idleUntil = t + c.minT; if (env.night || n.energy < 0.3) st.pendGest = { name: 'nap', dur: c.minT }; }
+  else if (c.id === 'rest' && st.mode !== 'sit' && st.floor && inView() && st.z === 0 && clear(st.x, st.floor.y, SIT_H + 4)) { st.mode = 'sit'; st.idleUntil = t + c.minT; if (env.night || n.energy < 0.3) st.pendGest = { name: 'nap', dur: c.minT }; }
 }
 function relStep(f) {
   const R = window.REL; if (!R || t < (st.relAt || 0) || st.dead || st.dazed || st.mode === 'crawl' || (st.crawlK || 0) > 0.05) return;   // no standing up under a low ceiling for the bird
@@ -984,11 +986,12 @@ function step(dt) {
     swingLimbs(dt, (st.vx - lastVx) / dt, (st.vy - lastVy) / dt + G, 0.7); lastVx = st.vx; lastVy = st.vy;
     st.tilt += ((st.vx * 0.0005) - st.tilt) * Math.min(1, dt * 4);
     let f = st.dropIn && st.dropF ? null : landingBelow(st.x, py - 1, !st.hop && !st.pounce);   // dropping in from above the screen: only the ledge he aimed for
-    if (f && f.screen && st.z === 0) { let s = null; for (const q of seams) if (q.section && q.y > py && q.y <= f.y && onFloor(q, st.x) && (!s || q.y < s.y)) s = q;   // nothing in view to land on: the section's floor, behind the page, before the screen's edge
-      if (s) { f = s; st.z = -1; st.backUntil = t + 6 + Math.random() * 8; } }
     if (st.dropF && (!f || f.y > st.dropF.y)) f = st.dropF;   // the ledge he chose to step down to catches him
     st.landF = f;   // where his shadow falls while he is up
     if (f && st.y >= f.y && st.vy > 0) { if (f === st.dropF) st.x = Math.max(f.x1 + HALF_W, Math.min(f.x2 - HALF_W, st.x)); st.dropF = null; st.dropIn = false; st.y = f.y; st.floor = f; st.air = false; st.squash = Math.max(0.4, Math.min(1, st.vy / 600)); st.vy = 0; st.vx = 0; st.land = 0.23; st.hop = false; st.mode = 'walk'; st.tilt = 0;   // land: a squash (x1.3, y0.7) recovering in ~0.23 s (Celeste's 1.75/s)
+      if (f.screen && !clear(st.x, f.y, CFG.size + 4)) for (let k = 1; k < 40; k++) { let x = null;   // caught at the screen's edge over words: the nearest word-free spot along it
+        for (const s of [1, -1]) { const q = st.x + s * k * 20; if (q > scrollX + HALF_W && q < scrollX + innerWidth - HALF_W && clear(q, f.y, CFG.size + 4)) { x = q; break; } }
+        if (x != null) { goTo(f, x, { auto: 1 }); break; } }
       if (st.pounce) { window.REL?.ev('hugo', 'pounceLand', 'dove', 0, { x: st.x, y: st.y }); st.pounce = null; relEnd('ok'); st.mode = 'idle'; st.idleUntil = t + 0.8; }
       else if (gest && gest.rel) st.mode = 'idle';
       if ((st.shaken || 0) > 0.35) { window.REL?.ev('hugo', 'fell', null, Math.min(0.8, st.shaken), { x: st.x, y: st.y }); poke('landed hard'); }
@@ -1020,13 +1023,14 @@ function step(dt) {
   if (st.mode === 'lane') {   // mid-hop between lanes: nothing else happens until he lands in the new one
     const H = st.hopL, u = Math.min(1, (t - H.t0) / H.dur), e = u * u * (3 - 2 * u);
     st.zs = H.from + (H.to - H.from) * e; st.hopY = Math.sin(Math.PI * u) * CFG.size * 0.16;
-    if (u >= 1) { st.z = H.to; st.zs = H.to; st.hopY = 0; st.hopL = null; st.mode = 'walk'; st.land = 0.12; st.backUntil = t + 8 + Math.random() * 12;
+    if (u >= 1) { st.z = H.to; st.zs = H.to; st.hopY = 0; st.hopL = null; st.mode = 'walk'; st.land = 0.12; st.backUntil = t + (st.peek ? 2 + Math.random() * 2 : 4 + Math.random() * 2);   // behind: a transit (<= 6 s) or a peek (<= 4 s)
+      if (H.to === 0 && st.peek) { st.peek = false; st.peekAt = t + 20 + Math.random() * 10; }
       if (!(st.route && st.route.length && nextLeg()) && !st.goal) { st.mode = 'idle'; st.idleUntil = t + 0.6; } }
     return;
   }
   // in the back lane: out again once its time is up or the section's w closes the lane (where he fits on the content)
   if (st.z !== 0 && !(st.route && st.route.length) && (t > (st.backUntil || 0) || !st.lanes.includes(st.z)) && st.mode !== 'prep' && st.mode !== 'crawl' && (st.sitK || 0) < 0.04 && !st.relBusy) {
-    if (!laneHop(0) && !st.goal && (st.backTry || 0) < t) { st.backTry = t + 3; backOut(f); }
+    if (!laneHop(0) && !st.goal && (st.backTry || 0) < t) { st.backTry = t + 3; if (!backOut(f) && !st.goal && t > (st.backUntil || 0) + 3) { st.z = 0; st.peek = false; st.floor = null; st.air = true; st.vx = 0; st.vy = 0; st.mode = 'walk'; poke('dropped back out onto the page'); return; } }
   }
   if (st.mode !== 'prep') relStep(f);
   if (st.dazed && st.mode === 'walk') { st.mode = 'idle'; st.idleUntil = t + 0.5; }   // seeing stars: he stands where he is
@@ -1049,6 +1053,7 @@ function step(dt) {
           if (g.rel) { relArrive(f); return; }
           if (g.food) { st.mode = 'idle'; st.idleUntil = t + 0.4; return; }   // the next beat leans in for the bite
           const M = window.MORTAL; if (M) { if (g.goalId) M.goalDone('hugo', g.goalId); if (g.auto || g.toView) M.done('hugo'); }
+          if (st.z !== 0) { if (!laneHop(0)) { st.mode = 'idle'; st.idleUntil = t + 0.5; } return; }   // behind the page is no place to dwell: out where he fits
           const n = window.REL ? window.REL.needs('hugo') : { energy: 1 };   // there he sits if he is tired (or it is night), else stands a while and looks (a trip ends in a dwell)
           if (inView() && clear(st.x, f.y, SIT_H + 4) && (n.energy < 0.6 || (M && M.env.night))) { st.mode = 'sit'; st.idleUntil = t + 10 + Math.random() * 20; }
           else { st.mode = 'idle'; st.idleUntil = t + 8 + Math.random() * 12; }
@@ -1083,7 +1088,7 @@ function step(dt) {
     if (past) {   // a ledge (or the side of the screen): stand at the edge a moment and look down (Shimeji, Celeste's teeter), then step off onto the ledge below or turn back
       if (!(st.edgeAt > 0)) { st.edgeAt = t + 0.3 + Math.random() * 0.3; st.mode = 'idle'; st.idleUntil = st.edgeAt; st.amt = 0; if (inView()) gest = { name: 'peer', t0: t, dur: 1, side: st.dir, amp: 1, f: 1 }; return; }
       st.edgeAt = 0;
-      if (dropTo(nx, f.y)) { st.air = true; st.hop = true; st.vx = st.dir * 20; st.vy = -160; st.x = nx; return; }   // nearly straight down, onto the ledge he looked at, not past it
+      if (dropTo(nx, f.y)) { st.air = true; st.hop = true; st.vx = st.dir * 20; st.vy = -160; st.x = nx; fallBehind(nx, f.y, st.dropF.y); return; }   // nearly straight down, onto the ledge he looked at, not past it (behind a picture in the way)
       if (st.goal && st.goal.toView && st.y < scrollY && dropIn()) return;   // left above the view with no ledge he can step down to: he drops in from the top edge
       if (st.goal) giveUp('no way down');   // nothing to step down to: that place is not reachable from here (no pacing to the edge and back)
       st.dir = -st.dir; st.mode = 'idle'; st.idleUntil = t + 0.8 + Math.random() * 1.5; return;
