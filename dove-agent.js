@@ -265,6 +265,8 @@ window.SCION_BOOT = R => {
   // ---------- the environment: everything it can stand on ----------
   // A surface is a live anchor: an element's top edge, or one line of text (a Range's client rect).
   const surfRect = s => s.range ? s.range.getClientRects()[s.line] : s.el.getBoundingClientRect();
+  // the perch height at x on a surface (page y): on a text line the top of the letter under its feet (the highest within 8 px either side), else the line's ink top
+  const perchY = (s, r, px) => { let y = null; if (s.runs) for (const u of s.runs) if (u.x2 > px - (r.left + scrollX) - 8 && u.x1 < px - (r.left + scrollX) + 8 && (y === null || u.top < y)) y = u.top; return r.top + scrollY + (y ?? s.ink ?? 0); };
   let surfaces = [], ink = [], surfAt = 0;   // ink: every piece of visible text, for the never-cover rule
   function scanSurfaces() {
     const out = [], inkOut = [], vh = innerHeight, near = r => r.bottom > -vh && r.top < vh * 2 && r.width > 50;
@@ -294,8 +296,8 @@ window.SCION_BOOT = R => {
       // a perch only on what carries Hugo too (depth.js support: the name, h1/h2, 28px+ type), never a body-text line; ink: the glyph tops sit below the line's rect top
       const D = window.DEPTH, kind = e.closest('h1,h2,h3,h4') ? 'heading' : 'text';
       if (D ? !D.support({ text: true, heading: !!e.closest('h1,h2'), fontSize: parseFloat(getComputedStyle(e).fontSize) }) : kind !== 'heading') continue;
-      const ink = D ? D.inkInset(e, n.textContent) : 0;
-      [...range.getClientRects()].forEach((r, line) => { if (r.width > 40) out.push({ range, line, el: e, kind, clip, ink,
+      const ink = D ? D.inkInset(e, n.textContent) : 0, runsL = D && D.inkRuns ? D.inkRuns(e, n) : null;   // runs: the line's per-character ink tops (depth.js inkRuns), so it perches on the letter under its feet, never floating over the lowercase
+      [...range.getClientRects()].forEach((r, line) => { if (r.width > 40) out.push({ range, line, el: e, kind, clip, ink, runs: runsL && runsL[line] || null,
         abs: { l: r.left + scrollX, t: r.top + scrollY, r: r.right + scrollX, b: r.bottom + scrollY } }); });
     }
     surfaces = out; ink = inkOut; surfAt = performance.now();
@@ -337,11 +339,10 @@ window.SCION_BOOT = R => {
     const top = scrollY + 50, bottom = scrollY + innerHeight - 20;
     for (const s of surfaces) {
       const r = surfRect(s); if (!r) continue;
-      const sy = r.top + scrollY + (s.ink || 0); if (sy < top + CFG.size * 2 || sy > bottom) continue;  // room above for the bird (its own height, so a phone screen has perches too)
       // only the stretch you can see: inside the screen, and inside its carousel's box (a card swiped off screen is not a perch)
       const c = s.clip, lo = Math.max(r.left + scrollX + 24, scrollX + 16, c ? c.l + 16 : -1e9), hi = Math.min(r.right + scrollX - 24, scrollX + innerWidth - 16, c ? c.r - 16 : 1e9);
-      if (hi < lo || (c && (sy < c.t || sy > c.b))) continue;
-      const fx = clamp(x, lo, hi);
+      if (hi < lo) continue;
+      const fx = clamp(x, lo, hi), sy = perchY(s, r, fx); if (sy < top + CFG.size * 2 || sy > bottom || (c && (sy < c.t || sy > c.b))) continue;  // room above for the bird (its own height, so a phone screen has perches too)
       const d = Math.hypot(fx - x, (sy - y) * 1.3) + (s === avoid ? 400 : 0) + (s.kind === 'text' ? 0 : 20) + (fresh ? 0 : stale(s) * 260);
       // The cover test (it scans every line of text) runs only for a spot that would win.
       if (d < bd && !covers(fx, sy, s)) { bd = d; best = { s, dx: fx - (r.left + scrollX), x: fx, y: sy }; }
@@ -383,7 +384,7 @@ window.SCION_BOOT = R => {
       const hh = h.headH || 150, sh = sp.s.where === 'shoulder', y = h.y - (sh ? hh * 0.78 : hh - 4), x = h.x + (sh ? (h.dir || 1) * 14 : 0);
       return { x, y, r: { left: x - 20 - scrollX, right: x + 20 - scrollX, width: 40, top: y - scrollY } };
     }
-    const r = surfRect(sp.s); return r ? { x: r.left + scrollX + sp.dx, y: r.top + scrollY + (sp.s.ink || 0), r } : null;
+    const r = surfRect(sp.s); return r ? { x: r.left + scrollX + sp.dx, y: perchY(sp.s, r, r.left + scrollX + sp.dx), r } : null;
   };
   const headingOf = s => {
     if (s.kind === 'hugo') return '';

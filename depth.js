@@ -167,9 +167,35 @@
     const m = inkCtx.measureText(text), px = Math.max(0, (m.fontBoundingBoxAscent || 0) - (m.actualBoundingBoxAscent || 0));
     inkMemo.set(k, { px, loaded }); return px;
   }
+  // ---------------------------------------------------------------- per-character heightmap of a text node
+  // One ink top per line is the cap line: over lowercase he floats. inkRuns walks the node character by character: each character's
+  // own Range rect gives its advance (kerning, letter-spacing and the line's offset included), canvas measureText its ink top;
+  // neighbours whose tops agree within 2 px merge into a run, a space is a gap. Result: per client rect of the node (same index as
+  // range.getClientRects()), runs [{x1, x2, top}] relative to that rect's left and top. Memo per node + font + text + element
+  // width (a rewrap); measured again once the web fonts land.
+  const runMemo = new WeakMap();
+  function inkRuns(el, node) {
+    if (!DOM || !el || !node || node.nodeType !== 3) return null;
+    const cs = getComputedStyle(el), font = `${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`, loaded = !document.fonts || document.fonts.status === 'loaded';
+    const text = node.textContent, key = font + '|' + text + '|' + Math.round(el.getBoundingClientRect().width), m0 = runMemo.get(node);
+    if (m0 && m0.key === key && (m0.loaded || !loaded)) return m0.out;
+    inkCtx = inkCtx || document.createElement('canvas').getContext('2d'); inkCtx.font = font;
+    const asc = inkCtx.measureText('HIkl').fontBoundingBoxAscent || 0, range = node.ownerDocument.createRange();
+    range.selectNodeContents(node); const all = [...range.getClientRects()], lines = []; let L = null, run = null;
+    for (let i = 0; i < text.length; i++) {
+      range.setStart(node, i); range.setEnd(node, i + 1); const r = range.getClientRects()[0]; if (!r || !r.width) continue;
+      if (!L || Math.abs(r.top - L.top) > 2) { lines.push(L = { top: r.top, left: r.left, runs: [] }); run = null; }
+      if (/\s/.test(text[i])) { run = null; continue; }
+      const top = Math.max(0, asc - (inkCtx.measureText(text[i]).actualBoundingBoxAscent || 0)), x1 = r.left - L.left, x2 = r.right - L.left;
+      if (run && Math.abs(run.top - top) < 2 && x1 <= run.x2 + 1) { run.x2 = x2; run.top = Math.min(run.top, top); } else L.runs.push(run = { x1, x2, top });
+    }
+    const out = [];
+    for (const l of lines) { const i = all.findIndex(r => Math.abs(r.top - l.top) < 2 && r.left - 1 <= l.left && r.right + 1 >= l.left); if (i >= 0) out[i] = l.runs.map(u => ({ x1: u.x1 + l.left - all[i].left, x2: u.x2 + l.left - all[i].left, top: u.top })); }
+    runMemo.set(node, { key, loaded, out }); return out;
+  }
 
   // ---------------------------------------------------------------- the shared scene (page coords), measured, never per frame
-  const D = { clipOf, SCALE, scaleOf, W_RANGE, phase, lanesFor, sectionAt, merge, occluders, support, inkInset, buildGraph, astar,
+  const D = { clipOf, SCALE, scaleOf, W_RANGE, phase, lanesFor, sectionAt, merge, occluders, support, inkInset, inkRuns, buildGraph, astar,
     sections: [], scene: { cards: [], text: [], floors: [], seams: [], at: 0 },
     // Hugo's scan publishes what it measured; the dove reads the same cards and text instead of measuring its own each frame
     publish(s) { D.scene = { cards: s.cards, text: merge(s.text), floors: s.floors, seams: s.seams, at: Date.now() }; },
