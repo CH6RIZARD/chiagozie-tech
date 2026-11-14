@@ -75,6 +75,10 @@
       for (let i = 0; i <= n; i++) node(f, f.x1 + half + (f.x2 - f.x1 - 2 * half) * i / n, z);
     }
     for (const [f, x, z] of o.seed || []) if (f.x2 - f.x1 >= 2 * half + 4) node(f, x, z);   // where he stands and where he is going
+    // the ends of a card transit (below): lane 0 and -1 nodes just before and just past each card, on the floors that pass it
+    const H = o.h || 150;
+    for (const c of o.cards || []) for (const [f, seam] of plat) if (!seam && f.y > c.t - reach && f.y <= c.b + H && lanesAt(f.y).includes(-1))
+      for (const x of [c.l - half - 6, c.r + half + 6]) if (x - half >= f.x1 && x + half <= f.x2) { node(f, x, 0); node(f, x, -1); }
     // fall and jump links from each end and each sample point, in the same lane
     for (const a of [...nodes]) {
       for (const [f] of plat) {
@@ -111,27 +115,61 @@
       const blocked = o.clear && (!o.clear(a.x + 2 * half, a.y, 0) || !o.clear(a.x - 2 * half, a.y, 0));
       const c = blocked ? 12 : 45; link(a, b, c, 'depth'); link(b, a, c, 'depth');
     }
-    return { nodes, edges, node, byKey };
+    const g = { nodes, edges, node, byKey, transits: [] };
+    // Card transits (LittleBigPlanet): one authored edge from a lane-0 node just before a card's near edge to one just past its far
+    // edge, carried by the back-lane route between them (e.via) that passes behind the card with his body over it. A third of the price
+    // of that route, so the router takes it over any way around whenever both ends have standing room.
+    const back = e => g.nodes[e.to].z === -1;
+    for (const c of o.cards || []) {
+      const end = (lo, hi) => nodes.filter(n => n.z === 0 && !n.seam && n.x >= lo && n.x <= hi && (!o.clear || o.clear(n.x, n.y, 0)) && byKey.has(`-1:f${floors.indexOf(n.f)}:${n.x}`))
+        .sort((p, q) => Math.abs(p.y - c.b) - Math.abs(q.y - c.b)).slice(0, 3);
+      for (const a of end(c.l - 3 * half, c.l - half)) for (const b of end(c.r + half, c.r + 3 * half)) {
+        const a1 = byKey.get(`-1:f${floors.indexOf(a.f)}:${a.x}`), b1 = byKey.get(`-1:f${floors.indexOf(b.f)}:${b.x}`);
+        const p = astar(g, a1, n => n === b1, n => Math.abs(n.x - b1.x), back); if (!p) continue;
+        const behind = p.some((n, i) => i && n.y === p[i - 1].y && n.y > c.t + 20 && n.y < c.b + H && Math.min(n.x, p[i - 1].x) < c.r && Math.max(n.x, p[i - 1].x) > c.l);   // a walk across the card with his body over it
+        if (!behind) continue;
+        edges.get(a.id).push({ to: b.id, c: p.cost * 0.35, kind: 'transit', via: p }); edges.get(b.id).push({ to: a.id, c: p.cost * 0.35, kind: 'transit', via: [...p].reverse() });
+        g.transits.push({ a, b, card: c });
+      }
+    }
+    return g;
   }
   // A* over the graph: from a node to the first node goal(n) accepts. h = straight distance scaled under the cheapest edge rate.
-  function astar(g, from, goal, h = () => 0) {
+  // ok(e): edges it may use (default all). path.edges: the edges walked, in order (a transit edge carries its back-lane route in .via).
+  function astar(g, from, goal, h = () => 0, ok = () => true) {
     const open = [from.id], cost = new Map([[from.id, 0]]), prev = new Map(), est = new Map([[from.id, h(from)]]), done = new Set();
     while (open.length) {
       let bi = 0; for (let i = 1; i < open.length; i++) if (est.get(open[i]) < est.get(open[bi])) bi = i;
       const id = open.splice(bi, 1)[0]; if (done.has(id)) continue; done.add(id);
       const n = g.nodes[id];
-      if (goal(n)) { const path = [n]; for (let p = id; prev.has(p);) { p = prev.get(p).id; path.unshift(g.nodes[p]); }
-        path.cost = cost.get(id); path.kinds = path.slice(1).map((m, i) => g.edges.get(path[i].id).find(e => e.to === m.id).kind); return path; }
+      if (goal(n)) { const path = [n], es = []; for (let p = id; prev.has(p);) { const { n: q, e } = prev.get(p); p = q.id; path.unshift(q); es.unshift(e); }
+        path.cost = cost.get(id); path.edges = es; path.kinds = es.map(e => e.kind); return path; }
       for (const e of g.edges.get(id)) {
+        if (!ok(e)) continue;
         const c = cost.get(id) + e.c; if (c >= (cost.get(e.to) ?? Infinity)) continue;
-        cost.set(e.to, c); prev.set(e.to, n); est.set(e.to, c + h(g.nodes[e.to])); open.push(e.to);
+        cost.set(e.to, c); prev.set(e.to, { n, e }); est.set(e.to, c + h(g.nodes[e.to])); open.push(e.to);
       }
     }
     return null;
   }
 
+  // ---------------------------------------------------------------- ink top of a text line
+  // A text line's client rect is its font's content area (ascent + descent above and below the baseline); the glyph tops sit
+  // fontAscent - glyphAscent below its top. Hugo's feet and the dove's perch go there, never on the empty strip above the letters.
+  // Memo per font and sample; measured again once the web fonts have landed (a fallback font's metrics are not the real ones).
+  const inkMemo = new Map(); let inkCtx = null;
+  function inkInset(el, sample) {
+    if (!DOM || !el) return 0;
+    const cs = getComputedStyle(el), font = `${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`, loaded = !document.fonts || document.fonts.status === 'loaded';
+    const text = (sample || 'HIkl').replace(/\s+/g, '').slice(0, 24) || 'HIkl', k = font + '|' + text, m0 = inkMemo.get(k);
+    if (m0 && (m0.loaded || !loaded)) return m0.px;
+    inkCtx = inkCtx || document.createElement('canvas').getContext('2d'); inkCtx.font = font;
+    const m = inkCtx.measureText(text), px = Math.max(0, (m.fontBoundingBoxAscent || 0) - (m.actualBoundingBoxAscent || 0));
+    inkMemo.set(k, { px, loaded }); return px;
+  }
+
   // ---------------------------------------------------------------- the shared scene (page coords), measured, never per frame
-  const D = { clipOf, SCALE, scaleOf, W_RANGE, phase, lanesFor, sectionAt, merge, occluders, support, buildGraph, astar,
+  const D = { clipOf, SCALE, scaleOf, W_RANGE, phase, lanesFor, sectionAt, merge, occluders, support, inkInset, buildGraph, astar,
     sections: [], scene: { cards: [], text: [], floors: [], seams: [], at: 0 },
     // Hugo's scan publishes what it measured; the dove reads the same cards and text instead of measuring its own each frame
     publish(s) { D.scene = { cards: s.cards, text: merge(s.text), floors: s.floors, seams: s.seams, at: Date.now() }; },

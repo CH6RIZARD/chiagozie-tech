@@ -291,8 +291,11 @@ window.SCION_BOOT = R => {
         if (rr > l) inkOut.push({ l, t: r.top + scrollY, r: rr, b: r.bottom + scrollY });   // text scrolled out of its carousel is not ink
       }
       if (!near(e.getBoundingClientRect())) continue;
-      const kind = e.closest('h1,h2,h3,h4') ? 'heading' : 'text';
-      [...range.getClientRects()].forEach((r, line) => { if (r.width > 40) out.push({ range, line, el: e, kind, clip,
+      // a perch only on what carries Hugo too (depth.js support: the name, h1/h2, 28px+ type), never a body-text line; ink: the glyph tops sit below the line's rect top
+      const D = window.DEPTH, kind = e.closest('h1,h2,h3,h4') ? 'heading' : 'text';
+      if (D ? !D.support({ text: true, heading: !!e.closest('h1,h2'), fontSize: parseFloat(getComputedStyle(e).fontSize) }) : kind !== 'heading') continue;
+      const ink = D ? D.inkInset(e, n.textContent) : 0;
+      [...range.getClientRects()].forEach((r, line) => { if (r.width > 40) out.push({ range, line, el: e, kind, clip, ink,
         abs: { l: r.left + scrollX, t: r.top + scrollY, r: r.right + scrollX, b: r.bottom + scrollY } }); });
     }
     surfaces = out; ink = inkOut; surfAt = performance.now();
@@ -323,7 +326,7 @@ window.SCION_BOOT = R => {
   document.addEventListener('scroll', e => { if (e.target !== document && performance.now() - surfAt > 300) surfAt = 0; }, { capture: true, passive: true });
 
   // It never stands where its body would cover words: the space above its feet must be free of text.
-  const covers = (x, y) => ink.some(q => q.b > y - CFG.size && q.t < y - 4 && q.r > x - 30 && q.l < x + 30);
+  const covers = (x, y) => ink.some(q => q.b > y - CFG.size && q.t < y - 4 && q.b < y + 4 && q.r > x - 30 && q.l < x + 30);   // words above the perch within its height; not the line it perches on (the perch sits at the glyph tops, inside that line's rect)
   // Best place to land near (x, y) in page coords; foot x is clamped onto the surface.
   // Where it has perched recently: a perch it just used is less inviting than one it has not tried (no groove-wearing).
   const perchedAt = new Map();
@@ -334,7 +337,7 @@ window.SCION_BOOT = R => {
     const top = scrollY + 50, bottom = scrollY + innerHeight - 20;
     for (const s of surfaces) {
       const r = surfRect(s); if (!r) continue;
-      const sy = r.top + scrollY; if (sy < top + CFG.size * 2 || sy > bottom) continue;  // room above for the bird (its own height, so a phone screen has perches too)
+      const sy = r.top + scrollY + (s.ink || 0); if (sy < top + CFG.size * 2 || sy > bottom) continue;  // room above for the bird (its own height, so a phone screen has perches too)
       // only the stretch you can see: inside the screen, and inside its carousel's box (a card swiped off screen is not a perch)
       const c = s.clip, lo = Math.max(r.left + scrollX + 24, scrollX + 16, c ? c.l + 16 : -1e9), hi = Math.min(r.right + scrollX - 24, scrollX + innerWidth - 16, c ? c.r - 16 : 1e9);
       if (hi < lo || (c && (sy < c.t || sy > c.b))) continue;
@@ -380,7 +383,7 @@ window.SCION_BOOT = R => {
       const hh = h.headH || 150, sh = sp.s.where === 'shoulder', y = h.y - (sh ? hh * 0.78 : hh - 4), x = h.x + (sh ? (h.dir || 1) * 14 : 0);
       return { x, y, r: { left: x - 20 - scrollX, right: x + 20 - scrollX, width: 40, top: y - scrollY } };
     }
-    const r = surfRect(sp.s); return r ? { x: r.left + scrollX + sp.dx, y: r.top + scrollY, r } : null;
+    const r = surfRect(sp.s); return r ? { x: r.left + scrollX + sp.dx, y: r.top + scrollY + (sp.s.ink || 0), r } : null;
   };
   const headingOf = s => {
     if (s.kind === 'hugo') return '';
