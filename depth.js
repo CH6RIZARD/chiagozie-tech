@@ -173,7 +173,10 @@
   // neighbours whose tops agree within 2 px merge into a run, a space is a gap. Result: per client rect of the node (same index as
   // range.getClientRects()), runs [{x1, x2, top}] relative to that rect's left and top. Memo per node + font + text + element
   // width (a rewrap); measured again once the web fonts land.
-  const runMemo = new WeakMap();
+  let runMemo = new WeakMap();
+  // document.fonts.status reads 'loaded' before a web font is even requested, so an early scan can memo the fallback font's tops;
+  // when the real fonts land, forget every measurement and make the agents rescan (their resize handlers mark the scene dirty).
+  if (DOM && document.fonts && document.fonts.addEventListener) document.fonts.addEventListener('loadingdone', () => { inkMemo.clear(); runMemo = new WeakMap(); window.dispatchEvent(new Event('resize')); });
   function inkRuns(el, node) {
     if (!DOM || !el || !node || node.nodeType !== 3) return null;
     const cs = getComputedStyle(el), font = `${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`, loaded = !document.fonts || document.fonts.status === 'loaded';
