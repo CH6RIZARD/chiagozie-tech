@@ -227,9 +227,13 @@
       if (!u && DOM && /^(chiagozie\.tech|www\.chiagozie\.tech|ch6rizard\.github\.io|localhost|127\.0\.0\.1)$/.test(location.hostname)) u = BELIEF_API; } catch (e) { u = ''; }
     return /^https:\/\/[\w.-]+(\/[\w./-]*)?$/.test(u) ? u.replace(/\/$/, '') : ''; })();
   const SRV = { api: API, up: !!API, fails: 0 };
+  // No network while the visitor scrolls (owner 2026-11-15: scroll-up stutter): a request waits until the page has been still 400 ms.
+  let scrollAt = -1e9; if (DOM && G.addEventListener) G.addEventListener('scroll', () => { scrollAt = Date.now(); }, { passive: true, capture: true });
+  const calm = async () => { while (Date.now() - scrollAt < 400) await new Promise(r => setTimeout(r, 250)); };
   async function api(path, body) {   // a JSON call to the belief service; three failures in a visit and it is not asked again
     if (!SRV.up || typeof fetch !== 'function') return null;
     try {
+      await calm();
       const r = await fetch(API + path, { method: body ? 'POST' : 'GET', credentials: 'omit', referrerPolicy: 'no-referrer', mode: 'cors', keepalive: !!body,
         headers: body ? { 'content-type': 'application/json' } : undefined, body: body ? JSON.stringify(body) : undefined, signal: AbortSignal.timeout ? AbortSignal.timeout(5000) : undefined });
       if (!r.ok) throw new Error('status ' + r.status);
@@ -256,6 +260,7 @@
     const c = cget(key); if (c !== undefined) return c;
     if (!ALLOW.test(url) || B.net >= NET.max || typeof fetch !== 'function') return null;
     B.net++; NET.log.push({ who: B.who, host: url.split('/')[2], at: Date.now() });
+    await calm();
     const r = await fetch(url, { credentials: 'omit', referrerPolicy: 'no-referrer', mode: 'cors', signal: AbortSignal.timeout ? AbortSignal.timeout(8000) : undefined });
     if (!r.ok) { if (r.status === 404) cset(key, null, ttl); return null; }
     const v = shape(await r.json()); cset(key, v, ttl); return v;

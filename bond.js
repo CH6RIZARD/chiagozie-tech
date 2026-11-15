@@ -410,7 +410,7 @@
       case 'approach': o.goal = near(d.x, U(40, 80)); if (S.I.hugo.inspect > S.I.hugo.approach) { o.spdK = .7; o.look = -side * .5; } break;
       case 'inspect': o.goal = { x: h.x + side * Math.max(0, Math.min(40, c.dist - 90)), y: h.y }; o.gesture = G_(rnd() < .5 ? 'curious' : 'peer', 2.5, c.aro, side); break;
       case 'follow': o.goal = near(d.x, 80); o.until = S.t + 6; break;
-      case 'offer': if (far) o.goal = near(d.x, 70); o.gesture = G_('greet', 3, c.aro, side); o.drop = 'crumb'; break;
+      case 'offer': if (far) o.goal = near(d.x, 70); o.gesture = G_('feed', 7, c.aro, side); o.drop = 'crumb'; break;   // the page body feeds from the seed bag (hugo3d 'feed': take, shake, watch, stow); o.drop is the toy sim's
       case 'groom': o.goal = near(d.x, 35); o.gesture = G_('pat', 3, c.aro, side); break;
       case 'pickup': o.goal = near(d.x, 24); o.gesture = G_('scoop', 1.6, c.aro, side); break;
       case 'sit_with': o.goal = near(d.x, U(55, 90)); o.sit = true; o.look = side * .4; break;
@@ -1155,7 +1155,7 @@
   function stage() {
     const h = getH(), d = getD(); if (!h || !d) return;
     const hun = S.drv.dove.hunger / .6, lon = Math.max(S.drv.hugo.lonely, S.drv.dove.lonely) / .5, bor = Math.max(S.drv.hugo.boredom, S.drv.dove.boredom) / .6;
-    if (hun >= lon && hun >= bor) { if (!S.crumb && (h.floor || SIM)) ev(null, 'drop', 'dove', 0, { x: h.x + U(-60, 60), y: h.y }); if (S.crumb) S.crumb.by = 'stage'; }
+    if (hun >= lon && hun >= bor) { if (!S.crumb && SIM) ev(null, 'drop', 'dove', 0, { x: h.x + U(-60, 60), y: h.y }); else if (!S.crumb && h.floor) S.staged = { who: 'hugo', ex: 'offer', exp: S.t + 20 }; if (S.crumb) S.crumb.by = 'stage'; }   // on the page food never appears from nowhere: Hugo feeds it from his bag
     else if (lon >= bor) S.staged = { who: 'hugo', ex: 'sit_with', exp: S.t + 20 };
     else S.staged = { who: 'dove', ex: 'approach', gap: U(160, 220), exp: S.t + 20 };
   }

@@ -17,7 +17,7 @@ const CFG = window.SCION_CONFIG = Object.assign({
 const canvas = document.createElement('canvas');
 canvas.id = 'scion-gl'; canvas.setAttribute('aria-hidden', 'true');
 // A small canvas in page coordinates that travels with the bird, so scrolling never leaves it a frame behind the page.
-const BOX = 300;
+const BOX = CFG.size < 20 ? 160 : 300;   // the phone's 16 px dove: 160 px still clears its widest wingbeat 5x over, at a third of the pixels to draw and composite every frame
 Object.assign(canvas.style, { position: 'absolute', left: 0, top: 0, width: BOX + 'px', height: BOX + 'px', pointerEvents: 'none', zIndex: 9999, willChange: 'transform' });
 // Both agents draw inside one page-sized layer that clips them, so a canvas near the bottom never makes the page taller
 // (it did: the page grew, the floor at the bottom moved down, and he kept falling).
@@ -97,8 +97,6 @@ function frame(now) {
   requestAnimationFrame(frame);
   const dt = Math.min((now - last) / 1000, 0.05); last = now;
   if (!st.visible) { if (shown) { canvas.style.visibility = 'hidden'; shown = false; } return; }
-  if (!shown) canvas.style.visibility = '';
-  shown = true;
   // Poses flow into each other (wings unfold on takeoff, fold on landing) instead of swapping frames.
   const want = st.mode === 'perch' ? st.row : st.glide ? 'glide' : 'flap';
   let sum = 0;
@@ -120,6 +118,8 @@ function frame(now) {
 
   const W = pageW, sy = st.y - scrollY;
   const ox = Math.max(0, Math.min(W - BOX, Math.round(st.x - scrollX - BOX / 2))), oy = Math.round(sy - 20 - BOX / 2);
+  if (oy > innerHeight || oy + BOX < 0) { if (shown) { canvas.style.visibility = 'hidden'; shown = false; } return; }   // off screen: no draw, no compositing
+  if (!shown) { canvas.style.visibility = ''; shown = true; }
   camera.setViewOffset(innerWidth, innerHeight, ox, oy, BOX, BOX);
   canvas.style.transform = `translate3d(${ox + scrollX}px,${oy + scrollY}px,0)`;
   occlude(st.clip || []);   // behind cards: st.clip lists the cards (viewport rects) it is flying behind

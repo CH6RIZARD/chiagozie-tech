@@ -1,5 +1,5 @@
 // Hugo's backpack: a CC0 rucksack (Quaternius, poly.pizza/m/vF7TuXCPDH) on his back whose front lid is cut free and opens on its
-// hinge onto a real mouth. ?pack=leather swaps in the leather pack (realms/hugo/pack/CREDITS.txt); only the
+// hinge onto a real mouth. the leather pack is the default; ?pack=quaternius swaps in the rucksack (realms/hugo/pack/CREDITS.txt); only the
 // chosen one is fetched. Every pack file has the same nodes: pack, flap, hinge (extras.open), mouth, hole. He swings it off one shoulder, opens a pocket, pulls the book or the bird's seed bag into his hand, and puts it back.
 // Loaded by hugo3d.js after his first frame; boot() returns the per-frame pose hook it calls before the joint springs.
 import * as THREE from 'three';
@@ -27,16 +27,21 @@ function makeSeedBag() {   // a little burlap sack tied at the neck
 
 export async function boot({ model, B, rest, st, armMix, mix, springK, body, glb }) {
   const BODY = body(); if (!BODY || !B.chest || !B.handR) return null;
-  const pick = new URLSearchParams(location.search).get('pack'), file = pick === 'leather' ? 'leather' : 'pack';
+  const pick = new URLSearchParams(location.search).get('pack'), file = pick === 'quaternius' ? 'pack' : 'leather';
   const url = new URL(`realms/hugo/pack/${file}.meshopt.glb` + (/\.wasm$/.test(glb || '') ? '.wasm' : ''), document.baseURI).href;
   const gltf = await new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).loadAsync(url);
   let scene = model; while (scene.parent) scene = scene.parent;
   const pack = gltf.scene.getObjectByName('pack'), hinge = pack.getObjectByName('hinge'), mouth = pack.getObjectByName('mouth'), hole = pack.getObjectByName('hole'), lid = new THREE.Group(), OPEN = hinge.userData.open || -1.9;
   lid.position.copy(hinge.position); pack.add(lid); pack.updateMatrixWorld(true); lid.attach(pack.getObjectByName('flap'));   // re-pivot on the hinge (meshopt quantizing moves node origins)
-  pack.traverse(o => { if (o.isMesh) { if (!o.material.map) o.material = mat(o.material.color); else if (!o.material.userData.lit) { o.material.userData.lit = 1; o.material.envMapIntensity = 0.8; o.material.color.multiplyScalar(1.5); } o.material.side = THREE.DoubleSide; o.frustumCulled = false; } });   // a textured pack (leather) keeps its own PBR maps
+  const lidOf = o => { for (let q = o; q; q = q.parent) if (q === lid) return true; return false; };
+  pack.traverse(o => { if (o.isMesh) { if (!o.material.map) o.material = mat(o.material.color); else if (!o.material.userData.lit) { o.material.userData.lit = 1; o.material.envMapIntensity = 0.8; o.material.color.multiplyScalar(1.5); } o.frustumCulled = false; } });   // a textured pack (leather) keeps its own PBR maps
+  pack.traverse(o => { if (o.isMesh) { o.material = o.material.clone(); o.material.side = lidOf(o) ? THREE.DoubleSide : THREE.FrontSide; o.material.transparent = false; o.material.depthWrite = true; } });
+  // the model's own shoulder straps are rigid loops that cut through him: they come off, and straps built on his skin replace them
+  const strapMeshes = []; pack.traverse(o => { if (o.isMesh && /^(String2?|attac[lr])_low/.test(o.name)) strapMeshes.push(o); }); strapMeshes.forEach(o => o.parent.remove(o));
   const box = new THREE.Box3().setFromObject(pack, true);   // the closed pack in its own units (1 tall); box.min.z is the side against him
+  const STRAPS = /leather/.test(file);
   // the inside: dark under the lid, so the open pack reads as a hole, not as more canvas
-  if (hole) { const d = new THREE.Mesh(new THREE.CircleGeometry(0.5, 12), new THREE.MeshBasicMaterial({ color: 0x2a2520, side: THREE.DoubleSide })); d.scale.set(hole.scale.x, hole.scale.z, 1); d.rotation.x = -Math.PI / 2; d.position.copy(hole.position); pack.add(d); }
+  if (hole) { const d = new THREE.Mesh(new THREE.CircleGeometry(0.5, 12), new THREE.MeshBasicMaterial({ color: 0x2a2520, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 })); d.scale.set(hole.scale.x, hole.scale.z, 1); d.rotation.x = -Math.PI / 2; d.position.copy(hole.position).y += 0.012; pack.add(d); }
   const root = new THREE.Group(), swing = new THREE.Group();   // root: placed every frame in world space; swing: the follow-through, pivoted at the pack's top
   root.matrixAutoUpdate = false; swing.position.y = 1; pack.position.y = -1; swing.add(pack); root.add(swing); scene.add(root);
 
@@ -51,17 +56,27 @@ export async function boot({ model, B, rest, st, armMix, mix, springK, body, glb
   // His real surface: torso skin vertices (the ones the spine bones carry), sampled at rest; each frame their skinned positions
   // push the pack out until its near face clears them by 3.5 % of his height, whatever he is doing (leaning, sitting, climbing).
   const skins = []; model.traverse(o => { if (o.isSkinnedMesh) skins.push(o); });
-  const samples = [], up0 = BODY.up.clone(), hipsM = mp(B.hips), headM = mp(B.head); let hMin = 1e9, hMax = -1e9;
+  const torsoV = [], samples = [], up0 = BODY.up.clone(), hipsM = mp(B.hips), headM = mp(B.head); let hMin = 1e9, hMax = -1e9;
   for (const sk of skins) { const sw = sk.geometry.attributes.skinWeight, si = sk.geometry.attributes.skinIndex, bones = sk.skeleton.bones, n = sk.geometry.attributes.position.count, w = new THREE.Vector3();
     const toM = new THREE.Matrix4().multiplyMatrices(toModel, sk.matrixWorld), cand = [];
     for (let i = 0; i < n; i++) { sk.getVertexPosition(i, w).applyMatrix4(toM); const h = w.dot(up0); hMin = Math.min(hMin, h); hMax = Math.max(hMax, h);
       let best = 0, bi = 0; for (let k = 0; k < 4; k++) { const x = sw.getComponent(i, k); if (x > best) { best = x; bi = si.getComponent(i, k); } }
-      if (/spine(?!.?00[456])/i.test(bones[bi].name)) cand.push(i); }
+      if (/spine(?!.?00[456])/i.test(bones[bi].name)) { cand.push(i); torsoV.push([sk, i, w.clone()]); } }
     const stride = Math.max(1, Math.floor(cand.length / 96)); for (let k = 0; k < cand.length; k += stride) samples.push([sk, cand[k]]); }
   const CLEAR = 0.035 * (hMax - hMin) / H;   // clearance in pack units
   let capR = 0; { const ab = headM.clone().sub(hipsM), w = new THREE.Vector3();
     for (const [sk, i] of samples) { sk.getVertexPosition(i, w).applyMatrix4(new THREE.Matrix4().multiplyMatrices(toModel, sk.matrixWorld)); const t = Math.max(0, Math.min(1, w.clone().sub(hipsM).dot(ab) / ab.lengthSq())); capR = Math.max(capR, w.distanceTo(hipsM.clone().addScaledVector(ab, t))); } }
+  // Straps: each runs pack top -> back of the shoulder -> over it -> down his chest -> under the arm -> pack bottom. The body points are
+  // his own torso vertices (nearest to where a strap lies), so the strap is skinned to his spine bones and moves with his skin.
+  const nearest = q => { let b = null, d = 1e9; for (const v of torsoV) { const e = v[2].distanceToSquared(q); if (e < d) { d = e; b = v; } } return [b[0], b[1]]; };
+  const STRAP = STRAPS ? ['L', 'R'].map(k => { const sd = k === 'L' ? 1 : -1, side = BODY.left.clone().multiplyScalar(sd), a = mp(k === 'L' ? B.armL : B.armR), t = torso, U = BODY.up, Fw = BODY.fwd;
+    const at = (o, s2, u2, f2) => nearest(a.clone().addScaledVector(side, s2 * t).addScaledVector(U, u2 * t).addScaledVector(Fw, f2 * t));
+    return { k, sd, body: [at(0, -0.1, 0.06, -0.14), at(0, -0.1, 0.12, 0), at(0, -0.06, -0.12, 0.16), at(0, 0.0, -0.36, 0.12), at(0, 0.02, -0.46, -0.08)] }; }) : [];
   save.forEach((q, i) => q && [B.hips, B.chest][i].quaternion.copy(q)); model.updateMatrixWorld(true);
+  const strapMat = new THREE.MeshStandardMaterial({ color: 0x4a3222, roughness: 0.75, metalness: 0, envMapIntensity: 0.6, side: THREE.DoubleSide }), SN = 30;
+  for (const S of STRAP) { const g = new THREE.BufferGeometry(), idx = []; g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(SN * 2 * 3), 3));
+    for (let i = 0; i < SN - 1; i++) { const a = i * 2; idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); } g.setIndex(idx);
+    S.mesh = new THREE.Mesh(g, strapMat); S.mesh.frustumCulled = false; scene.add(S.mesh); }
 
   const items = { book: makeBook(), food: makeSeedBag() }, ITEM_H = { book: 0.5, food: 0.46 };
   for (const it of Object.values(items)) { it.visible = false; it.traverse(o => { if (o.isMesh) o.frustumCulled = false; }); scene.add(it); }
@@ -100,18 +115,41 @@ export async function boot({ model, B, rest, st, armMix, mix, springK, body, glb
     if (u > 0 && u < 1) {   // mid-swing: keep the pack's centre outside his body capsule (hips to head, radius from his skin)
       const ms = model.getWorldScale(_v).x; B.hips.getWorldPosition(_x); B.head.getWorldPosition(_y); const ab = _y.sub(_x), t = Math.max(0, Math.min(1, _g.copy(_p).sub(_x).dot(ab) / ab.lengthSq()));
       const c = _x.addScaledVector(ab, t), d = _g.copy(_p).sub(c), need = capR * ms + packW * (box.max.z - box.min.z) * 0.5, len = d.length();
-      if (len < need) _p.addScaledVector(len > 1e-3 ? d.divideScalar(len) : _g.set(0, 0, 1), need - len);
+      if (len < need) _p.addScaledVector(len > 1e-3 ? d.divideScalar(len) : _g.set(0, 0, 1), (need - len) * Math.sin(Math.PI * u));
     }
     root.matrix.compose(_p, _q, _s); root.matrixWorldNeedsUpdate = true;
   }
-  const _w = new THREE.Vector3(), _inv = new THREE.Matrix4();
+  const _w = new THREE.Vector3(), _inv = new THREE.Matrix4(), _a = new THREE.Vector3(), _b = new THREE.Vector3(), _c = new THREE.Vector3(), _n = new THREE.Vector3(), _t = new THREE.Vector3();
+  const curve = new THREE.CatmullRomCurve3(Array.from({ length: 7 }, () => new THREE.Vector3()), false, 'centripetal'), rad = new Float32Array(7), spts = Array.from({ length: SN }, () => new THREE.Vector3());
+  function axisPoint(p, out) { B.hips.getWorldPosition(_a); B.head.getWorldPosition(_b); _b.sub(_a); const t = Math.max(0, Math.min(1, _c.copy(p).sub(_a).dot(_b) / _b.lengthSq())); return out.copy(_a).addScaledVector(_b, t); }
+  function buildStraps(swingU, offW) {   // offW: the arm-side strap slipped off; swingU: the pack hangs round the front from the other shoulder
+    if (!STRAP.length) return;
+    const ms = model.getWorldScale(_v).x, th = torso * ms * 0.02, wid = torso * ms * 0.07;
+    for (const S of STRAP) {
+      const off = S.k === hand ? offW : 0, stay = S.k === hand ? 0 : swingU, P = curve.points;
+      const xs = -S.sd * 0.2, z0 = box.min.z + 0.02;
+      P[0].set(xs, 0.8, z0).applyMatrix4(pack.matrixWorld); P[6].set(xs * 1.2, 0.1, z0).applyMatrix4(pack.matrixWorld);
+      S.body.forEach(([sk, i], j) => { const p = P[j + 1]; sk.getVertexPosition(i, p).applyMatrix4(sk.matrixWorld); axisPoint(p, _n); rad[j + 1] = p.distanceTo(_n) + th; _n.subVectors(p, _n).normalize(); p.addScaledVector(_n, th); });
+      // round the front: past the shoulder the strap runs straight down to the pack, hanging; slipped off: a loose loop off the pack
+      for (let j = 3; j <= 5; j++) { _a.lerpVectors(P[2], P[6], (j - 2) / 4); P[j].lerp(_a, sm(stay * 1.4)); }
+      if (off > 0) { _t.set(0, 0, -1).transformDirection(pack.matrixWorld); for (let j = 1; j <= 5; j++) { _a.lerpVectors(P[0], P[6], j / 6).addScaledVector(_t, packW * 0.12 * Math.sin(Math.PI * j / 6)); P[j].lerp(_a, off); } }
+      const hug = (1 - off) * (1 - sm(stay * 1.4));   // how much of the strap is still wrapped on him
+      for (let i = 0; i < SN; i++) { const u = i / (SN - 1), p = curve.getPoint(u, spts[i]);
+        const f = u * 6, j = Math.min(5, Math.floor(f)), r = j >= 1 && j <= 4 ? rad[j] + (rad[j + 1] - rad[j]) * (f - j) : 0;
+        if (r > 0 && hug > 0) { axisPoint(p, _n); const d = p.distanceTo(_n); if (d < r) p.lerp(_n.addScaledVector(_c.subVectors(p, _n).normalize(), r), hug); } }   // wrap round him, never a chord through him
+      const pos = S.mesh.geometry.attributes.position;
+      for (let i = 0; i < SN; i++) { const p = spts[i]; _t.subVectors(spts[Math.min(SN - 1, i + 1)], spts[Math.max(0, i - 1)]).normalize(); axisPoint(p, _n); _n.subVectors(p, _n).normalize(); _b.crossVectors(_t, _n).normalize().multiplyScalar(wid / 2);
+        pos.setXYZ(i * 2, p.x + _b.x, p.y + _b.y, p.z + _b.z); pos.setXYZ(i * 2 + 1, p.x - _b.x, p.y - _b.y, p.z - _b.z); }
+      pos.needsUpdate = true; S.mesh.geometry.computeVertexNormals(); S.mesh.geometry.computeBoundingSphere();
+    }
+  }
   function clearBody(dt) {   // push the pack out along its own +z until its near face clears his skin (measured every frame)
     root.updateMatrixWorld(true); _inv.copy(pack.matrixWorld).invert(); let pen = -1e9;
     for (const [sk, i] of samples) { sk.getVertexPosition(i, _w).applyMatrix4(sk.matrixWorld).applyMatrix4(_inv);
       if (_w.x < box.min.x - CLEAR || _w.x > box.max.x + CLEAR || _w.y < box.min.y || _w.y > box.max.y) continue;
       pen = Math.max(pen, box.min.z + CLEAR - _w.z); }
     maxPen = pen; const need = Math.max(0, pen);   // measured on the unpushed placement: the push this frame needs
-    pushS = need >= pushS ? need : Math.max(need, pushS - dt * 0.4);   // out at once, back in slowly (no jitter)
+    pushS = need >= pushS ? need : pushS + (need - pushS) * Math.min(1, dt * 10);   // out at once, back in over ~0.2 s (no jitter, no pack left hanging off his back)
     if (pushS > 0) { _g.set(0, 0, 1).transformDirection(pack.matrixWorld); _m.makeTranslation(_g.x * pushS * packW, _g.y * pushS * packW, _g.z * pushS * packW); root.matrix.premultiply(_m); root.matrixWorldNeedsUpdate = true; root.updateMatrixWorld(true); }
   }
   function placeItem(name, t) {   // t: 0 at the pocket mouth .. 1 in his hand
@@ -152,12 +190,13 @@ export async function boot({ model, B, rest, st, armMix, mix, springK, body, glb
       if (reading > 0.01) { armMix('L', [0.12, -0.75, 0.55], [-0.4, 0.45, 0.85], reading); armMix('R', [0.12, -0.75, 0.55], [-0.4, 0.45, 0.85], reading); mix(B.head, 0.32, 0, 0, reading); }
       if (reading < 0.99) armMix(hand, [0.15, -0.8, 0.4], [0.1, shakeT > 0 ? 0.35 + Math.sin(shakeT * 28) * 0.45 : 0.1, 1], wHold * (1 - reading));
     }
-    F = { dt, swingU, flapU, itemU, itemName };
+    const offW = job ? Math.min(sm(u / 0.12), 1 - sm((u - 0.88) / 0.12)) : 0;   // the arm slips out first and back in last
+    F = { dt, swingU, flapU, itemU, itemName, offW };
   };
   // Placement runs inside render(), after his bones have their final matrices for this frame (the pose hook runs before them).
   const prevBR = scene.onBeforeRender;
   scene.onBeforeRender = (...a) => { prevBR.apply(scene, a); if (F) placeAll(F); };
-  function placeAll({ dt, swingU, flapU, itemU, itemName }) {
+  function placeAll({ dt, swingU, flapU, itemU, itemName, offW }) {
     // the pack: follow-through on a spring driven by the chest's acceleration (it lags a start, swings past a stop)
     B.chest.getWorldPosition(_p); _p.x += scrollX; _p.y -= scrollY;   // page space: a scroll is not a jolt
     if (lastC) { const v = _v.copy(_p).sub(lastC).divideScalar(Math.max(dt, 1e-3)), acc = _x.copy(v).sub(lastV).divideScalar(Math.max(dt, 1e-3)); lastV.copy(v);
@@ -166,7 +205,7 @@ export async function boot({ model, B, rest, st, armMix, mix, springK, body, glb
     lastC = (lastC || new THREE.Vector3()).copy(_p);
     if (sway[0] > 0) { sway[0] = 0; sway[1] = Math.min(0, sway[1]); }   // the follow-through swings out from his back, never in past it
     swing.rotation.x = sway[0];
-    place(swingU); clearBody(dt);
+    place(swingU); clearBody(dt); buildStraps(swingU, offW);
     lid.rotation.x = OPEN * flapU;
     for (const n of Object.keys(items)) if (n !== itemName) items[n].visible = false;
     if (itemName) placeItem(itemName, itemU);

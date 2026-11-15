@@ -437,13 +437,18 @@ function gesture(dt, sitting, still) {
   const w = Math.min(1, u * 4, (1 - u) * 4), A = gest.amp, sd = gest.side, ph = (t - gest.t0) * (gest.f || 1);
   const S1 = sd > 0 ? 'R' : 'L';   // the arm on the gesture's side
   const T1 = (sd > 0) === (st.dir > 0) ? 'R' : 'L';   // the arm toward that side, whichever way he faces
-  // an offer: halfway through crouching to it, a crumb appears by his hand
   if (gest.food && !gest.bit && u > (gest.name === 'eat' ? 0.4 : 0.6)) { gest.bit = 1; foodBite(gest.food); }   // the bite lands on the apex of the move
-  if (gest.rel && st.relOrder && st.relOrder.drop && !st.relOrder.packed && window.__pack && !window.__pack.busy) { st.relOrder.packed = 1; window.__pack.take('food').catch(() => {}); }   // the seed bag out of the backpack
-  if (gest.rel && st.relOrder && st.relOrder.drop && !st.relOrder.dropped && u > 0.5 && st.floor) { if (st.relOrder.packed) Promise.resolve(window.__pack.stow()).catch(() => {}); st.relOrder.dropped = true; const food = { x: st.hand ? st.hand.x : st.x + sd * 24, y: st.y, hy: st.hand ? st.hand.y : st.y - CFG.size * 0.4, vx: sd * 30, t: performance.now() }; window.REL.ev('hugo', 'drop', 'dove', 0, food);
-    window.__hugoFood = food; dispatchEvent(new CustomEvent('hugo:food', { detail: food })); }   // the crumb, page coordinates: anything (the bird) can find it
+  // Feeding is one causal chain (owner 2026-11-15): the seed bag out of the backpack, face the bird, shake it (backpack.js drops the real
+  // food into REL from the bag's mouth), watch, the bag back in. The chain sets the pace, not a timer. No bag, no feeding: never an empty hand.
+  if (gest.name === 'feed') { const P = window.__pack, g = gest; if (dv) st.dir = Math.sign(dv.x - st.x) || st.dir;
+    if (!g.ph && !(P && P.busy)) { g.ph = 'take'; g.start ??= t; if (!P) g.ph = 'fail'; else P.take('food').then(ok => { if (g.ph === 'take') g.ph = ok && P.holding === 'food' ? 'shake' : t - g.start < 4 ? '' : 'fail'; }, () => { g.ph = 'fail'; }); }   // the pack mid-move (a stow, a book): wait for it, then take; 4 s of no bag and the feeding is off
+    if (g.ph === 'shake' && !P.busy && P.shake()) { g.ph = 'watch'; g.dropAt = t; }
+    else if (g.ph === 'watch' && t - g.dropAt > 2.2) { g.ph = 'stow'; Promise.resolve(P.stow()).then(() => { g.ph = 'done'; }); }
+    if (g.ph === 'fail' || t - (g.start ??= t) > 14) { gest = null; gestAt = t + 1; if (st.relOrder && st.relOrder.id === g.rel) relEnd('interrupted'); return; }
+    g.t0 = g.ph === 'done' ? t - g.dur : t - g.dur * 0.5; }
   switch (gest.name) {
     case 'look': lookGoal = sd * 0.8 * Math.sin(ph * 1.3) * A; break;
+    case 'feed': { const d = window.__scion; lookGoal = d ? Math.max(-1, Math.min(1, (d.x - st.x) / 120)) : st.dir * 0.4; mix(B.head, gest.ph === 'watch' ? 0.25 : 0.12, 0, 0, w); break; }   // eyes on the bird; the bag arm is backpack.js's
     case 'hips': armMix('L', [0.75, -0.6, -0.2], [-0.85, -0.35, 0.15], w); armMix('R', [0.75, -0.6, -0.2], [-0.85, -0.35, 0.15], w); break;
     case 'scratch': armMix(S1, [0.55, 0.55, 0.35], [-0.55, 0.75 + Math.sin(ph * 14) * 0.08, -0.15], w); lookGoal = -sd * 0.3; mix(B.head, 0.12, 0, sd * 0.15, w); break;
     case 'cross': armMix('L', [0.3, -0.85, 0.42], [-0.95, 0.12, 0.3], w); armMix('R', [0.3, -0.85, 0.42], [-0.95, 0.2, 0.36], w); break;
@@ -540,7 +545,7 @@ function gesture(dt, sitting, still) {
 
 window.__hugo = st;   // read-only peek for debugging
 window.__hugoFloors = () => allFloors;   // the ledges he scans are the food's colliders too (bond.js skips support:false seams)
-if (/[?&]debug/.test(location.search)) window.__hugoDbg = { get floors() { return floors; }, get t() { return t; }, get gest() { return gest && gest.name; }, miss: why => missed(why), clear: (x, y, h) => clear(x, y, h), get ink() { return ink; }, transits: () => { const g = graph(); return g ? g.transits : null; }, route: () => transitRoute(), graph: () => graph(), go: () => { const r = transitRoute(); if (r) { st.goal = null; st.route = r; nextLeg(); } return !!r; }, get sq() { return st.sq || 0; }, bones: () => { const o = {}; for (const [k, b] of Object.entries({ head: skull, chest: B.chest, hips: B.hips })) { b.getWorldPosition(_hv); o[k] = [+(_hv.x + innerWidth / 2 + scrollX).toFixed(1), +(innerHeight / 2 - _hv.y + scrollY).toFixed(1)]; } return o; }, get lid() { return eyes[0] ? eyes[0].scale.y : 1; }, get shade() { return shadeCss; }, get att() { return att; }, get brace() { return st.brace || 0; }, get why() { return pokeWhy; }, get intent() { return window.MORTAL && window.MORTAL.why ? window.MORTAL.why('hugo') : null; }, know: () => (window.MORTAL && window.MORTAL.beliefs ? window.MORTAL.beliefs('hugo') : []), get beh() { return st.beh ? { id: st.beh.id, kind: st.beh.kind, b: st.beh.p.b } : null; },
+if (/[?&]debug/.test(location.search)) window.__hugoDbg = { get inner() { return thoughts; }, get gph() { return gest && gest.ph; }, feed: () => { if (st.air || st.held || st.mode === 'climb' || st.mode === 'sit' || (st.sitK || 0) > 0.001) return false; if (st.beh) behEnd(false); st.goal = null; st.route = null; st.amt = 0; st.mode = 'idle'; st.idleUntil = t + 9; gest = { name: 'feed', t0: t, dur: 7, side: st.dir, amp: 1, f: 1 }; return true; }, get floors() { return floors; }, get t() { return t; }, get gest() { return gest && gest.name; }, miss: why => missed(why), clear: (x, y, h) => clear(x, y, h), get ink() { return ink; }, transits: () => { const g = graph(); return g ? g.transits : null; }, route: () => transitRoute(), graph: () => graph(), go: () => { const r = transitRoute(); if (r) { st.goal = null; st.route = r; nextLeg(); } return !!r; }, get sq() { return st.sq || 0; }, bones: () => { const o = {}; for (const [k, b] of Object.entries({ head: skull, chest: B.chest, hips: B.hips })) { b.getWorldPosition(_hv); o[k] = [+(_hv.x + innerWidth / 2 + scrollX).toFixed(1), +(innerHeight / 2 - _hv.y + scrollY).toFixed(1)]; } return o; }, get lid() { return eyes[0] ? eyes[0].scale.y : 1; }, get shade() { return shadeCss; }, get att() { return att; }, get brace() { return st.brace || 0; }, get why() { return pokeWhy; }, get intent() { return window.MORTAL && window.MORTAL.why ? window.MORTAL.why('hugo') : null; }, know: () => (window.MORTAL && window.MORTAL.beliefs ? window.MORTAL.beliefs('hugo') : []), get beh() { return st.beh ? { id: st.beh.id, kind: st.beh.kind, b: st.beh.p.b } : null; },
   walk: dx => { const f = st.floor; if (!f) return false; st.goal = { f, x: Math.max(f.x1 + HALF_W, Math.min(f.x2 - HALF_W, st.x + dx)), until: t + 20 }; st.route = null; if (st.mode !== 'walk') { st.mode = 'walk'; restyle(); } return true; }, park: s => { st.goal = null; st.route = null; if (st.mode === 'walk') st.mode = 'idle'; st.idleUntil = t + s; }, hop: v => hopUp(v) };   // scripted beats for the harness
 st.dims = { THIGH, ARMLEN, SPINE, PITCH, CRAWL_H, size: CFG.size };
 // Hit area follows him; the canvas itself never takes the pointer.
@@ -706,7 +711,6 @@ window.__hugoAct = (act, target) => {
 };
 // The Mortal Agent Frame's life (bond.js): ENDED = the body goes limp where it is, the next BIRTH stands it up again.
 window.__hugoLife = alive => { if (!alive === !!st.dead) return; st.dead = !alive; st.deadAt = t; gest = null; if (st.dead) { relEnd('interrupted'); st.prep = null; } else st.idleUntil = t + 0.6; };
-// What he says aloud (the frame's "say", or its reply to the visitor). The bubble lives in the agent layer, so nobody stands on it.
 // Contact shadow (depth cue): his own element in the agents' layer, never the page. Touching his feet it reads as standing;
 // during a lane hop it stays on the floor and shrinks (lifted), and behind the content it slides up and back (receding).
 const shade = layer.appendChild(document.createElement('div')); let shadeCss = '';
@@ -722,9 +726,6 @@ function occlude(rects) {
   occPool.forEach((m, i) => { const q = rects[i]; m.visible = !!q; if (!q) return;
     m.position.set(((q.l + q.r) / 2 - scrollX - innerWidth / 2) * k, (innerHeight / 2 - ((q.t + q.b) / 2 - scrollY)) * k, ZP); m.scale.set((q.r - q.l) * k, (q.b - q.t) * k, 1); });
 }
-const say = layer.appendChild(document.createElement('div')); let sayTimer;
-Object.assign(say.style, { position: 'absolute', left: 0, top: 0, maxWidth: '240px', padding: '9px 12px', font: '13px/1.4 system-ui,sans-serif', color: '#15171C', background: '#fff',
-  border: '1px solid #D8D8D2', borderRadius: '14px', boxShadow: '0 8px 24px rgba(21,23,28,.16)', opacity: 0, transition: 'opacity .35s' });   // the dove's bubble (#scion-say), same look
 // His life on the public page is the Mortal Agent kernel's being (mortal-kernel.js): a hidden lifespan of years and one
 // energy pool. ENDED: he goes limp where he is; a while later a new being stands up in this body, nothing carried over.
 // On localhost the frame (bond.js frameTick) owns his life instead, and the kernel stands aside.
@@ -739,7 +740,8 @@ if (window.MORTAL) {
 }
 const lifeLine = () => { const M = window.MORTAL, R = window.REL; if (!M || !R || !M.alive('hugo')) return '';   // desktop hover readout; never the lifespan
   const n = R.needs('hugo'), p = M.pressure('hugo'); return `\nδt ${M.being('hugo').dt.toFixed(0)}s · energy ${n.energy.toFixed(2)} · hunger ${n.hunger.toFixed(2)}\npressure ${p.toFixed(2)}${p >= M.ACT ? ' (acting)' : ''} · ${M.mood('hugo', { ...n, stress: st.stress || 0 })}`; };
-window.__hugoSay = text => { text = String(text || '').replace(/\s+/g, ' ').trim().slice(0, 220); if (!text) return; window.REL?.spend('hugo', 0.002); say.textContent = text; say.style.opacity = 1; clearTimeout(sayTimer); sayTimer = setTimeout(() => { say.style.opacity = 0; }, 2500 + text.length * 50); };
+window.__hugoSay = text => { text = String(text || '').replace(/\s+/g, ' ').trim().slice(0, 220); if (text) thoughts.push({ t: +t.toFixed(1), text }); if (thoughts.length > 40) thoughts.shift(); };   // what he would say stays inside him (owner 2026-11-15: no bubble on the page); __hugoDbg.thoughts reads it
+const thoughts = [];
 // Something happened to him: his mind (the frame, or hugo-mind, via bond.js) thinks again right away instead of at its next beat.
 let pokes = 0, pokeWhy = '';
 function poke(why) { pokes++; pokeWhy = why; }
@@ -1255,7 +1257,7 @@ function born() {   // first appearance (patch 5, item 0): an entrance, never a 
   return true;
 }
 function refloor(f) {   // the page reflows; keep the floor glued to its element
-  if (f.screen) { const E = scrollY + innerHeight - 30; if (E < f.y && f.y - CFG.size < scrollY + innerHeight) f.y = E; return f.y - E > -40; }   // the screen's bottom edge: it carries him up while any of him shows (never out through the bottom), stays put under him once the view has left him below (a climb or the lost case brings him back), and lets go when the view moves on down (he falls to the next ledge)
+  if (f.screen) { const E = scrollY + innerHeight - 30; return f.y - E > -40; }   // the screen's bottom edge where he stepped onto it: it never carries him up (a scroll up or the iOS toolbar coming back leaves him below the view; the come-back climb brings him in), and lets go when the view moves on down (he falls to the next ledge)
   if (f.fr && (!simple() || !f.fr.getClientRects().length)) return false;   // a ledge in the Read less frame is gone once the frame is
   if (f.ground) { f.y = groundY(); f.x2 = document.documentElement.scrollWidth; fit(f); return true; }
   if (!f.el.isConnected || !f.el.getClientRects().length) return false;   // its element was hidden (a view switch): the floor is gone, he falls
@@ -1298,8 +1300,8 @@ function stepBody(dt) {
     st.tilt += ((st.vx * 0.0005) - st.tilt) * Math.min(1, dt * 4);
     let f = landingBelow(st.x, py - 1, !st.hop && !st.pounce);
     if (st.dropF && (!f || f.y > st.dropF.y)) f = st.dropF;   // the ledge he chose to step down to catches him
-    const E = scrollY + innerHeight - 30;   // the screen's bottom edge is a hard floor while any of him shows: never out through the bottom, whatever he was doing in the air
-    if (py - CFG.size < scrollY + innerHeight && st.y > E && (!f || f.y > E)) f = { y: E, x1: 0, x2: pageW, el: document.body, screen: true, support: true };
+    const E = scrollY + innerHeight - 30;   // the screen's bottom edge catches him only when he falls through it from above: a view that moved up past him never snaps him up onto it
+    if (py <= E && st.y > E && (!f || f.y > E)) f = { y: E, x1: 0, x2: pageW, el: document.body, screen: true, support: true };
     st.landF = f;   // where his shadow falls while he is up
     const ly = f ? footY(f, st.x) : 0;   // where his feet land: the letter tops under him on a text ledge
     if (f && st.y >= ly && st.vy > 0) { if (f === st.dropF) st.x = Math.max(f.x1 + HALF_W, Math.min(f.x2 - HALF_W, st.x)); st.dropF = null; st.y = footY(f, st.x); st.floor = f; st.air = false; st.squash = Math.max(0.4, Math.min(1, st.vy / 600)); st.sqAt = t; if (st.vy > 420) kickDust(st.x, st.y, 3 + Math.round(5 * Math.min(1, (st.vy - 420) / 600))); st.vy = 0; st.vx = 0; st.land = 0.23; st.hop = false; st.mode = 'walk'; st.tilt = 0;   // land: a squash (x1.3, y0.7) recovering in ~0.23 s (Celeste's 1.75/s)
@@ -1338,7 +1340,7 @@ function stepBody(dt) {
     else { let x = null; for (let k = 1; k < 40 && x == null; k++) for (const q of [st.x + k * 20, st.x - k * 20]) if (q > scrollX + HALF_W && q < scrollX + innerWidth - HALF_W && clear(q, f.y, CFG.size + 4)) { x = q; break; } if (x != null) st.x = x; }
     st.catchTry = 0;
   }
-  if (!f.ground && !f.screen && st.mode !== 'prep' && !st.enter && !room() && !(performance.now() - scanAt > 100 && (scan(), room()))) { poke('no room: ' + st.mode); st.air = true; st.vx = 0; st.vy = 0; st.floor = null; st.mode = 'walk'; return; }   // a stale scan (the hero settling a few px) is no reason to fall; look again first
+  if (!f.ground && !f.screen && st.mode !== 'prep' && !st.enter && !room() && performance.now() - scrolledAt > 250 && !(performance.now() - scanAt > 100 && (scan(), room()))) { poke('no room: ' + st.mode); st.air = true; st.vx = 0; st.vy = 0; st.floor = null; st.mode = 'walk'; return; }   // a stale scan (the hero settling a few px) is no reason to fall; look again first (mid-scroll: neither a fall nor a rescan until it stops)
   if ((st.markAt || 0) < t) { seenAt.set(cell(st.x, st.y), t); st.markAt = t + 1; }
   if (!st.anchor || Math.hypot(st.x - st.anchor.x, st.y - st.anchor.y) > 160) st.anchor = { x: st.x, y: st.y, t };
   if (st.mode === 'lane') {   // mid-hop between lanes: nothing else happens until he lands in the new one
@@ -1474,7 +1476,7 @@ function frame(now) {
   const dt = Math.min((now - last) / 1000, 0.25); last = now; t += dt;
   // not on every scroll frame, and not mid-scroll at all (a full-page layout read then stutters the scroll), unless very stale
   if (simple() !== st.simple) { st.simple = simple(); scan(); }   // Scroll / Read less flipped: his world changed under him, look now (not after the scroll settles)
-  else if ((now - scrolledAt > 250 && ((dirty && now - scanAt > 400) || now - scanAt > 2500)) || now - scanAt > 6000) scan();
+  else if (now - scrolledAt > 250 && ((dirty && now - scanAt > 400) || now - scanAt > 2500)) scan();   // never mid-scroll: once it stops
   if (barInk) { barInk.t = scrollY - 400; barInk.b = scrollY + barInk.h; }   // the nav's wall in viewport space, every frame
   if (inView()) { st.away = 0; st.awayT = t; } else st.away = t - (st.awayT ?? (st.awayT = t));   // the off-camera clock (seconds since any of him last showed) the come-back (1.5 s) and the lost case (4 s) wait on: time, not beats (a beat counter ran ahead whenever an order ended and the next beat came at once)
   if (!st.floor && !st.air && !st.held && st.mode !== 'climb') { if (st.bornOnce) { st.air = true; st.hop = false; st.vy = 0; } else if (!born()) { canvas.style.visibility = 'hidden'; return; } }   // born once; after that a lost floor is a fall from where he is (no relocation, no drop from the top), never a vanish
@@ -1606,9 +1608,9 @@ function frame(now) {
   // Render only the BOX around him: same camera, cropped with a view offset, and the canvas parked there in page coords.
   const W = pageW;
   const ox = Math.max(0, Math.min(W - BOX, Math.round(st.x - scrollX - BOX / 2))), oy = Math.round(vy - CFG.size * 0.5 - BOX / 2);
+  if (oy > innerHeight || oy + BOX < 0) { if (!canvas.style.visibility) canvas.style.visibility = 'hidden'; return; }   // off screen (a scroll left him below or above the view): no draw, no compositing
   camera.setViewOffset(innerWidth, innerHeight, ox, oy, BOX, BOX);
   canvas.style.transform = `translate3d(${ox + scrollX}px,${oy + scrollY}px,0)`; if (canvas.style.visibility) canvas.style.visibility = '';
-  if (say.style.opacity === '1') say.style.transform = `translate(${Math.max(scrollX + 8, Math.min(scrollX + W - 250, st.x - 30))}px,${Math.max(scrollY + 4, st.y - CFG.size - say.offsetHeight - 6)}px)`;   // over his head, kept on screen
   // Occlusion: behind the content (lane -1) the cards in front of him hide him, drawn as depth-only quads in his own renderer.
   // The page is not touched; only cards that overlap him count, and never text.
   { const behind = st.zs < -0.3, hh = (st.headH || CFG.size) * lsc, py = st.y - (st.hopY || 0) + st.par;
@@ -1654,4 +1656,4 @@ document.addEventListener('scroll', e => {
 new MutationObserver(ms => { if (ms.some(m => m.target !== hit && m.target !== hud && !(m.target.closest && m.target.closest(skipSel)))) dirty = true; }).observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class', 'open', 'style'] });
 requestAnimationFrame(frame);
 // The backpack (backpack.js, realms/hugo/pack): loaded after his first frame so it never delays him; it owns window.__pack.
-let packPose = null; requestAnimationFrame(() => setTimeout(() => import('./backpack.js?v=20261115p6').then(m => m.boot({ model, B, rest, st, armMix, mix, springK, body: () => BODY, glb: CFG.glb })).then(f => { packPose = f; }, e => console.warn('backpack', e)), 0));
+let packPose = null; requestAnimationFrame(() => setTimeout(() => import('./backpack.js?v=20261115p7').then(m => m.boot({ model, B, rest, st, armMix, mix, springK, body: () => BODY, glb: CFG.glb })).then(f => { packPose = f; }, e => console.warn('backpack', e)), 0));

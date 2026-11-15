@@ -61,10 +61,6 @@ window.SCION_BOOT = R => {
       border-radius:50%;background:radial-gradient(rgba(21,23,28,.28),transparent 70%)}
     .scion-burst{position:absolute;left:0;top:0;width:260px;height:260px;margin:-130px 0 0 -130px;z-index:9997;pointer-events:none;
       border-radius:50%;background:radial-gradient(circle,rgba(255,255,255,.95),rgba(32,56,199,.35) 40%,transparent 70%)}
-    #scion-say{position:absolute;left:0;top:0;z-index:10000;pointer-events:none;max-width:240px;padding:9px 12px;
-      font:13px/1.4 system-ui,sans-serif;color:#15171C;background:#fff;border:1px solid #D8D8D2;border-radius:14px;
-      box-shadow:0 8px 24px rgba(21,23,28,.16);opacity:0;transition:opacity .35s}
-    #scion-say.on{opacity:1}
     #scion-ask{position:absolute;left:0;top:0;z-index:10002;pointer-events:auto;width:230px;padding:8px 11px;font:13px/1.3 system-ui,sans-serif;color:#15171C;
       background:#fff;border:1px solid #2038C7;border-radius:12px;outline:none;box-shadow:0 8px 24px rgba(21,23,28,.16);display:none}
     ::highlight(scion){background-color:#E8EBFA;color:#2038C7}
@@ -80,9 +76,9 @@ window.SCION_BOOT = R => {
   document.head.append(css);
 
   const mk = (id, cls) => { const d = document.createElement('div'); if (id) d.id = id; if (cls) d.className = cls; return d; };
-  const el = mk('scion-dove'), shadow = mk('scion-shadow'), say = mk('scion-say'), hud = mk('scion-hud');
+  const el = mk('scion-dove'), shadow = mk('scion-shadow'), hud = mk('scion-hud');
   const ask = Object.assign(document.createElement('input'), { id: 'scion-ask', placeholder: 'Say something to SCION…', maxLength: 200 });
-  el.setAttribute('aria-hidden', 'true'); shadow.setAttribute('aria-hidden', 'true'); say.setAttribute('aria-live', 'polite');
+  el.setAttribute('aria-hidden', 'true'); shadow.setAttribute('aria-hidden', 'true');
   hud.title = 'SCION on the Mortal Agent Frame. Click to inspect.';
   hud.innerHTML = '<div><span class="pulse"></span><span class="id"></span></div><div class="bar"><i></i></div><div class="log"></div>';
   hud.onclick = () => hud.classList.toggle('min'); hud.classList.add('min');
@@ -90,7 +86,7 @@ window.SCION_BOOT = R => {
   // document taller (on WebKit it did: the page grew to 20 000 px). Created here first; dove3d/hugo3d reuse it.
   const layer = document.getElementById('agent-layer') || document.body.appendChild(Object.assign(document.createElement('div'), { id: 'agent-layer' }));
   Object.assign(layer.style, { position: 'absolute', left: 0, top: 0, right: 0, bottom: 0, overflow: 'clip', pointerEvents: 'none', zIndex: 9998 });
-  layer.append(shadow, el, say, ask); document.body.append(hud);
+  layer.append(shadow, el, ask); document.body.append(hud);
   const [hudId, hudBar, hudLog, pulse] = ['.id', '.bar i', '.log', '.pulse'].map(s => hud.querySelector(s));
 
   const pick = arr => arr[(Math.random() * arr.length) | 0];
@@ -105,15 +101,9 @@ window.SCION_BOOT = R => {
   const log = [];
   const emit = (type, msg = '') => { log.unshift(`${type.padEnd(9)}${msg}`); log.length = 3; hudLog.textContent = log.join('\n'); };
 
-  let sayTimer, typeTimer;
-  function speak(text, ms = 4200) {
-    if (!CFG.talk) return;
-    REL.spend('dove', 0.002);   // speech costs energy (runtime_state SPEECH_COST_EPSILON)
-    clearTimeout(sayTimer); clearInterval(typeTimer);
-    let i = 0; say.textContent = ''; say.classList.add('on');
-    typeTimer = setInterval(() => { say.textContent = text.slice(0, ++i); if (i >= text.length) clearInterval(typeTimer); }, 28);
-    sayTimer = setTimeout(() => say.classList.remove('on'), ms);
-  }
+  // What it would say stays inside it (owner 2026-11-15: no bubble on the page): its own log only (the HUD on localhost).
+  const said = [];
+  function speak(text) { said.push(text); if (said.length > 20) said.shift(); emit('THOUGHT', String(text).slice(0, 40)); }
   function burst(x, y) {
     const b = mk(null, 'scion-burst'); layer.append(b);
     b.animate([{ transform: `translate(${x}px,${y}px) scale(.1)`, opacity: 1 }, { transform: `translate(${x}px,${y}px) scale(1.6)`, opacity: 0 }],
@@ -327,14 +317,14 @@ window.SCION_BOOT = R => {
   // Scroll end (150 ms still): look again, and a flight whose perch went off screen (or that has none) picks one in view now,
   // so a fast scroll never leaves it hovering with nowhere to land.
   let scrollEndT = 0;
-  addEventListener('scroll', () => { if (performance.now() - surfAt > 600) surfAt = 0; clearTimeout(scrollEndT); scrollEndT = setTimeout(scrollEnd, 150); }, { passive: true });
+  addEventListener('scroll', () => { clearTimeout(scrollEndT); scrollEndT = setTimeout(scrollEnd, 150); }, { passive: true });
   function scrollEnd() {
     surfAt = 0;
     if (!a || a.held || a.target?.hand || a.target?.pass) return;
     // A screen or more away (the page flew past it): it comes in from the edge you scrolled past instead of crossing the page.
     const off = a.y < scrollY - 150 ? -1 : a.y > scrollY + innerHeight + 150 ? 1 : 0;
     if (off) { if (a.mode === 'perch') takeOff(null, 'scrolled out of view: back in'); a.y = off < 0 ? scrollY - 160 : scrollY + innerHeight + 160; a.x = clamp(a.x, scrollX + 60, scrollX + innerWidth - 60); a.vy = -off * 220; a.vx = 0; a.target = null; a.hiddenUntil = performance.now() + 700; }   // off-screen it is not drawn; it flies in from that edge
-    else if (a.mode === 'perch' && (a.y < scrollY + 40 || a.y > scrollY + innerHeight + 10)) takeOff(null, 'scrolled out of view: back in');   // just past the edge: back in now, not after the 1.2 s grace
+    else if (a.mode === 'perch' && (a.y - CFG.size < scrollY + navB() || a.y > scrollY + innerHeight + 10)) takeOff(null, 'scrolled out of view: back in');   // just past the edge: back in now, not after the 1.2 s grace
     const T = a.mode === 'fly' ? a.target : null; if (a.mode !== 'fly' || T?.follow) return;
     const p = T?.spot && spotPos(T.spot); if (p && p.y > scrollY + 60 && p.y < scrollY + innerHeight - 20) return;
     const sp = landingNear(a.x, a.y + 80) || landingNear(scrollX + innerWidth / 2, scrollY + innerHeight / 2); if (sp) a.target = { spot: sp };
@@ -413,7 +403,8 @@ window.SCION_BOOT = R => {
       const left = r.left + s.lx; return { x: left + scrollX + sp.dx, y, r: { left, right: left + s.w, width: s.w, top: y - scrollY } };
     }
     if (sp.s.kind === 'hugo') {   // riding Hugo: his head or shoulder is a perch that walks (gone when he jumps, climbs or is held)
-      const h = window.__hugo; if (!h || h.held || h.air || h.mode === 'climb') return null;
+      const h = window.__hugo; if (!h || h.held || h.air || h.mode === 'climb' || sp.gone) return null;
+      if (sp.hx != null && Math.hypot(h.x - sp.hx, h.y - sp.hy) > 120) { sp.gone = true; return null; } sp.hx = h.x; sp.hy = h.y;   // he was moved in one step (the come-back off camera): the perch is gone, it never rides along through a teleport
       const hh = h.headH || 150, sh = sp.s.where === 'shoulder', y = h.y - (sh ? hh * 0.78 : hh - 4), x = h.x + (sh ? (h.dir || 1) * 14 : 0);
       return { x, y, r: { left: x - 20 - scrollX, right: x + 20 - scrollX, width: 40, top: y - scrollY } };
     }
@@ -438,7 +429,6 @@ window.SCION_BOOT = R => {
     R.set({ mode: 'perch', x: fx, y: fy, z: 0, scale: ps, heading: heading(yaw, face), pitch: 0, roll, row, walkPh, breath, clip });
     el.style.transform = `translate(${fx - 32}px,${fy - CFG.size}px)`;
     shadow.style.transform = `translate(${fx}px,${fy}px) scale(${ps.toFixed(2)})`; shadow.style.opacity = clip ? 0 : 0.9;
-    placeBubble(fx, fy - CFG.size);
   }
   function drawFly(bx, by, z, view, face, flapPh, glide, pitch, roll, groundY) {
     const s = depthScale(z);
@@ -449,7 +439,6 @@ window.SCION_BOOT = R => {
     const gap = groundY - by + Math.max(z, 0) * 0.6;
     shadow.style.transform = `translate(${bx}px,${groundY}px) scale(${clamp(1 - gap / 320, 0.25, 1)})`;
     shadow.style.opacity = z < -4 && clip ? 0 : clamp(1 - gap / 280, 0, 0.75);
-    placeBubble(bx, by - 60 * s);
   }
   // WebGL cannot see the page: "behind a card" means the cards' rects become depth-only quads in its renderer (dove3d.js).
   // Only what is in front of its lane and overlaps its body (page coords, from the scene depth.js shares; no layout read here):
@@ -457,10 +446,6 @@ window.SCION_BOOT = R => {
   function behindCards(box) {
     const occ = window.DEPTH ? window.DEPTH.occluders(box, -1) : [];
     return occ.length ? occ.map(q => ({ left: q.l - scrollX, top: q.t - scrollY, right: q.r - scrollX, bottom: q.b - scrollY })) : '';   // viewport rects for dove3d
-  }
-  function placeBubble(x, top) {
-    const bx = clamp(x - 40, scrollX + 12, scrollX + innerWidth - 260), by = Math.max(scrollY + 12, top - 52);
-    say.style.transform = `translate(${bx}px,${by}px)`;
   }
 
   // ---------- the agent ----------
@@ -988,7 +973,7 @@ window.SCION_BOOT = R => {
     const sameLine = mouse && Math.abs(mouse.y - (a.y - 20)) < 55 && mouse.x > minX - 30 && mouse.x < maxX + 30;
 
     // It has its own agenda: the mind decides where to go. The body only keeps itself in view of the visitor.
-    if (a.y < scrollY + 40 || a.y > scrollY + innerHeight + 10) {
+    if (a.y - CFG.size < scrollY + navB() || a.y > scrollY + innerHeight + 10) {   // under the bar counts as out of view
       if ((a.offT += dt) > 1.2) {
         a.offT = 0;
         const sp = landingNear(clamp(a.x, scrollX + 80, scrollX + innerWidth - 80), scrollY + innerHeight * 0.45, a.spot);
