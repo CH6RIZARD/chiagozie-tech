@@ -601,27 +601,27 @@ window.SCION_BOOT = R => {
   const DOVE_REP = [
     { id: 'visit', cat: 'fly', dur: 6, move: 1, u: c => (c.fresh ? 0.35 + 0.65 * c.mo.c : 0) },
     { id: 'explore', cat: 'fly', dur: 5, move: 1, u: c => 0.25 + 0.5 * Math.min(1, c.perched / 25) },
-    { id: 'hide', cat: 'fly', dur: 6, move: 1, u: c => (c.back ? 0.15 + 0.5 * c.mo.c : 0) },
-    { id: 'hop_letter', cat: 'hop', dur: 2.5, move: 1, perch: 1, u: c => 0.3 + 0.2 * c.mo.c },
-    { id: 'hop_along', cat: 'hop', dur: 2.5, move: 1, perch: 1, u: c => (c.room ? 0.3 : 0) },
+    { id: 'hide', cat: 'fly', dur: 6, move: 1, words: ['~rain', '~snow', '~storm', '~cold', 'crevice', 'shelter'], u: c => (c.back ? 0.15 + 0.5 * c.mo.c : 0) },
+    { id: 'hop_letter', cat: 'hop', dur: 2.5, move: 1, perch: 1, words: ['ledge', 'cliff'], u: c => 0.3 + 0.2 * c.mo.c },
+    { id: 'hop_along', cat: 'hop', dur: 2.5, move: 1, perch: 1, words: ['ledge', 'cliff'], u: c => (c.room ? 0.3 : 0) },
     { id: 'glide_card', cat: 'glide', dur: 5, move: 1, u: c => (c.cardBelow ? 0.35 + 0.3 * c.mo.c : 0) },
-    { id: 'lap', cat: 'soar', dur: 7, move: 1, u: c => 0.2 + 0.4 * (c.n.energy > 0.5 ? 1 : 0) + 0.2 * c.mo.e },
+    { id: 'lap', cat: 'soar', dur: 7, move: 1, avoid: ['~rain', '~storm', '~snow'], u: c => 0.2 + 0.4 * (c.n.energy > 0.5 ? 1 : 0) + 0.2 * c.mo.e },
     { id: 'circle_cursor', cat: 'social', dur: 8, move: 1, u: c => (c.mouse && !c.wary ? 0.25 + 0.5 * c.mo.s : 0), on: ['cursor_slow'] },
     { id: 'approach_visitor', cat: 'social', dur: 5, move: 1, u: c => (c.mouse && !c.wary ? 0.2 + 0.5 * c.mo.s : 0), on: ['tap'] },
-    { id: 'startle', cat: 'flee', dur: 9, move: 1, u: c => (c.threat ? 0.9 : 0), on: ['tap_near', 'cursor_fast'] },
+    { id: 'startle', cat: 'flee', dur: 9, move: 1, words: ['predator', 'falcon', 'hawk'], u: c => (c.threat ? 0.9 : 0), on: ['tap_near', 'cursor_fast'] },
     { id: 'follow_hugo', cat: 'hugo', dur: 6, move: 1, u: c => (c.hugo && c.hugo.dist > 140 ? 0.25 + 0.45 * c.mo.s : 0), on: ['hugo_ready'] },
     { id: 'perch_hugo_head', cat: 'hugo', dur: 12, move: 1, u: c => (c.hugo && c.hugo.still && !rodeHugo ? 0.3 + 0.3 * c.mo.s : 0) },
     { id: 'watch_visitor', cat: 'look', dur: 3.5, perch: 1, u: c => (c.mouse ? 0.2 + 0.4 * (c.still > 4 ? 1 : 0) : 0), on: ['tap', 'scroll_stop'] },
     { id: 'look_around', cat: 'look', dur: 3, perch: 1, u: 0.3, on: ['scroll_stop', 'tab_back'] },
     { id: 'head_tilt', cat: 'look', dur: 1.8, perch: 1, u: c => 0.15 + 0.3 * (c.mouse ? 1 : 0), on: ['cursor_slow', 'hugo_near'] },
-    { id: 'head_bob', cat: 'fidget', dur: 1.6, perch: 1, u: 0.2, on: ['scroll_start'] },
-    { id: 'peck', cat: 'fidget', dur: 2, perch: 1, u: c => (c.onText ? 0.4 : 0) },
+    { id: 'head_bob', cat: 'fidget', dur: 1.6, perch: 1, words: ['bob'], u: 0.2, on: ['scroll_start'] },
+    { id: 'peck', cat: 'fidget', dur: 2, perch: 1, words: ['seed', 'grain', 'granivor', 'forag'], u: c => (c.onText ? 0.4 : 0) },
     { id: 'shake', cat: 'fidget', dur: 1.2, perch: 1, u: 0.2, on: ['tab_back'] },
     { id: 'ruffle', cat: 'fidget', dur: 2.5, perch: 1, u: c => 0.15 + 0.3 * c.fatigue },
-    { id: 'stretch_wing', cat: 'rest', dur: 2.2, perch: 1, u: c => 0.2 + 0.3 * c.fatigue, on: ['tab_back'] },
-    { id: 'preen', cat: 'rest', dur: 3, perch: 1, u: 0.3 },
-    { id: 'rest', cat: 'rest', dur: 7, perch: 1, u: c => 0.1 + 0.6 * c.fatigue + 0.3 * c.env.sleepy },
-    { id: 'sleep', cat: 'rest', dur: 12, perch: 1, u: c => (c.quiet ? 0.1 + 0.6 * c.fatigue + 0.5 * c.env.sleepy : 0) },
+    { id: 'stretch_wing', cat: 'rest', dur: 2.2, perch: 1, words: ['~sunny', '~warm', '~bask'], u: c => 0.2 + 0.3 * c.fatigue, on: ['tab_back'] },
+    { id: 'preen', cat: 'rest', dur: 3, perch: 1, words: ['preen', 'feather'], u: 0.3 },
+    { id: 'rest', cat: 'rest', dur: 7, perch: 1, words: ['~night', '~dusk', 'roost'], u: c => 0.1 + 0.6 * c.fatigue + 0.3 * c.env.sleepy },
+    { id: 'sleep', cat: 'rest', dur: 12, perch: 1, words: ['~night'], u: c => (c.quiet ? 0.1 + 0.6 * c.fatigue + 0.5 * c.env.sleepy : 0) },
   ].map(d => (d.perch ? { ...d, u: (c, e) => (c.flying ? 0 : typeof d.u === 'function' ? d.u(c, e) : d.u) } : d));   // perch moves are for a perched bird
   const DOVE_DUR = Object.fromEntries(DOVE_REP.map(d => [d.id, d.dur]));
   if (window.MORTAL && window.MORTAL.repertoire) window.MORTAL.ready.then(() => window.MORTAL.repertoire('dove', DOVE_REP));
@@ -641,7 +641,7 @@ window.SCION_BOOT = R => {
       back: !!window.DEPTH?.at(a.y).lanes.includes(-1), cardBelow: !!cardBelow(), hugo };
     const o = M.next('dove', ctx); if (!o) return null;
     if (gT && o.id === 'visit') M.goalDone('dove', g.id);
-    return { do: o.id, target: o.id === 'visit' ? fresh : undefined, why: o.reason, source: 'reflex', p: o.p, x: o.x, minT: o.p.before + (DOVE_DUR[o.id] || 3) * o.p.durK + o.p.after };
+    return { do: o.id, target: o.id === 'visit' ? fresh : undefined, why: o.reason, source: 'reflex', p: o.p, x: o.x, say: (o.belief && M.line('dove', o.belief)) || undefined, minT: o.p.before + (DOVE_DUR[o.id] || 3) * o.p.durK + o.p.after };
   }
 
   // Pecking: light up the word under the beak (CSS Custom Highlight, no DOM changes).

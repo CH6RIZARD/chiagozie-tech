@@ -1,0 +1,7 @@
+pack.meshopt.glb (and the .wasm copy, same bytes)
+  Source: "Backpack" by Quaternius, https://poly.pizza/m/vF7TuXCPDH
+  License: CC0 1.0 (public domain dedication); credit given anyway.
+  Changes: recoloured to a light matte palette, the front lid (with its tab, buckle and the strap over it) cut into a
+  hinged piece (node "flap", re-pivoted in backpack.js), the body's top cap under the lid removed so it opens onto a
+  mouth, scaled to 1 unit tall, meshopt-compressed (212 KB -> 20 KB).
+Book and seed bag: procedural meshes in backpack.js (no third-party assets).

@@ -7,9 +7,11 @@
 //   visits. Never shown. Death: the lifespan runs out, or energy hits 0. Rebirth = a new id, nothing carried over.
 // - Pressure exactly as motivation.py (curiosity .4, social isolation .3, existential anxiety .3; act at .45).
 // - Drives -> goals -> actions: scored choice with a commitment bonus, minimum action times and hysteresis.
-// - Idle curiosity: a few small public fetches per visit (the owner's GitHub activity, the visitor's sky), cached.
+// - Beliefs (patch 6): curiosity picks a lookup (its kind on Wikipedia, its sky on Open-Meteo, its maker's GitHub, the page's
+//   terms); the facts become beliefs with source, time, confidence and decay, and move the repertoire's scores through words.
 (() => {
   'use strict';
+  const BELIEF_API = 'https://agent-beliefs.daniel4chigs.workers.dev';   // the shared belief service (belief_api.md); the one place its URL lives
   const G = typeof window !== 'undefined' ? window : globalThis;
   const DOM = typeof document !== 'undefined';
   const store = k => { try { return G.localStorage ? G.localStorage.getItem(k) : null; } catch (e) { return null; } };
@@ -120,7 +122,8 @@
   const subs = { hugo: [], dove: [] };
   const fire = (who, type, x) => { for (const f of subs[who]) { try { f(type, x); } catch (e) { if (DEBUG) console.error(e); } } };
   function fresh(who, id, born, deathAt) {
-    return { who, id, born, deathAt, dt: 0, alive: true, external: false, mot: { ...newMot(), ...BORN }, act: null, visited: new Set(), lastUser: now(), progressAt: now() - STALL_AFTER * 1000, goals: [], ended: null };
+    return { who, id, born, deathAt, dt: 0, alive: true, external: false, mot: { ...newMot(), ...BORN }, act: null, visited: new Set(), lastUser: now(), progressAt: now() - STALL_AFTER * 1000, goals: [], ended: null,
+      know: loadKnow(who, id), kv: 0, mc: new Map(), net: 0, asked: new Set(), grow: [], lookAt: 0, studied: new Set(), looking: null, wonder: null, ageK: 0, ageBel: null, section: null };
   }
   function create(who) {
     const id = uuid(rng), born = Date.now(), deathAt = born + sampleLifespan(rng) * 1000;
@@ -141,12 +144,12 @@
   }
   function die(who, cause) {
     const B = beings[who]; if (!B || !B.alive) return;
-    B.alive = false; stash(KEY(who), null);   // death is final: no save, no reload
+    B.alive = false; stash(KEY(who), null); stash(BKEY(who), null);   // death is final: no save, no reload
     fire(who, 'ENDED', cause);
   }
   async function newBeing(who) {
     await ready;
-    const B = beings[who] = create(who); forget(who);
+    const B = beings[who] = create(who); forget(who); loadShared(who);
     fire(who, 'BIRTH', B.id);
     return B.id;
   }
@@ -168,7 +171,7 @@
     scan(); setTimeout(scan, 4000);
   }
 
-  // ---------------------------------------------------------------- environment and idle curiosity (NET_FETCH)
+  // ---------------------------------------------------------------- environment, beliefs and lookups (patch 6)
   const env = { hour: new Date().getHours(), night: false, isDay: null, weather: '', temp: null, sleepy: 0, self: null };
   function envUpdate() {
     env.hour = new Date().getHours();
@@ -176,47 +179,205 @@
     env.sleepy = (env.night ? .3 : 0) + (/rain|snow|storm/.test(env.weather) ? .1 : 0);
   }
   envUpdate();
-  const FETCH = { budget: 4, used: 0, busy: false, done: new Set(), nextAt: 8000 };
-  const get = async (url, key) => {
-    const c = sget('mortal.f.' + key); if (c) return c;
-    if (FETCH.used >= FETCH.budget) return null;
-    FETCH.used++;
-    const r = await fetch(url, { cache: 'force-cache', credentials: 'omit', referrerPolicy: 'no-referrer', signal: AbortSignal.timeout ? AbortSignal.timeout(6000) : undefined });
-    if (!r.ok) return null;
-    const j = await r.json(); sset('mortal.f.' + key, j); return j;
+  // Beliefs: what a being knows, built only from what it fetched or perceived. A belief is a sentence with its source, the time it
+  // was learned, a confidence and a half-life. Behaviours that name words (d.words / d.avoid) score up or down by the live
+  // confidence of a belief that mentions them, and the choice cites it: no rule says "rain -> shelter", the words do. Kept per
+  // being across visits (localStorage, keyed by its id): a new being knows nothing.
+  const BKEY = who => 'mortal.v1.know.' + who;
+  const words = s => String(s).toLowerCase().match(/[a-z][a-z0-9.+#'-]*/g) || [];
+  const confOf = (b, at = Date.now()) => b.c * Math.pow(.5, (at - b.at) / 1000 / b.hl);
+  function loadKnow(who, id) { let r = null; try { r = JSON.parse(store(BKEY(who))); } catch (e) { r = null; } return r && r.id === id && Array.isArray(r.list) ? r.list.filter(b => confOf(b) > .05) : []; }
+  const saveKnow = B => stash(BKEY(B.who), JSON.stringify({ id: B.id, list: B.know.map(({ w, ...b }) => b) }));
+  function believe(who, f, shared) {   // f: { key, text, line?, src (url), name (source), c, hl (s), v?, title?, from? }; shared: it came from the service
+    const B = beings[who]; if (!B || !f || !f.text) return null;
+    const b = { key: f.key, text: String(f.text).slice(0, 240), line: String(f.line || f.text).slice(0, 120), src: f.src, name: f.name, at: f.at || Date.now(), c: f.c ?? .8, hl: f.hl || 86400, v: f.v, title: f.title, from: f.from };
+    B.know = B.know.filter(x => x.key !== b.key && confOf(x) > .05); B.know.push(b); if (B.know.length > 80) B.know.shift();
+    B.kv++; saveKnow(B);
+    if (!shared && SHARE.has(f.kind)) api('/observe', { being: who, topic: f.topic || b.key, fact: b.text, source: b.name, url: b.src });   // what it read, for the next visit's beings
+    return b;
+  }
+  function match(who, d) {   // the strongest beliefs this behaviour's words are about (the word scan is cached per belief version)
+    const B = beings[who]; if (!B || !B.know.length || !(d.words || d.avoid)) return null;
+    let m = B.mc.get(d.id);
+    if (!m || m.kv !== B.kv) {
+      const sky = b => b.from === 'sky' || b.key === 'clock';   // a '~' word is about the weather or the hour: only the sky and the clock speak to it ("snow" in a bird's name is no snowfall)
+      const hit = stems => (stems ? B.know.filter(b => { const w = b.w || (b.w = words(b.text)); return stems.some(s => (s[0] === '~' ? sky(b) && w.some(x => x.startsWith(s.slice(1))) : w.some(x => x.startsWith(s)))); }) : []);
+      m = { kv: B.kv, pro: hit(d.words), con: hit(d.avoid) }; B.mc.set(d.id, m);
+    }
+    const best = l => { let o = null, oc = .05; for (const b of l) { const c = confOf(b); if (c > oc) { oc = c; o = b; } } return o && { b: o, c: oc }; };
+    return { pro: best(m.pro), con: best(m.con) };
+  }
+  const ago = at => { const s = Math.max(0, (Date.now() - at) / 1000); return s < 90 ? `${Math.round(s)} s ago` : s < 5400 ? `${Math.round(s / 60)} min ago` : s < 172800 ? `${Math.round(s / 3600)} h ago` : `${Math.round(s / 86400)} d ago`; };
+  const cite = b => `${b.text.length > 90 ? b.text.slice(0, 88) + '…' : b.text} (${b.name}, ${ago(b.at)})`;
+  const SAID = new Set();   // a line never repeats in a visit
+  function line(who, b) {   // at most one line per 45 s per being, and only the words of a belief it holds
+    const B = beings[who], s = b && b.line; if (!B || !s || SAID.has(s) || Date.now() - (B.saidAt || 0) < 45000) return null;
+    SAID.add(s); B.saidAt = Date.now(); return s;
+  }
+
+  // Lookups: curiosity about what it stands on or sees, its own kind and its sky. Keyless public GETs only, allowlisted hosts,
+  // credentials omitted, no referrer, a 6 s timeout, results cached in localStorage with TTLs; per being per visit at most 6 network
+  // fetches, at least 12 s apart, none in the first 5 s. Offline, blocked or rate-limited: it simply does not learn it today.
+  const ALLOW = /^https:\/\/(api\.github\.com|api\.open-meteo\.com|geocoding-api\.open-meteo\.com|en\.wikipedia\.org)\//;
+  // The shared belief service (a Cloudflare Worker, outreach/research_notes/.../belief_api.md): what every visit's beings learned, merged.
+  // Its base URL is BELIEF_API (top of file; <meta name="mortal-api"> or window.MORTAL_API override it); down or slow (3 s): the beings learn alone.
+  // Only what they read is sent (a topic, a fact, its source); never the visitor's clock, city or sky, nor anything about the visitor.
+  // Asked only from the origins its CORS admits (elsewhere every call would be a console error): the live site, its mirror, localhost.
+  const API = (() => { let u = G.MORTAL_API || ''; try { if (!u && DOM) { const m = document.querySelector('meta[name="mortal-api"]'); u = m ? m.content : ''; }
+      if (!u && DOM && /^(chiagozie\.tech|www\.chiagozie\.tech|ch6rizard\.github\.io|localhost|127\.0\.0\.1)$/.test(location.hostname)) u = BELIEF_API; } catch (e) { u = ''; }
+    return /^https:\/\/[\w.-]+(\/[\w./-]*)?$/.test(u) ? u.replace(/\/$/, '') : ''; })();
+  const SRV = { api: API, up: !!API, fails: 0 };
+  async function api(path, body) {   // a JSON call to the belief service; three failures in a visit and it is not asked again
+    if (!SRV.up || typeof fetch !== 'function') return null;
+    try {
+      const r = await fetch(API + path, { method: body ? 'POST' : 'GET', credentials: 'omit', referrerPolicy: 'no-referrer', mode: 'cors', keepalive: !!body,
+        headers: body ? { 'content-type': 'application/json' } : undefined, body: body ? JSON.stringify(body) : undefined, signal: AbortSignal.timeout ? AbortSignal.timeout(5000) : undefined });
+      if (!r.ok) throw new Error('status ' + r.status);
+      return await r.json();
+    } catch (e) { if (++SRV.fails >= 3) SRV.up = false; return null; }
+  }
+  // a fact from the service, in whatever field names it uses, as a belief (confidence and decay kept; the newer of two copies wins)
+  const fromSrv = (f, from) => { const text = f && (f.fact || f.text); if (!text) return null; const topic = f.topic || from || 'shared';
+    // the service's confidence is already decayed at read (half-life 14 d): it starts again from now with that half-life
+    return { key: f.key || `${topic}#${words(text).slice(0, 8).join('-')}`, text, line: f.line ? f.line : short(text), src: f.url || f.src || '', name: f.source || f.name || 'shared memory',
+      c: clamp(+(f.confidence ?? f.conf ?? f.c ?? .6)), hl: +(f.halfLife ?? f.hl ?? 14 * 86400) || 14 * 86400, at: f.last_reinforced ? Date.now() : Date.parse(f.fetched_at || f.at || f.ts) || +f.at || Date.now(), v: f.v, from: f.from || from, related: f.related || f.links }; };
+  const SHARE = new Set(['self', 'wiki', 'gh']);   // what may be sent: what it read, never what it perceived about the visitor
+  async function loadShared(who) {   // at birth (or on the first visit of a life): the beliefs other visits taught this kind of being
+    const j = await api('/beliefs?being=' + who + '&limit=30'), B = beings[who]; if (!B || !j) return;
+    for (const f of (Array.isArray(j) ? j : j.beliefs || [])) { if (/open-meteo/i.test(f.source || '')) continue;   // another visitor's sky is not this one's
+      const b = fromSrv(f); if (b && !B.know.some(x => x.key === b.key && x.at >= b.at)) believe(who, b, true); }
+  }
+  const NET = { max: 6, gap: 12000, after: 5000, log: [] }, LOOKS = [];
+  const TTL = { wiki: 7 * 864e5, geo: 30 * 864e5, sky: 30 * 6e4, gh: 36e5 };
+  const SPECIES = { hugo: 'Stick figure', dove: 'Rock dove' }, SILENT = { dove: 1 };
+  const cget = k => { try { const r = JSON.parse(store('mortal.c.' + k)); return r && Date.now() - r.at < r.ttl ? r.v : undefined; } catch (e) { return undefined; } };
+  const cset = (k, v, ttl) => stash('mortal.c.' + k, JSON.stringify({ at: Date.now(), ttl, v }));
+  async function net(B, url, key, ttl, shape) {   // shape(json) -> the small part worth keeping; a 404 is cached as nothing
+    const c = cget(key); if (c !== undefined) return c;
+    if (!ALLOW.test(url) || B.net >= NET.max || typeof fetch !== 'function') return null;
+    B.net++; NET.log.push({ who: B.who, host: url.split('/')[2], at: Date.now() });
+    const r = await fetch(url, { credentials: 'omit', referrerPolicy: 'no-referrer', mode: 'cors', signal: AbortSignal.timeout ? AbortSignal.timeout(8000) : undefined });
+    if (!r.ok) { if (r.status === 404) cset(key, null, ttl); return null; }
+    const v = shape(await r.json()); cset(key, v, ttl); return v;
+  }
+  const sentences = x => String(x || '').split(/\n+/).filter(l => !/^\s*=/.test(l)).join(' ').replace(/\s+/g, ' ')
+    .split(/(?<=[a-z0-9)][.!?])\s+(?=[A-Z])/).filter(s => s.length > 30 && s.length < 220);
+  const short = s => (s.length <= 110 ? s : s.slice(0, s.lastIndexOf(' ', 108)) + '…');
+  const hm = d => `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  const LOOK = {
+    async self(B, topic) {   // its own kind: the article body (the intro rarely says what the animal does), what concerns its repertoire
+      const t = encodeURIComponent(topic.replace(/ /g, '_')), src = 'https://en.wikipedia.org/wiki/' + t;
+      const ss = await net(B, `https://en.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext=1&redirects=1&format=json&formatversion=2&origin=*&titles=${t}`, 'ws:' + topic, TTL.wiki,
+        j => sentences(j && j.query && j.query.pages && j.query.pages[0] && j.query.pages[0].extract).slice(0, 300));
+      if (!ss || !ss.length) return [];
+      const R = reps[B.who], stems = new Set(); if (R) for (const d of R.defs.values()) for (const s of [...(d.words || []), ...(d.avoid || [])]) if (s[0] !== '~') stems.add(s);
+      const about = s => { const w = words(s); return [...stems].some(st => w.some(x => x.startsWith(st))); };
+      const out = ss.slice(0, 1).map((s, i) => ({ key: `${topic}#${i}`, text: s, line: short(s), src, name: 'Wikipedia', c: .9, hl: 30 * 86400 }));
+      for (const s of ss) { if (out.length >= 10) break; if (about(s) && !out.some(o => o.text === s)) out.push({ key: `${topic}#${ss.indexOf(s)}`, text: s, line: short(s), src, name: 'Wikipedia', c: .8, hl: 30 * 86400 }); }
+      const life = ss.find(s => /life ?span|life expectancy|lives? (?:for|up to)/i.test(s) && /\d+\s*(?:[–-]|to)?\s*\d*\s+years/.test(s));
+      if (life) { const m = life.match(/(\d+)(?:\s*(?:[–-]|to)\s*(\d+))?\s+years/); out.push({ key: 'lifespan', text: life, line: short(life), src, name: 'Wikipedia', c: .8, hl: 30 * 86400, v: m[2] ? (+m[1] + +m[2]) / 2 : +m[1] }); }
+      return out;
+    },
+    async wiki(B, topic) {   // a thing on the page it stands on: the REST summary's first sentence
+      const t = encodeURIComponent(topic.replace(/ /g, '_'));
+      const s = await net(B, 'https://en.wikipedia.org/api/rest_v1/page/summary/' + t, 'w:' + topic, TTL.wiki, j => (j && j.type === 'standard' ? sentences(j.extract)[0] || null : null));
+      return s ? [{ key: 'w:' + topic.toLowerCase(), text: s, line: short(s), src: 'https://en.wikipedia.org/wiki/' + t, name: 'Wikipedia', c: .8, hl: 30 * 86400 }] : [];
+    },
+    async gh(B) {   // its maker's public repos: what each is, its language, when it was last pushed; a repo named like a card on the page
+      const src = 'https://github.com/CH6RIZARD';
+      const rs = await net(B, 'https://api.github.com/users/CH6RIZARD/repos?sort=pushed&per_page=30', 'gh', TTL.gh,
+        j => (Array.isArray(j) ? j.map(r => ({ n: r.name, l: r.language, d: (r.description || '').slice(0, 80), p: r.pushed_at })) : null));
+      if (!rs) return [];
+      const out = [];
+      for (const r of rs) {
+        const ws = r.n.toLowerCase().split(/[-_.]+/).filter(w => w.length > 2 && !/^(the|app|web|site|io|github|main|tech)$/.test(w));
+        const h = sec.all.find(h => { const t = titleOf(h).toLowerCase(); return t.length < 30 && ws.some(w => t.split(/\W+/).some(x => x.length > 2 && (w.startsWith(x) || x.startsWith(w)))); });
+        const text = `${r.n} is ${r.l ? 'written in ' + r.l : 'a repo'}${r.d ? ': ' + r.d : ''}, last pushed ${ago(Date.parse(r.p))}`;
+        if (h || !out.length) out.push({ key: 'gh:' + r.n, text, line: short(text), src: `${src}/${r.n}`, name: 'GitHub', c: .9, hl: 6 * 3600, title: h ? titleOf(h) : null, at: Date.now() });
+        if (h) addGoal(B.who, { id: 'gh:' + r.n, desc: `visit ${r.n} (${titleOf(h)})`, drive: 'curiosity', title: titleOf(h), pri: .6, novel: 1 });
+        if (out.length >= 4) break;
+      }
+      return out;
+    },
+    async sky(B) {   // the visitor's sky, from the time zone's city only (no geolocation, nothing personal sent)
+      let tz = ''; try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch (e) { tz = ''; }
+      const city = tz.includes('/') ? tz.split('/').pop().replace(/_/g, ' ') : ''; if (!city) return [];
+      const p = await net(B, `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(city)}&count=1&language=en&format=json`, 'geo:' + city, TTL.geo,
+        j => (j && j.results && j.results[0] ? { la: +j.results[0].latitude.toFixed(1), lo: +j.results[0].longitude.toFixed(1) } : null));
+      if (!p) return [];
+      const url = `https://api.open-meteo.com/v1/forecast?latitude=${p.la}&longitude=${p.lo}&current=is_day,temperature_2m,weather_code&daily=sunrise,sunset&forecast_days=1&timezone=auto`;
+      const w = await net(B, url, 'sky:' + city, TTL.sky, j => (j && j.current ? { d: j.current.is_day, t: j.current.temperature_2m, c: j.current.weather_code, at: Date.parse(j.current.time) || Date.now(), rise: j.daily && j.daily.sunrise && j.daily.sunrise[0], set: j.daily && j.daily.sunset && j.daily.sunset[0] } : null));
+      if (!w) return [];
+      env.isDay = w.d; env.weather = WMO(w.c); env.temp = w.t; envUpdate();
+      const what = { storm: 'a storm', snow: 'snowing', rain: 'raining', fog: 'foggy', cloud: 'cloudy', clear: w.d ? 'sunny' : 'clear' }[env.weather];
+      const feel = w.t < 8 ? ', cold' : w.t > 24 ? ', warm' : '', text = `it is ${what} in ${city}, ${Math.round(w.t)}°C${feel}${w.d ? '' : ', night'}`;
+      const out = [{ key: 'sky', text, line: `${text[0].toUpperCase()}${text.slice(1)}.`, src: 'https://open-meteo.com', name: 'Open-Meteo', c: .9, hl: 1800, at: Date.now() }];
+      if (w.rise && w.set) { const s = `the sun is up ${w.rise.slice(11, 16)} to ${w.set.slice(11, 16)} in ${city}${w.d && Date.parse(w.set) - Date.now() < 36e5 && Date.parse(w.set) > Date.now() ? ', dusk soon' : ''}`;
+        out.push({ key: 'sun', text: s, line: `${s[0].toUpperCase()}${s.slice(1)}.`, src: 'https://open-meteo.com', name: 'Open-Meteo', c: .9, hl: 3600 }); }
+      return out;
+    },
   };
   const WMO = c => (c >= 95 ? 'storm' : c >= 71 && c <= 86 && !(c >= 80 && c <= 82) ? 'snow' : (c >= 51 && c <= 67) || (c >= 80 && c <= 82) ? 'rain' : c >= 45 && c <= 48 ? 'fog' : c >= 2 ? 'cloud' : 'clear');
-  const SOURCES = {
-    // about itself: what its maker last pushed (public events, 60 requests/h unauthenticated; one per visit at most)
-    async github() {
-      const ev = await get('https://api.github.com/users/CH6RIZARD/events/public?per_page=15', 'gh');
-      const push = Array.isArray(ev) && ev.find(e => e.type === 'PushEvent' && e.repo);
-      if (!push) return;
-      const repo = push.repo.name.split('/').pop(), ageH = (Date.now() - Date.parse(push.created_at)) / 36e5;
-      env.self = { repo, ageH: Math.round(ageH) };
-      const words = repo.toLowerCase().split(/[-_.]+/).filter(w => w.length > 2 && !/^(the|app|web|site|io|github|main)$/.test(w));
-      const h = sec.all.find(h => words.some(w => titleOf(h).toLowerCase().includes(w)));
-      const pri = ageH < 72 ? .8 : .4;   // fresh work is more interesting
-      for (const who of ['hugo', 'dove']) addGoal(who, { id: 'gh:' + repo, desc: `visit ${repo}${h ? ' (' + titleOf(h) + ')' : ''}`, drive: 'curiosity', title: h ? titleOf(h) : null, pri, novel: 1 });
-    },
-    // about its world: the visitor's sky, from the time zone's city only (no geolocation, nothing personal sent)
-    async sky() {
-      let tz = ''; try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch (e) { tz = ''; }
-      const city = tz.includes('/') ? tz.split('/').pop().replace(/_/g, ' ') : '';
-      if (!city) return;
-      const g = await get(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(city)}&count=1&language=en&format=json`, 'geo:' + city);
-      const p = g && g.results && g.results[0]; if (!p) return;
-      const w = await get(`https://api.open-meteo.com/v1/forecast?latitude=${p.latitude.toFixed(1)}&longitude=${p.longitude.toFixed(1)}&current=is_day,temperature_2m,weather_code&timezone=auto`, 'sky:' + city);
-      const cur = w && w.current; if (!cur) return;
-      env.isDay = cur.is_day; env.weather = WMO(cur.weather_code); env.temp = cur.temperature_2m; envUpdate();
-    },
-  };
-  async function curiosity(B) {   // the frame's _autonomous_planner_loop: idle (10 s untouched) with something unknown -> fetch, one source at a time
-    if (FETCH.busy || now() < FETCH.nextAt || (G.navigator && G.navigator.onLine === false) || (DOM && document.hidden)) return;
-    if ((now() - B.lastUser) / 1000 < 10 || B.mot.c < .15) return;
-    const src = Object.keys(SOURCES).find(k => !FETCH.done.has(k)); if (!src) return;
-    FETCH.busy = true; FETCH.done.add(src); FETCH.nextAt = now() + 15000;
-    try { await SOURCES[src](); } catch (e) { /* offline, blocked or rate-limited: it simply does not learn this today */ } finally { FETCH.busy = false; }
+  const topicCache = new Map();
+  function topicsOf(title) {   // the page around a heading: its stack tags and evidence lines, split into names a lookup can take
+    if (!DOM || !title) return [];
+    if (topicCache.has(title)) return topicCache.get(title);
+    const h = sec.all.find(x => titleOf(x) === title), box = h && (h.closest('article, .realm, .poster, .stage, .cap, section') || h.parentElement), out = [];
+    if (box) for (const el of box.querySelectorAll('.ev, .sp, b + span')) for (let s of el.textContent.split(/[·,;:()]|\s[-–—]\s/)) {
+      s = s.trim(); if (s.length >= 3 && s.length <= 24 && /^[A-Z][\w.+#-]*(?: [A-Z0-9][\w.+#-]*){0,2}$/.test(s) && !out.includes(s)) out.push(s); }
+    const t = titleOf(h || { textContent: '' }); if (/^[A-Za-z][\w .+-]{2,23}$/.test(t) && t.split(' ').length <= 3 && !out.includes(t)) out.unshift(t);
+    topicCache.set(title, out.slice(0, 6)); return topicCache.get(title);
+  }
+  // Topics grow: a fact names things (the service's related terms, or proper names in the sentence), and those become new things to
+  // wonder about, a little less salient than what led there; at most 3 per lookup and 8 per visit, so curiosity drifts but stays bounded.
+  const GROW_LOOK = 3, GROW_VISIT = 8;
+  function grow(B, w, got) {
+    if (w.kind === 'sky') return;   // the weather names no topics
+    const seen = new Set([...B.grow.map(g => g.topic.toLowerCase()), (w.topic || '').toLowerCase()]); let n = 0;
+    const take = t => { t = String(t || '').trim(); const k = t.toLowerCase(); if (n >= GROW_LOOK || B.grow.length >= GROW_VISIT || t.length < 4 || t.length > 40 || seen.has(k) || /^(the|this|it|in|on|a|an)\b/i.test(t)) return; seen.add(k); n++; B.grow.push({ topic: t, s: Math.max(.2, (w.s || .5) * .8) }); };
+    for (const f of got) for (const r of f.related || []) take(r);
+    for (const f of got) for (const m of String(f.text || '').slice(1).matchAll(/\b([A-Z][a-z]{3,}(?: [A-Z][a-z]+){0,2})\b/g)) take(m[1]);
+  }
+  function wonder(who) {   // what it does not know and could look up now, scored by how close it is to it
+    const B = beings[who];
+    if (!B || B.looking || now() < NET.after || Date.now() - B.lookAt < NET.gap || B.net >= NET.max || (G.navigator && G.navigator.onLine === false) || (DOM && document.hidden)) return null;
+    const known = key => B.asked.has(key) || B.know.some(b => b.from === key && confOf(b) > .3);
+    let best = null; const ask = (key, kind, topic, s) => { if (!known(key) && (!best || s > best.s)) best = { key, kind, topic, s }; };
+    ask('self', 'self', SPECIES[who], .7); ask('sky', 'sky', null, .55); ask('gh', 'gh', null, who === 'hugo' ? .75 : .3);   // Hugo stands on his maker's work
+    topicsOf(B.section).forEach((t, i) => ask('w:' + t.toLowerCase(), 'wiki', t, .5 - .04 * i));
+    for (const g of B.grow) ask('w:' + g.topic.toLowerCase(), 'wiki', g.topic, g.s);   // what earlier reading pointed to
+    return best;
+  }
+  async function lookup(who) {   // the body began its lookup behaviour: fetch what it wondered about; the result becomes beliefs
+    const B = beings[who], w = B && B.wonder; if (!w || B.looking || !B.alive) return null;
+    B.looking = w; B.asked.add(w.key); B.lookAt = Date.now(); B.wonder = null;
+    const R = rep(who); R.trace.push({ t: +(now() / 1000).toFixed(2), id: 'lookup', cat: 'learn', b: '-', topic: w.topic || w.kind, look: 1 });
+    let got = [];
+    try {
+      let srv = null;
+      if (SRV.up && (w.kind === 'wiki' || w.kind === 'gh') && B.net < NET.max) {   // its own kind it reads in full itself (the service has the summary only), then shares
+        B.net++; NET.log.push({ who, host: 'belief-service', at: Date.now() });
+        const j = await api('/lookup', { being: who, topic: w.kind === 'gh' ? 'github' : w.topic }); srv = j && (Array.isArray(j) ? j : j.beliefs || j.facts);
+        if (srv) srv = srv.map(f => fromSrv(f, w.key)).filter(Boolean); if (srv && srv[0] && Array.isArray(j.candidates)) srv[0].related = [...(srv[0].related || []), ...j.candidates]; }   // candidates: new topics the service suggests
+      got = srv && srv.length ? srv.map(f => ({ ...f, shared: 1 })) : (await LOOK[w.kind](B, w.topic)) || [];
+    } catch (e) { got = []; if (!B.asked.has('retry:' + w.key)) { B.asked.delete(w.key); B.asked.add('retry:' + w.key); } if (DEBUG) console.warn('lookup failed', w.key, String(e)); } finally { B.looking = null; }   // a timeout or a dropped connection: it may wonder once more later (the fetch cap still holds)
+    if (beings[who] !== B || !B.alive) return null;   // it died while it read
+    const bs = got.map(f => believe(who, { ...f, from: w.key, kind: w.kind, topic: w.topic || w.kind }, !!f.shared)).filter(Boolean);
+    grow(B, w, got);
+    LOOKS.push({ who, key: w.key, topic: w.topic || w.kind, n: bs.length, at: Date.now() });
+    return bs.find(b => b.key !== 'lifespan') || bs[0] || null;
+  }
+  function perceive(B, section) {   // what it sees without fetching: the visitor's clock, the place it is on
+    if (Date.now() - (B.clockAt || 0) > 5 * 6e4) { B.clockAt = Date.now(); const d = new Date(), night = env.isDay === 0 || d.getHours() < 6 || d.getHours() >= 22;
+      believe(B.who, { key: 'clock', text: `it is ${hm(d)} on the visitor's clock${night ? ', night' : ''}`, src: 'about:clock', name: "the visitor's clock", c: 1, hl: 900 }); }
+    if (section && !B.know.some(b => b.key === 'here:' + section)) { const tp = topicsOf(section);
+      believe(B.who, { key: 'here:' + section, text: `${section}${tp.length ? ': ' + tp.join(', ') : ''}`, src: DOM ? location.href.split('#')[0] : '', name: 'this page', c: .9, hl: 3600 }); }
+    const life = B.know.find(b => b.key === 'lifespan' && b.v > 0 && confOf(b) > .3);
+    B.ageK = life ? (Date.now() - B.born) / 1000 / YEAR / life.v : 0; B.ageBel = life || null;
+  }
+  function studyCard(who) {   // a card it holds a fact about and has not gone to see
+    const B = beings[who]; if (!B) return null;
+    const b = B.know.find(b => b.title && !B.studied.has(b.key) && confOf(b) > .3); return b ? { title: b.title, b } : null;
   }
   function addGoal(who, g) {
     const B = beings[who]; if (!B || B.goals.some(x => x.id === g.id)) return;
@@ -237,6 +398,9 @@
       B.lane = s.lane || 0; B.w = s.w ?? null;   // the body's depth lane and its section's scroll phase (depth.js), for drives that weigh it
       const section = s.section || (s.y != null ? sectionAt(s.y) : null);
       if (section && !B.visited.has(section)) { B.visited.add(section); progress(who, 'new place'); }
+      if (section) B.section = section;
+      if (gate) perceive(B, section);
+      if (gate && SILENT[who] && !B.looking && !B.external && (B.wonder = wonder(who))) lookup(who);   // the dove reads without showing it
       const unknowns = [...sec.seen].filter(t => !B.visited.has(t)).length + B.goals.filter(g => !g.done && g.novel).length;
       const silence = (now() - B.lastUser) / 1000;   // the visitor's silence toward this being (touch, hover, the cursor close)
       B.p = motStep(B.mot, silence * SIL_K, unknowns, (now() - B.progressAt) / 1000 > STALL_AFTER);
@@ -244,7 +408,6 @@
       if (Date.now() >= B.deathAt) die(who, 'lifespan_expired');
       else if (s.energy != null && s.energy <= 0) die(who, 'energy_depleted');
     }
-    if (beings.dove && beings.dove.alive) curiosity(beings.dove);
   }
   function progress(who, why) { const B = beings[who]; if (B) { B.progressAt = now(); B.lastWhy = why; } }
   const MOODS = (who, n) => {   // mood: REL's affect point toward the other plus the needs
@@ -277,7 +440,7 @@
   }
   // The repertoire belongs to the body (it outlives a being); a new being starts with an empty memory of it (forget()).
   const reps = { hugo: null, dove: null }, blank = () => ({ last: new Map(), lastCat: new Map(), seen: new Set(), cur: null, plan: null, ev: [], catRun: 0, lastC: null, buckets: new Map() });
-  const rep = who => (who in reps ? reps[who] || (reps[who] = { defs: new Map(), plans: [], trace: [], budget: new Map(), ...blank() }) : null);
+  const rep = who => (who in reps ? reps[who] || (reps[who] = { who, defs: new Map(), plans: [], trace: [], budget: new Map(), ...blank() }) : null);
   const forget = who => { if (reps[who]) Object.assign(reps[who], blank()); };
   // defs: [{ id, cat, u: ctx => 0..1, dur (s), on: [event types it reacts to], edge: true (a screen-edge move), move }]
   function repertoire(who, defs) { const R = rep(who); if (R) for (const d of defs) if (d && d.id) R.defs.set(d.id, { dur: 3, ...d }); }
@@ -298,30 +461,40 @@
     return true;
   }
   const answers = (d, ev) => !!(ev && d.on && d.on.includes(ev.type));
+  const OLDER = new Set(['rest', 'flee']), YOUNGER = new Set(['move', 'fly', 'soar', 'play', 'glide']);
   function score(R, d, ctx, t, ev, lax) {
     let u = Math.min(1, +(typeof d.u === 'function' ? d.u(ctx, ev) : d.u) || 0);
     if (answers(d, ev)) u = Math.max(u, .8) * 1.5;   // a noticed interrupt it can answer
+    const k = u > 0 && match(R.who, d);   // what it believes: a belief that mentions this behaviour's words lifts it, one it avoids lowers it
+    if (k) { if (k.pro) u = Math.min(1.2, u * (1 + k.pro.c) + .2 * k.pro.c); if (k.con) u *= 1 - .7 * k.con.c; }
+    const g = beings[R.who] ? beings[R.who].ageK : 0;   // its age against the lifespan it read for its kind: older rests and startles more, roams less
+    if (g > .02) u *= OLDER.has(d.cat) ? 1 + Math.min(1, g) : YOUNGER.has(d.cat) ? 1 - .5 * Math.min(1, g) : 1;
     if (!(u > 0) || (d.edge && !ctx.edge)) return 0;
     if (ctx.edge && !d.edge) { if (ctx.edgeFor > 1) return 0; u *= .5; }   // the screen's edge is no home: after a second only edge moves are left
     const lid = R.last.get(d.id), lcat = R.lastCat.get(d.cat);
     let s = u * persona(d.cat) * (R.seen.has(d.id) ? 1 : 1 + NOVEL);
-    if (lid != null && t - lid < (d.edge ? EDGE_ID : SAME_ID)) s *= lax ? .3 : 0;   // the same thing again inside 90 s (10 s for an edge move: the page keeps moving): never, unless nothing else answers the edge or the world
+    if (lid != null && t - lid < (d.edge ? EDGE_ID : d.again || SAME_ID)) s *= lax ? .3 : 0;   // the same thing again inside 90 s (10 s for an edge move: the page keeps moving): never, unless nothing else answers the edge or the world
     if (lcat != null && t - lcat < SAME_CAT) { if (R.catRun >= 2 && R.lastC === d.cat) return 0; if (!(d.edge && ctx.edge)) s *= .15; }   // a third of the same kind running: never
     return s * (.85 + .3 * u01());   // Dave Mark: a little noise, so near-ties fall either way
   }
   function begin(who, R, d, ov, t, planned, ev, ctx) {
     const used = (R.buckets.get(d.id) || []).filter(x => t - x.t < SAME_ID); let p = vary(); for (let i = 0; i < 12 && used.some(x => x.b === p.b); i++) p = vary();   // a repeat inside 90 s (a plan step, the edge) never in the same way
     R.buckets.set(d.id, [...used, { t, b: p.b }]); p = { ...p, ...(ov || {}) };
+    const B = beings[who], k = match(who, d), age = B && B.ageK > .02 && (OLDER.has(d.cat) || YOUNGER.has(d.cat)) ? B.ageBel : null;
+    const bel = (planned && R.plan.bel) || (k && k.pro && k.pro.b) || age || null, because = bel ? `${cite(bel)} → ${planned ? R.plan.def.goal + ':' : ''}${d.id}` : null;
+    if (!(ov && ov.speed)) p.speed *= 1 - .5 * env.sleepy - .2 * Math.min(1, B ? B.ageK : 0);   // night (and age) slows it
     const dur = (d.dur || 3) * p.durK, u = Math.min(1, +(typeof d.u === 'function' ? d.u(ctx, ev) : d.u) || 0);
     R.cur = { id: d.id, cat: d.cat, def: d, p, t0: t, minT: Math.min(dur * .6, 6), maxT: p.before + dur + p.after + 1.5, ev: ev ? ev.type : null, s: planned ? Math.max(.6, u) : u };
     R.last.set(d.id, t); R.lastCat.set(d.cat, t); R.seen.add(d.id); R.catRun = R.lastC === d.cat ? (R.catRun || 0) + 1 : 1; R.lastC = d.cat;
-    R.trace.push({ t: +t.toFixed(2), id: d.id, cat: d.cat, b: p.b, plan: planned ? R.plan.def.goal : null, ev: R.cur.ev }); if (R.trace.length > 600) R.trace.shift();
-    return { id: d.id, cat: d.cat, p, reason: why(who), ev: R.cur.ev, plan: planned ? R.plan.def : null, step: planned ? R.plan.i : -1, x: ev ? ev.x : undefined };
+    R.cur.because = because;
+    R.trace.push({ t: +t.toFixed(2), id: d.id, cat: d.cat, b: p.b, plan: planned ? R.plan.def.goal : null, ev: R.cur.ev, ...(because ? { bel: because } : {}) }); if (R.trace.length > 600) R.trace.shift();
+    return { id: d.id, cat: d.cat, p, reason: why(who), ev: R.cur.ev, plan: planned ? R.plan.def : null, step: planned ? R.plan.i : -1, x: ev ? ev.x : undefined, belief: bel };
   }
   // The next thing to start, or null (carry on). ctx: whatever the body's utilities read (needs, pointer, edge, edgeFor, ...).
   function next(who, ctx) {
     const B = beings[who], R = rep(who); if (!R || !B || !B.alive) return null;
     ctx = ctx || {}; const t = now() / 1000;
+    ctx.wonder = B.wonder = wonder(who); ctx.know = { card: studyCard(who), age: B.ageK };   // what it could look up now; a card it knows about
     R.ev = R.ev.filter(e => t < e.until); const ev = R.ev.find(e => t >= e.at) || null;
     if (R.cur && t - R.cur.t0 > R.cur.maxT) ended(who, true);   // it never said it finished: that was long enough
     if (R.cur) {   // committed: only a noticed interrupt or the screen edge may cut in, and only when it clearly scores higher
@@ -348,7 +521,7 @@
     let r = u01() * sum, pick = top[top.length - 1]; for (const x of top) { r -= x[0]; if (r <= 0) { pick = x; break; } }
     if (ev) R.ev = R.ev.filter(e => e !== ev);
     const [, d, kind] = pick;
-    if (kind === 'plan') { R.last.set('plan:' + d.goal, t); R.lastCat.set(d.goal, t); R.seen.add('plan:' + d.goal); R.plan = { def: d, i: 0 }; return next(who, ctx); }
+    if (kind === 'plan') { R.last.set('plan:' + d.goal, t); R.lastCat.set(d.goal, t); R.seen.add('plan:' + d.goal); const bel = d.cite ? d.cite(ctx) : null; if (bel) B.studied.add(bel.key); R.plan = { def: d, i: 0, bel }; return next(who, ctx); }
     return begin(who, R, d, null, t, false, answers(d, ev) ? ev : null, ctx);
   }
   // The body finished (ok) or gave up on (!ok) what it was doing. A finished move is progress for the frame's stall count too.
@@ -361,7 +534,7 @@
   function why(who) {
     const R = rep(who); if (!R || !R.cur) return R && R.plan ? `${R.plan.def.purpose}: between steps` : 'idle';
     const P = R.plan, c = R.cur;
-    return `${P ? `${P.def.purpose} [${P.i + 1}/${P.def.steps.length}] ` : ''}${c.id}${c.ev ? ` (reacting to ${c.ev})` : ''} x${c.p.speed.toFixed(2)} ${c.p.side > 0 ? 'R' : 'L'}`;
+    return `${P ? `${P.def.purpose} [${P.i + 1}/${P.def.steps.length}] ` : ''}${c.id}${c.ev ? ` (reacting to ${c.ev})` : ''} x${c.p.speed.toFixed(2)} ${c.p.side > 0 ? 'R' : 'L'}${c.because ? ' ← ' + c.because : ''}`;
   }
 
   let ready;
@@ -394,17 +567,27 @@
     mark(who, id, cat) { const R = rep(who); if (R) { R.trace.push({ t: +(now() / 1000).toFixed(2), id, cat, b: '-', rel: 1 }); if (R.trace.length > 600) R.trace.shift(); } },   // something else moved the body (REL's orders): on the record, not a decision of the kernel
     trace: who => (reps[who] ? reps[who].trace : []),
     get visitor() { return { ...VISITOR }; },
-    get fetches() { return { used: FETCH.used, budget: FETCH.budget, done: [...FETCH.done] }; },
+    // patch 6: beliefs (what it learned, from where, how sure, now) and lookups
+    believe, line, lookup, words, cite,
+    beliefs: who => (beings[who] ? beings[who].know.map(({ w, ...b }) => ({ ...b, conf: +confOf(b).toFixed(3), ago: ago(b.at) })) : []),
+    wonder: who => (beings[who] ? beings[who].wonder : null),
+    get looks() { return LOOKS.slice(); },
+    get said() { return [...SAID]; },
+    service: SRV,   // { api, up, fails }
+    grown: who => (beings[who] ? beings[who].grow.slice() : []),
+    get fetches() { return { used: NET.log.length, max: NET.max, log: NET.log.slice(), hugo: beings.hugo ? beings.hugo.net : 0, dove: beings.dove ? beings.dove.net : 0 }; },
+    NET,
   };
   if (DEBUG) MORTAL.debug = {   // death/rebirth tests only; never on by default
     kill: (who, cause) => die(who, cause || 'debug'),
     lifespan(who, s) { const B = beings[who]; if (B) { B.deathAt = Date.now() + s * 1000; stash(KEY(who), JSON.stringify({ id: B.id, born: B.born, seal: seal(B.id, B.deathAt) })); } },
-    fetchNow: () => { FETCH.nextAt = 0; },
+    fetchNow: () => { NET.after = 0; NET.gap = 0; },
   };
   G.MORTAL = MORTAL;
   ready = (async () => {
     try { rng = await HolyRNG(); } catch (e) { rng = { u: () => C.getRandomValues(new Uint32Array(1))[0] / 4294967296 }; rng.bytes = n => C.getRandomValues(new Uint8Array(n)); }
     beings.hugo = load('hugo'); beings.dove = load('dove');
+    setTimeout(() => { loadShared('hugo'); loadShared('dove'); }, DOM ? NET.after : 0);   // after the page's own load; not awaited: the beings live while the service answers (or does not)
     if (DOM) { if (document.readyState === 'loading') addEventListener('DOMContentLoaded', watchSections); else watchSections(); }
     return beings;
   })();
