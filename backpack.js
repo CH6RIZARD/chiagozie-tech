@@ -33,7 +33,7 @@ export async function boot({ model, B, rest, st, armMix, mix, springK, body, glb
   let scene = model; while (scene.parent) scene = scene.parent;
   const pack = gltf.scene.getObjectByName('pack'), hinge = pack.getObjectByName('hinge'), mouth = pack.getObjectByName('mouth'), hole = pack.getObjectByName('hole'), lid = new THREE.Group(), OPEN = hinge.userData.open || -1.9;
   lid.position.copy(hinge.position); pack.add(lid); pack.updateMatrixWorld(true); lid.attach(pack.getObjectByName('flap'));   // re-pivot on the hinge (meshopt quantizing moves node origins)
-  pack.traverse(o => { if (o.isMesh) { if (!o.material.map) o.material = mat(o.material.color); else { o.material.envMapIntensity = 0.8; o.material.color.multiplyScalar(1.5); } o.material.side = THREE.DoubleSide; o.frustumCulled = false; } });   // a textured pack (leather) keeps its own PBR maps
+  pack.traverse(o => { if (o.isMesh) { if (!o.material.map) o.material = mat(o.material.color); else if (!o.material.userData.lit) { o.material.userData.lit = 1; o.material.envMapIntensity = 0.8; o.material.color.multiplyScalar(1.5); } o.material.side = THREE.DoubleSide; o.frustumCulled = false; } });   // a textured pack (leather) keeps its own PBR maps
   const box = new THREE.Box3().setFromObject(pack, true);   // the closed pack in its own units (1 tall); box.min.z is the side against him
   // the inside: dark under the lid, so the open pack reads as a hole, not as more canvas
   if (hole) { const d = new THREE.Mesh(new THREE.CircleGeometry(0.5, 12), new THREE.MeshBasicMaterial({ color: 0x2a2520, side: THREE.DoubleSide })); d.scale.set(hole.scale.x, hole.scale.z, 1); d.rotation.x = -Math.PI / 2; d.position.copy(hole.position); pack.add(d); }
