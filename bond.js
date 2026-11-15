@@ -963,10 +963,8 @@
     syncCrumb();
     if (SIM) return;
     const h = getH();
-    // Hugo is the producer: he comes up with the next one and holds it
-    if (h && !S.food.some(it => it.main) && S.t > S.nextFood && h.floor && !h.held && !h.air && !h.dead) {
-      S.food.push(Object.assign(mkFood('hugo', h.x, h.y, 'held', true), { holder: 'hugo', heldAt: S.t, holdFor: 6 + 14 * S.P.hugo.patience })); physKick();
-    }
+    // Hugo is the producer, but only through his seed bag (hugo3d feed_dove -> backpack.js shake -> 'drop'): food never appears in his hand
+    // from nothing (owner 2026-11-15: "just raises his hand in the air with no correlation")
     const held = S.food.find(it => it.st === 'held');
     if (held) {
       if (!h || h.held || h.air || h.dead) release(held, held.x, held.y);
@@ -975,6 +973,10 @@
         if (c.has && c.dist < 320 && c.aff > .1) S.boost.hugo.offer = { v: .7, until: S.t + 3 };
         if (S.t - held.heldAt > held.holdFor) release(held, h.x + (h.dir || 1) * 20, h.y - 10);
       }
+    }
+    if (!SIM && h && h.floor && !h.air && !held && !S.crumb && S.drv.dove.hunger > .3 && S.t - (S.feedAsk || -1e9) > 4) {   // a hungry bird near him and nothing to eat on the page: feeding it from his bag gets likely (owner 2026-11-15: it never happened unaided)
+      const c = ctx('hugo'); S.feedAsk = S.t;
+      if (c.has && c.dist < 420 && c.aff > -.2) S.boost.hugo.offer = { v: 1 + 2 * S.drv.dove.hunger, until: S.t + 4 };
     }
     if ((S.rideAt += dt) >= 1) {   // settled food rides its ledge as the page reflows (one rect read per item a second)
       S.rideAt = 0;

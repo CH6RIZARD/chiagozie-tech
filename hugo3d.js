@@ -441,7 +441,8 @@ function gesture(dt, sitting, still) {
   // Feeding is one causal chain (owner 2026-11-15): the seed bag out of the backpack, face the bird, shake it (backpack.js drops the real
   // food into REL from the bag's mouth), watch, the bag back in. The chain sets the pace, not a timer. No bag, no feeding: never an empty hand.
   if (gest.name === 'feed') { const P = window.__pack, g = gest; if (dv) st.dir = Math.sign(dv.x - st.x) || st.dir;
-    if (!g.ph && !(P && P.busy)) { g.ph = 'take'; g.start ??= t; if (!P) g.ph = 'fail'; else P.take('food').then(ok => { if (g.ph === 'take') g.ph = ok && P.holding === 'food' ? 'shake' : t - g.start < 4 ? '' : 'fail'; }, () => { g.ph = 'fail'; }); }   // the pack mid-move (a stow, a book): wait for it, then take; 4 s of no bag and the feeding is off
+    if (!g.ph && !(P && P.busy) && !st.air && !st.held && st.mode !== 'climb' && st.mode !== 'lane' && (st.amt || 0) < 0.05) {   // a full stop on the ground first (the pack refuses a take while he walks or is in the air)
+      g.ph = 'take'; g.start ??= t; if (!P) g.ph = 'fail'; else P.take('food').then(r => { if (g.ph !== 'take') return; if ((r === true || (r && r.ok)) && P.holding === 'food') g.ph = 'shake'; else if (!g.retried) { g.retried = true; g.why = r && r.why; g.ph = ''; } else g.ph = 'fail'; }, () => { g.ph = 'fail'; }); }   // refused (true without the bag, or {ok:false, why}): one retry once the pack is free again, then the feeding is off
     if (g.ph === 'shake' && !P.busy && P.shake()) { g.ph = 'watch'; g.dropAt = t; }
     else if (g.ph === 'watch' && t - g.dropAt > 2.2) { g.ph = 'stow'; Promise.resolve(P.stow()).then(() => { g.ph = 'done'; }); }
     if (g.ph === 'fail' || t - (g.start ??= t) > 14) { gest = null; gestAt = t + 1; if (st.relOrder && st.relOrder.id === g.rel) relEnd('interrupted'); return; }
@@ -479,11 +480,13 @@ function gesture(dt, sitting, still) {
       lookGoal = Math.max(-1, Math.min(1, dx / 160)); mix(B.head, Math.max(-0.35, Math.min(0.45, -dy / 300)), 0, 0, w);
       mix(B.chest, 0.18 * A, 0, 0, w); const reach = Math.max(0, Math.sin(Math.min(1, u * 1.4) * Math.PI));
       armMix(dx > 0 ? (st.dir > 0 ? 'R' : 'L') : (st.dir > 0 ? 'L' : 'R'), [0.3, -0.2 + (dy > 0 ? -0.3 : 0.3), 0.9], [0.2, -0.1 + (dy > 0 ? -0.4 : 0.4), 1], w * reach * 0.9); break; }
-    case 'pat':   // greet's crouch, with the hand patting
-    case 'greet': { const d = window.__scion; const dx = d ? d.x - st.x : sd * 60;   // the dove is right here: he crouches to its level and offers a hand
+    case 'greet': { const d = window.__scion; const dx = d ? d.x - st.x : sd * 60;   // the dove is right here: he crouches to its level and tilts his head at it (no hand held out: an empty hand reads as food that is not there)
+      lookGoal = Math.max(-1, Math.min(1, dx / 90)); mix(B.head, 0.3, 0, sd * 0.28 * A, w); mix(B.chest, 0.3, 0, 0, w);
+      mix(B.thighL, -0.85, 0, 0, w); mix(B.thighR, -0.6, 0, 0, w); mix(B.shinL, 1.35, 0, 0, w); mix(B.shinR, 1.0, 0, 0, w); break; }
+    case 'pat': { const d = window.__scion; const dx = d ? d.x - st.x : sd * 60;   // greet's crouch, the hand patting the bird
       lookGoal = Math.max(-1, Math.min(1, dx / 90)); mix(B.head, 0.3, 0, 0, w); mix(B.chest, 0.3, 0, 0, w);
       mix(B.thighL, -0.85, 0, 0, w); mix(B.thighR, -0.6, 0, 0, w); mix(B.shinL, 1.35, 0, 0, w); mix(B.shinR, 1.0, 0, 0, w);
-      armMix(sd > 0 ? 'R' : 'L', [0.25, -0.45, 0.85], [0.15, -0.35 + (gest.name === 'pat' ? Math.sin(ph * 4) * 0.15 : 0), 0.95], w * A); break; }
+      armMix(sd > 0 ? 'R' : 'L', [0.25, -0.45, 0.85], [0.15, -0.35 + Math.sin(ph * 4) * 0.15, 0.95], w * A); break; }
     case 'swat': { const wu = Math.min(0.8, (gest.windup || 0.4) / gest.dur), soft = gest.soft ? 0.5 : 1;   // cocked high, then down and across at the bird
       lookGoal = sd * 0.8;
       mix(B.thighL, -0.85, 0, 0, w); mix(B.thighR, -0.6, 0, 0, w); mix(B.shinL, 1.35, 0, 0, w); mix(B.shinR, 1.0, 0, 0, w); mix(B.head, 0.3, 0, 0, w);   // down to its level, like greet
@@ -1009,6 +1012,7 @@ function forage(f) {
 // 'timer' (st.beh.until), or false (cannot, here and now). steps: more RUN-like functions to run in order after the first ends.
 const RUN = {};
 const gestOf = (name, dur, p, extra) => ({ name, t0: t, dur, side: p.side, amp: p.amp, f: 0.75 + 0.6 * (p.speed - 0.8) / 0.45, beh: 1, ...(extra || {}) });
+const feedPull = () => { const R = window.REL, h = R && R.needs ? R.needs('dove').hunger : 0; return h > 0.3 && !(R.foods || []).some(it => it.main && it.st !== 'gone') ? 0.3 + 0.9 * h : 0; };   // the bird's hunger, with no meal on the page (REL takes one fresh item at a time)
 const standGest = (name, dur, p, extra) => { if (st.mode === 'sit' && !(extra && extra.sit) && st.floor && !clear(st.x, st.floor.y, CFG.size + 4)) return false; if (st.mode === 'sit' && !(extra && extra.sit)) st.mode = 'idle'; if (st.mode !== 'sit') st.mode = 'idle'; st.amt = 0; st.goal = null; st.idleUntil = t + dur + 0.2; gest = gestOf(name, dur, p, extra); return 'gest'; };
 const sitGest = (name, dur, p) => { if (!st.floor || !clear(st.x, st.floor.y, SIT_H + 4)) return false; st.goal = null; st.mode = 'sit'; st.idleUntil = t + dur + 0.5; st.pendGest = { ...gestOf(name, dur, p), any: false }; return 'gest'; };
 const endX = (f, side) => (side > 0 ? f.x2 - HALF_W - 3 : f.x1 + HALF_W + 3);   // the end of his ledge on that side
@@ -1077,6 +1081,7 @@ Object.assign(RUN, {
   balance_serif: (p, o, ctx) => (ctx.textLedge ? standGest('weight', 2.5 + p.durK, p, { amp: 1.3 * p.amp }) : false),
   kick_crumb: (p, o, ctx) => { const c = ctx.crumb; if (!c) return false; const f = st.floor; if (Math.abs(c.x - st.x) > 24) { if (!f || Math.abs(c.y - f.y) > 12 || !walkOn(f, c.x - (Math.sign(c.x - st.x) || 1) * 22, p)) return false; st.beh.steps = [() => standGest('tap', 1.4, p)]; return 'goal'; } return standGest('tap', 1.4, p); },
   // --- the dove ---
+  feed_dove: (p, o, ctx) => (ctx.dove && window.__pack && feedPull() > 0 ? (lookAt(dovePt(), 2.5), standGest('feed', 7, p)) : false),   // the seed-bag chain (gesture 'feed'): his own choice, the bird hungry and near
   greet_dove: (p, o, ctx) => (ctx.dove ? (lookAt(dovePt(), 2.5), standGest('greet', 2.2 + p.durK, p)) : false),
   shoo_dove: (p, o, ctx) => (ctx.dove && ctx.dove.dist < CFG.size * 3.5 ? standGest('shoo', 1.8 + p.durK, p) : false),
   // --- the screen's bottom edge during a scroll: a catch, never a home. Each is a different way off it. ---
@@ -1134,6 +1139,7 @@ const HUGO_REP = [
   { id: 'lean_letter', cat: 'fidget', dur: 4, u: c => (c.textLedge || c.wallNear ? 0.45 : 0) },
   { id: 'balance_serif', cat: 'fidget', dur: 3, u: c => (c.textLedge ? 0.4 : 0) },
   { id: 'kick_crumb', cat: 'fidget', dur: 4, move: 1, u: c => (c.crumb ? 0.5 : 0), on: ['crumb'] },
+  { id: 'feed_dove', cat: 'social', dur: 7, u: c => (c.dove ? feedPull() : 0), on: ['dove_landed'] },
   { id: 'greet_dove', cat: 'social', dur: 3, u: c => (c.dove ? 0.3 + 0.3 * c.mo.s : 0), on: ['dove_landed'] },
   { id: 'shoo_dove', cat: 'social', dur: 2.5, u: c => (c.dove && c.dove.dist < CFG.size * 3.5 ? 0.3 : 0), on: ['dove_landed'] },
   { id: 'edge_run_climb', cat: 'move', dur: 4, move: 1, edge: 1, u: 1 },
@@ -1151,6 +1157,7 @@ const HUGO_PLANS = [   // purpose first: a trip has a payoff at its end (the res
   { goal: 'explore', purpose: 'see what is new here', when: c => (c.freshEl ? 0.5 + 0.5 * c.mo.c : 0), pick: c => c.freshEl && { el: c.freshEl }, steps: ['walk_to', 'look_around', 'sit_edge', 'look_visitor'] },
   { goal: 'attention', purpose: 'show the visitor what they are looking at', when: c => (c.hover ? 0.9 : 0), pick: c => c.hover, steps: ['walk_to', 'point_project', 'look_visitor', 'back_away'] },
   { goal: 'rest', purpose: 'a rest on an edge', when: c => 0.4 * c.fatigue + 0.3 * c.env.sleepy, steps: ['walk_to', 'sit_edge', 'yawn', 'nap'] },
+  { goal: 'feed', purpose: 'feed the hungry bird', when: c => (c.dove ? feedPull() : 0), steps: ['follow_dove', 'feed_dove'] },
   { goal: 'play', purpose: 'play with the dove', when: c => (c.dove ? 0.3 + 0.4 * (c.n.energy > 0.6 ? 1 : 0) : 0), steps: ['follow_dove', 'greet_dove', 'hop'] },
   { goal: 'inspect', purpose: 'inspect this ledge', when: c => (c.f && !c.f.screen && !c.f.ground ? 0.2 + 0.4 * c.mo.c : 0), steps: ['test_ledge', 'peek_behind', 'back_away'] },
   { goal: 'study', purpose: 'go and see the card he read about', when: c => (c.know && c.know.card && headingEl(c.know.card.title) ? 0.9 : 0), pick: c => c.know.card && { el: headingEl(c.know.card.title) }, cite: c => c.know.card && c.know.card.b, steps: ['walk_to', 'point_project', 'look_around'] },
