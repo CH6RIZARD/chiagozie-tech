@@ -131,11 +131,11 @@ loadTHREE(function(){
   _mjTxt.textContent='PHYSICS: PROCEDURAL';
   mjStatEl.appendChild(_mjDot);mjStatEl.appendChild(_mjTxt);
   document.body.appendChild(mjStatEl);
-  function setPhysicsBadge(live){
+  function setPhysicsBadge(live,label){
     _mjDot.style.background=live?'rgba(0,255,136,.9)':'rgba(255,100,100,.7)';
     _mjDot.style.animation=live?'mjPulse 1.2s ease-in-out infinite':'none';
     _mjTxt.style.color=live?'rgba(0,255,136,.9)':'rgba(255,100,100,.7)';
-    _mjTxt.textContent=live?'▶ PHYSICS: REALTIME MUJOCO':'▷ PHYSICS: PROCEDURAL';}
+    _mjTxt.textContent=label||(live?'▶ PHYSICS: REALTIME MUJOCO':'▷ PHYSICS: PROCEDURAL');}
 
   // ── HugoAgent — internal + external state ────────────────────────────────
   const HugoAgent={
@@ -782,10 +782,12 @@ loadTHREE(function(){
     localStorage.setItem('mjURL',_hashUrl);
     location.hash='';
   }
-  // Served locally (127.0.0.1 / localhost): connect to serve-mujoco.py on :8771 unless a wss:// hash says otherwise.
+  // Served locally (127.0.0.1 / localhost): connect to the Mortal Agent Frame's dorm body (mortal_agent
+  // adapters/mujoco_dorm/body.py --serve, :8775) unless a wss:// hash says otherwise. Unreachable or public: replay a
+  // recorded run of that same simulation (dorm-replay.json), labelled as a recording.
   const _mjLocal=/^(127\.0\.0\.1|localhost)$/.test(location.hostname);
   let MUJOCO_URL = _hashUrl.startsWith('wss://') ? _hashUrl
-    : _mjLocal ? 'ws://127.0.0.1:8771' : (localStorage.getItem('mjURL')||'');
+    : _mjLocal ? 'ws://127.0.0.1:8775' : (localStorage.getItem('mjURL')||'');
   (function(){
     const bar = document.createElement('div');
     bar.id='mjBar';
@@ -876,9 +878,31 @@ loadTHREE(function(){
   ];
   const MJ_BONE_SIDE=[null,null,'L','L','L','R','R','R',null,null,null,null,'L','L','L','R','R','R'];
 
+  // ─── The real dorm body: live stream or a recorded run of it ─────────────────
+  const mjCap=document.createElement('div');
+  mjCap.style.cssText='position:fixed;left:50%;bottom:14px;transform:translateX(-50%);max-width:calc(100vw - 32px);z-index:9;'+
+    'font:10px/1.4 monospace;letter-spacing:.06em;color:rgba(255,255,255,.62);background:rgba(0,0,0,.45);padding:5px 10px;'+
+    'border-radius:6px;pointer-events:none;text-align:center;display:none';
+  document.body.appendChild(mjCap);
+  const mjCaption=(d,head)=>{mjCap.style.display='block';
+    mjCap.textContent=head+(d&&d.act?` · ${d.act.replace(/_/g,' ')}`:'')+(d&&d.why&&d.why!=='idle'&&d.why!==d.act?` (${d.why.replace(/ x\d\.\d+/,'')})`:'');};
+  let _rp=null;   // {frames, i, timer, head}
+  function mjReplay(){
+    if(_rp||(_mj&&_mj.readyState===1))return;
+    _rp={frames:null,i:0,timer:null};
+    fetch('dorm-replay.json').then(r=>r.ok?r.json():Promise.reject(r.status)).then(j=>{
+      if(!_rp)return;
+      const m=j.meta;_rp.frames=j.frames;
+      _rp.head=`RECORDED RUN of the real MuJoCo ${m.mujoco} sim (Mortal Agent Frame dorm body, ${m.recorded}, ${m.seconds} s, looped)`;
+      HugoAgent.state.physicsMode='mujoco-replay';setPhysicsBadge(true,'▶ PHYSICS: MUJOCO (RECORDED RUN)');
+      _rp.timer=setInterval(()=>{const f=_rp.frames[_rp.i++%_rp.frames.length];_mjReady=true;_mjData=f;applyMjDataToHugo(f);
+        if(_rp.i%15===0)mjCaption(f,_rp.head);},1000/(m.fps||30));
+    }).catch(e=>{console.warn('[MuJoCo] replay unavailable',e);_rp=null;setPhysicsBadge(false);});}
+  function mjStopReplay(){if(_rp){clearInterval(_rp.timer);_rp=null;}}
   function mjConnect(){
+    if(_rp)return;   // the recording is playing (no live server answered); a dev server started later takes over on reload
     if(!MUJOCO_URL){
-      setPhysicsBadge(false);
+      mjReplay();
       return;}
     if(_mj){try{_mj.close();}catch(e){}_mj=null;}
     try{
@@ -887,6 +911,7 @@ loadTHREE(function(){
       _mj.binaryType='arraybuffer';
       _mj.onopen=()=>{
         _mjReady=true;_mjRetry=0;
+        mjStopReplay();
         HugoAgent.state.physicsMode='mujoco';
         setPhysicsBadge(true);
         const _bar=document.getElementById('mjBar');
@@ -898,13 +923,15 @@ loadTHREE(function(){
         try{
           const d=typeof e.data==='string'?JSON.parse(e.data):e.data;
           _mjData=d;
-          applyMjDataToHugo(d);}catch(err){}};
-      _mj.onerror=()=>{_mjReady=false;setPhysicsBadge(false);};
+          applyMjDataToHugo(d);
+          if(d.src&&d.step%15===0)mjCaption(d,'LIVE MuJoCo · Mortal Agent Frame dorm body (localhost)');}catch(err){}};
+      _mj.onerror=()=>{if(_rp)return;_mjReady=false;setPhysicsBadge(false);};
       _mj.onclose=()=>{
         _mjReady=false;
         HugoAgent.state.physicsMode='procedural';
         setPhysicsBadge(false);
         _mjRetry++;
+        if(_mjRetry>=2){mjReplay();return;}   // no live server: show the recorded run instead of a procedural gait
         const delay=Math.min(5000,500*_mjRetry);
         setTimeout(mjConnect,delay);
         if(_mjRetry===1)show(`MuJoCo disconnected — retrying`);};}
@@ -979,6 +1006,10 @@ loadTHREE(function(){
         const b=_hugoBones[k],r=b&&b.userData.mjRest;if(!r)continue;
         const[w,x,y,z]=d.bones[k];_mjQ.set(-y,z,-x,w);
         b.quaternion.copy(r[0]).multiply(_mjQ2.copy(r[1]).invert().multiply(_mjQ).multiply(r[1]));}
+      // mujoco_dorm game_feel.py (computed from MuJoCo state): chest lean and follow-through, head lag and turn lead
+      if(d.feel){const f=d.feel,fb=(k,x,y)=>{const b=_hugoBones[k],r=b&&b.userData.mjRest;if(r)
+        b.quaternion.copy(r[0]).multiply(_mjQ.setFromEuler(new THREE.Euler(x,y,0,'XYZ')));};
+        fb('DEF-spine003_139',f.chest||0,0);fb('DEF-spine006_136',f.head||0,f.head_yaw||0);}
       return;}
 
     // Format B: raw xquat array (18-body Colab server)

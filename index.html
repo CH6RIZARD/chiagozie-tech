@@ -314,6 +314,8 @@ html{touch-action:manipulation}
   .frame svg{max-height:260px}
 }
 @media (min-width:761px){.swipe-hint,.more{display:none}}
+/* Morgan on desktop: render the build in a real 390px iPhone viewport scaled to the screen (at 268px wide it clipped and showed a scrollbar) */
+@media (min-width:761px){#trading .phone .screen iframe{width:390px;height:calc(100% / var(--sk,1));transform:scale(var(--sk,1));transform-origin:0 0}}
 @media (max-width:760px){
   .head,.head>div,.split>*,.top>*{min-width:0}          /* a swipe row must not widen its column */
   .kicker{flex-wrap:wrap;gap:6px 12px}
@@ -523,7 +525,7 @@ body.simple>section,body.simple>footer,body.simple>.mindex{display:none!importan
 <section class="realm" id="hugo"><div class="wrap">
   <div class="top">
     <div><div class="kicker"><span class="st">Walkable · in dev</span><span class="st">Simulation</span></div><h2>Hugo, in the dorm</h2></div>
-    <div><p class="about">The first integration of the Mortal Agent Frame into a substrate. It's a 3D world built from my real LIU dorm floor plan, on MuJoCo physics, where Hugo lives and his emergence gets logged and observed. He gets a hidden lifespan at birth, and when he dies the next Hugo is a new being. One agent in one world first, then more agents, worlds and dynamics. 3D is the step before real hardware, drones and robotics, which is where this ends up. It was my first personal coding project and it's a test, a proof the integration works. The player runs on fixed-step physics at 120 Hz with AABB colliders and hinged doors. Hugo's skeleton is driven by a MuJoCo server over WebSocket when one is connected, and by a procedural gait when it is not.</p></div>
+    <div><p class="about">The first integration of the Mortal Agent Frame into a substrate. It's a 3D world built from my real LIU dorm floor plan, on MuJoCo physics, where Hugo lives and his emergence gets logged and observed. He gets a hidden lifespan at birth, and when he dies the next Hugo is a new being. One agent in one world first, then more agents, worlds and dynamics. 3D is the step before real hardware, drones and robotics, which is where this ends up. It was my first personal coding project and it's a test, a proof the integration works. The player runs on fixed-step physics at 120 Hz with AABB colliders and hinged doors. Hugo's body is the frame's MuJoCo dorm body: his own repertoire picks what he does (walk, turn, sit on the bed, reach, answer a knock) and MuJoCo joint torques carry it out. Run locally it streams live; here it replays a recorded 60 s run of that simulation, labelled as one.</p></div>
   </div>
   <div class="split">
     <div>
@@ -805,7 +807,7 @@ document.getElementById('copyEmail').addEventListener('click',e=>{e.preventDefau
   });
 })();
 const LOCAL = /^(127\.0\.0\.1|localhost)$/.test(location.hostname);
-const BUILD = '20261114a';
+const BUILD = '20261115m';
 const EZER_URL = LOCAL ? 'http://127.0.0.1:8766/' : 'https://ezer-demo.daniel4chigs.workers.dev/';
 // Morgan Futures mobile app (Expo web export), served at its own root like EZER.
 const MORGAN_URL = LOCAL ? 'http://127.0.0.1:8767/' : 'https://morgan-demo.daniel4chigs.workers.dev/app/';
