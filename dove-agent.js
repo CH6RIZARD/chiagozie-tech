@@ -464,6 +464,8 @@ window.SCION_BOOT = R => {
 
   // Two takeoffs: relaxed (the slow first stage) and panic (straight up, frantic wings).
   function takeOff(target, why, panic) {
+    if (a.mode === 'perch' && !panic && !(a.crouch < 0)) { a.crouch = 0.12; a.wingT = 0.16; a.pendTake = [target, why]; return; }   // first a crouch and the first downstroke (perch tick), then the push-off
+    a.crouch = 0;
     if (a.mode === 'perch') { a.vy = panic ? -420 : -260; const tx = target?.spot ? target.spot.x : mouse ? mouse.x : a.x + a.face; a.vx = (Math.sign(tx - a.x) || a.face) * 80; a.y -= R.bodyAbove; }
     if (a.mode === 'perch') { a.vz = 160; a.toT = panic ? 0.2 : 0.7; a.view = a.yaw; if (panic) { a.panic = 1.2; speak('!!', 700); } }
     a.mode = 'fly'; a.target = target; a.spot = null; a.walk = null; clearPeck();
@@ -472,6 +474,7 @@ window.SCION_BOOT = R => {
   }
   function landOn(sp) {
     const pos = spotPos(sp); if (!pos) return;
+    a.settle = { dx: a.x - pos.x, dy: a.y - pos.y, t: 0.15 };
     a.mode = 'perch'; a.spot = sp; a.x = pos.x; a.y = pos.y; a.vx = a.vy = 0; a.idle = rand(0.8, 2); perchedAt.set(sp.s, performance.now()); a.perchSince = performance.now();
     if (sp.s.kind === 'hugo') { emit('PAGE', 'perched on Hugo'); REL.ev('dove', 'landedNear', 'hugo', 0.1, { ride: 1 }); return; }
     // It has weight: whatever it lands on gives a little.
@@ -957,8 +960,11 @@ window.SCION_BOOT = R => {
     }
     // Breathing, faster as time pressure rises.
     if (a.wingT > 0) row = 'flap';   // a flash of the wings
-    const breath = a.walk ? 0 : Math.sin(now / 1000 * Math.PI * 2 * CFG.breathHz * (1 + p)) * 0.016;
-    drawPerch(a.x, a.y - lift, a.yaw, a.face, row, breath, a.walkPh);
+    if (a.crouch > 0 && (a.crouch -= dt) <= 0) { a.crouch = -1; const [tg, why] = a.pendTake || []; a.pendTake = null; takeOff(tg, why); return; }   // the crouch is done: off
+    const breath = a.crouch > 0 ? -0.14 : a.walk ? 0 : Math.sin(now / 1000 * Math.PI * 2 * CFG.breathHz * (1 + p)) * 0.016;   // crouching: squashed, wings opening
+    let sx = a.x, sy = a.y - lift;
+    if (a.settle) { const k = Math.max(0, (a.settle.t -= dt) / 0.15); sx += a.settle.dx * k; sy += a.settle.dy * k; if (k <= 0) a.settle = null; }   // touchdown: from where it arrived onto the spot over 0.15 s, no snap
+    drawPerch(sx, sy, a.yaw, a.face, row, breath, a.walkPh);
     if (a.wingT > 0) R.set({ flapPh: (now / 180) % 1 });
   }
 
@@ -1038,9 +1044,9 @@ window.SCION_BOOT = R => {
 
     // Wingbeats: effort = fighting gravity + accelerating; the first beats after takeoff are the strongest.
     const lift = 700 - ay;
-    a.glide = speed > 260 && a.vy > 30 && lift < 900 && !a.flee && !a.toT && !(a.clapT > 0);
+    a.glide = speed > 180 && a.vy > -20 && lift < 900 && !a.flee && !a.toT && !(a.clapT > 0) && !(landing && dist < 60);   // flap-flap-glide, even on a short hop; never into the touchdown
     const effort = clamp(lift / 900 + Math.hypot(ax, az) / 2000, 0.25, 1.4) * (1 + a.toT / 0.7) * (a.held ? 0.55 + (a.stress || 0) * 1.6 : 1)   // calm in the hand: slow wingbeats; frightened: frantic
-      * (a.panic > 0 ? 1.6 : 1) * (a.ti > 0 ? 0.15 : 1);   // panic: frantic; gone still: the wings barely move
+      * (a.panic > 0 ? 1.6 : 1) * (a.ti > 0 ? 0.15 : 1) * (landing && dist < 60 ? 1.4 : 1);   // panic: frantic; gone still: the wings barely move; the last 60 px: braking beats
     if (live) a.glide = false;
     if (!a.glide && !live) a.phase += dt * CFG.flapHz * effort;   // wingbeat cycles
     if (a.clapT > 0) { a.clapT -= dt; a.phase += dt * CFG.flapHz * 2; }   // clap-flight: extra loud beats
@@ -1070,7 +1076,7 @@ window.SCION_BOOT = R => {
     if (live) a.roll = sRoll * a.face;
     else if (a.tumble > 0) a.roll = (a.spin = (a.spin || 0) + 1000 * dt * (a.tumbleDir || 1)); else a.spin = 0;
     const brake = speed > 30 ? -(ax * a.vx + ay * a.vy) / speed : 0;
-    const flare = landing && dist < 140 ? clamp(brake / 40, 0, 26) : 0;
+    const flare = landing && dist < 140 ? Math.max(clamp(brake / 40, 0, 26), dist < 60 ? 22 : 0) : 0;   // nose up into the perch
     const pitch = live ? sPitch : clamp(a.vy / 14, -20, 22) - flare;   // nose down when diving, up when climbing or braking
 
     let ground = a.y + 260;
@@ -1078,7 +1084,7 @@ window.SCION_BOOT = R => {
 
     if (landing && ((dist < 22 && speed < 260 && Math.abs(a.z - (landing.z < 0 ? -60 : 0)) < 25) || (live && phys.st.perched && landPos && Math.hypot(a.x - landPos.x, a.y - landPos.y) < 90))) {
       a.ps = depthScale(a.z); a.z = a.vz = 0; a.yaw = clamp(a.view, 0, 6);
-      landOn(landing); a.target = null; return drawPerch(a.x, a.y, a.yaw, a.face, 'look');
+      landOn(landing); a.target = null; return drawPerch(a.x + (a.settle ? a.settle.dx : 0), a.y + (a.settle ? a.settle.dy : 0), a.yaw, a.face, 'look');
     }
     drawFly(a.x, a.y - bob, a.z, a.view, a.face, a.phase % 1, a.glide, pitch, a.roll * a.face, ground);
   }

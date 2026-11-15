@@ -102,7 +102,7 @@ function frame(now) {
   // Poses flow into each other (wings unfold on takeoff, fold on landing) instead of swapping frames.
   const want = st.mode === 'perch' ? st.row : st.glide ? 'glide' : 'flap';
   let sum = 0;
-  for (const k in w) { w[k] += Math.max(-dt * CFG.blendRate, Math.min(dt * CFG.blendRate, (k === want ? 1 : 0) - w[k])); sum += w[k]; }
+  for (const k in w) { const rate = st.mode === 'perch' && (k === 'flap' || k === 'glide') ? 4 : CFG.blendRate; w[k] += Math.max(-dt * rate, Math.min(dt * rate, (k === want ? 1 : 0) - w[k])); sum += w[k]; }   // perched: the wings fold over ~0.25 s
   for (const k in w) acts[k].setEffectiveWeight(w[k] / (sum || 1));
   acts.flap.time = (st.flapPh % 1) * acts.flap.getClip().duration;
   acts.walk.time = (st.walkPh % 1) * acts.walk.getClip().duration;
@@ -113,7 +113,8 @@ function frame(now) {
   inner.position.copy(anc).multiplyScalar(-S);
   view.position.set(st.x - scrollX - innerWidth / 2, innerHeight / 2 - (st.y - scrollY), st.z);
   view.rotation.x = CFG.viewTilt * D2R;
-  group.rotation.set(st.roll * D2R, st.heading * D2R, -st.pitch * D2R);
+  st.pitchD = (st.pitchD ?? st.pitch) + (st.pitch - (st.pitchD ?? st.pitch)) * Math.min(1, dt * 12);
+  group.rotation.set(st.roll * D2R, st.heading * D2R, -st.pitchD * D2R);
   const k = st.scale || 1;   // perched lane scale (depth.js): smaller on a back-lane seam, about its feet
   group.scale.set((1 - st.breath * 0.4) * (1 + 0.12 * st.puff) * k, (1 + st.breath) * k, (1 - st.breath * 0.4) * (1 + 0.12 * st.puff) * k);
 

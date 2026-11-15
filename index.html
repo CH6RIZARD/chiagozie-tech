@@ -21,15 +21,15 @@ try { if (localStorage.getItem('theme') === 'light') document.documentElement.da
 <link rel="preload" as="script" href="mortal-kernel.js?v=20261113e1" data-agent>
 <link rel="preload" as="script" href="depth.js?v=20261113g4b" data-agent>
 <link rel="preload" as="script" href="bond.js?v=20261113e1" data-agent>
-<link rel="preload" as="script" href="dove-agent.js?v=20261113g4" data-agent>
-<link rel="modulepreload" href="dove3d.js?v=20261113g1" data-agent>
-<link rel="modulepreload" href="hugo3d.js?v=20261113g4" data-agent>
+<link rel="preload" as="script" href="dove-agent.js?v=20261113g5" data-agent>
+<link rel="modulepreload" href="dove3d.js?v=20261113g5" data-agent>
+<link rel="modulepreload" href="hugo3d.js?v=20261113L1" data-agent>
 <link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.min.js">
 <link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/loaders/GLTFLoader.js">
 <link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/utils/BufferGeometryUtils.js">
 <link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/environments/RoomEnvironment.js">
 <link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/libs/meshopt_decoder.module.js">
-<link rel="preload" as="fetch" href="realms/hugo/hugo.glb" crossorigin>
+<link rel="preload" as="fetch" href="realms/hugo/hugo.meshopt.glb" crossorigin>
 <style>
 /* ---- tokens: re-skin here ---- */
 :root{
@@ -885,7 +885,7 @@ window.SCION_CONFIG = { size: matchMedia('(max-width:760px)').matches ? 16 : 26,
   const L = [...document.querySelectorAll('link[data-agent]')], classic = L.filter(l => l.rel === 'preload'), mods = L.filter(l => l.rel === 'modulepreload');
   classic.reduce((p, l) => p.then(() => add(l.getAttribute('href'))), Promise.resolve()).then(() => ext).then(ext => {
     window.SCION_GLB = 'dove.glb' + ext;
-    window.HUGO_CONFIG = { size: matchMedia('(max-width:760px)').matches ? 64 : 150, glb: 'realms/hugo/hugo.glb' + ext };
+    window.HUGO_CONFIG = { size: matchMedia('(max-width:760px)').matches ? 64 : 150, glb: 'realms/hugo/hugo.meshopt.glb' + ext };
     const [dove, hugo] = mods.map(l => l.getAttribute('href'));
     add(hugo, 'module');
     // The dove's body is fetched after Hugo's has landed: on a slow link the two would split the line and both come late (capped: the dove never waits past 5 s).

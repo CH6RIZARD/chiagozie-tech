@@ -4,9 +4,12 @@
 // Camera matches CSS pixels (1 unit = 1 px on the page plane), the same convention as the dove.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';   // the body is meshopt-compressed (1.43 MB -> 0.24 MB)
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 
 const CFG = Object.assign({ size: 150, perspective: 900, glb: 'realms/hugo/hugo.glb', viewTilt: 6, speed: 34, stride: 46 }, window.HUGO_CONFIG || {});
+const K = CFG.size / 150;
+const calm = matchMedia('(prefers-reduced-motion: reduce)').matches;   // no bracing or glancing for visitors who asked for less motion   // px amplitudes scale with his size: the phone's 64 px reads like the desktop's 150
 const reduced = /[?&]still/.test(location.search);   // walking is gentle motion; a reduce-motion setting no longer freezes him
 
 const canvas = document.createElement('canvas');
@@ -47,31 +50,36 @@ function resize() {
 let pageW = document.documentElement.clientWidth;   // cached: a per-frame read after style writes forces a layout
 resize(); addEventListener('resize', () => { resize(); dirty = true; pageW = document.documentElement.clientWidth; });
 const key = new THREE.DirectionalLight(0xffffff, 2.2); key.position.set(-400, 600, 700);
-const rim = new THREE.DirectionalLight(0x3550ff, 2.4); rim.position.set(300, 250, -700);
+const rim = new THREE.DirectionalLight(0x6a7cff, 4.0); rim.position.set(200, 500, -600);   // from behind and above: a cool edge on the dark page
 scene.add(key, rim, new THREE.HemisphereLight(0xffffff, 0xf1ede4, 1.2));
 
 // ---------- body ----------
-const gltf = await new GLTFLoader().loadAsync(CFG.glb);
+const gltf = await new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).loadAsync(CFG.glb);
 const model = gltf.scene;
-const skin = new THREE.MeshPhysicalMaterial({ color: 0xe8e6df, roughness: 0.6, sheen: 0.6, sheenColor: new THREE.Color(0xdfe5ff), envMapIntensity: 0.5 });
+const skin = new THREE.MeshPhysicalMaterial({ color: 0xd8d4c8, roughness: 0.6, sheen: 0.6, sheenColor: new THREE.Color(0xdfe5ff), envMapIntensity: 0.5 });   // a warm off-white: the key light models him, the rim edges him
 model.traverse(o => { if (o.isMesh) { o.material = skin; o.frustumCulled = false; } });
 // The skin deforms on the Rigify DEF chain, which sits beside the ORG bones in this export, so pose DEF directly.
 const bone = re => { let b = null; model.traverse(o => { if (!b && o.isBone && re.test(o.name)) b = o; }); return b; };
 const B = {
   thighL: bone(/^DEF-thigh.?L_/), thighR: bone(/^DEF-thigh.?R_/), shinL: bone(/^DEF-shin.?L_/), shinR: bone(/^DEF-shin.?R_/),
   armL: bone(/^DEF-upper_arm.?L_/), armR: bone(/^DEF-upper_arm.?R_/), foreL: bone(/^DEF-forearm.?L_/), foreR: bone(/^DEF-forearm.?R_/),
-  head: bone(/^DEF-spine.?00[456]_/), chest: bone(/^DEF-spine.?002_/), handL: bone(/^DEF-hand.?L_/), handR: bone(/^DEF-hand.?R_/),
-};
+  head: bone(/^DEF-spine.?00[456]_/), chest: bone(/^DEF-spine.?002_/), hips: bone(/^DEF-spine_/), handL: bone(/^DEF-hand.?L_/), handR: bone(/^DEF-hand.?R_/),
+};   // hips: the spine root; the DEF chain above it is the torso and head skin, the legs hang from ORG-spine, so a pelvis roll never moves a foot
 const rest = new Map(); for (const b of Object.values(B)) if (b) rest.set(b, b.quaternion.clone());
 // Poses write targets; applyPose eases every joint toward them, so he flows between walking, sitting and gestures.
 const tgt = new Map(), cur = new Map(), _q = new THREE.Quaternion(), _e = new THREE.Euler();
 const rot = (b, x, y = 0, z = 0) => { if (b) tgt.set(b, [x, y, z]); };
 const mix = (b, x, y, z, w) => { if (!b || w <= 0) return; const T = tgt.get(b) || [0, 0, 0]; tgt.set(b, [T[0] + (x - T[0]) * w, T[1] + (y - T[1]) * w, T[2] + (z - T[2]) * w]); };
-function applyPose(dt, k) {
-  const a = Math.min(1, dt * k);
+// Overlap: every joint is a damped spring with its own rate (Juckett's closed form: exact at any dt, so a 4 fps frame never
+// explodes). The head is loose (it lags the chest and overshoots), the chest firm, the legs stiff; held or airborne he is rigid.
+function springK(w, z, dt) { z = Math.min(z, 0.999); const wz = w * z, al = w * Math.sqrt(1 - z * z), ex = Math.exp(-wz * dt), c = Math.cos(al * dt), s = Math.sin(al * dt), es = ex * s / al, ezs = ex * wz * s / al;
+  return [ex * c + ezs, es, -es * al * al - wz * ezs, ex * c - ezs]; }   // [pos<-pos, pos<-vel, vel<-pos, vel<-vel]
+const RATE = new Map([[B.head, [18, 0.35]], [B.chest, [22, 0.7]], [B.hips, [22, 0.7]], [B.thighL, [28, 0.8]], [B.thighR, [28, 0.8]], [B.shinL, [30, 0.8]], [B.shinR, [30, 0.8]]]);
+function applyPose(dt, stiff) {
   for (const [b, T] of tgt) {
-    let C = cur.get(b); if (!C) cur.set(b, C = T.slice());
-    for (let i = 0; i < 3; i++) C[i] += (T[i] - C[i]) * a;
+    let C = cur.get(b); if (!C) cur.set(b, C = [...T, 0, 0, 0]);   // angle x3, angular velocity x3
+    const [w, z] = stiff ? [40, 1] : RATE.get(b) || [20, 0.7], [pp, pv, vp, vv] = springK(w, z, dt);
+    for (let i = 0; i < 3; i++) { const p = C[i] - T[i], v = C[i + 3]; C[i] = p * pp + v * pv + T[i]; C[i + 3] = p * vp + v * vv; }
     b.quaternion.copy(rest.get(b)).multiply(_q.setFromEuler(_e.set(C[0], C[1], C[2])));
   }
 }
@@ -90,13 +98,13 @@ function aimBone(b, dirModel) {   // turn bone b so its +Y points along dirModel
   const r = rest.get(b); _ax.set(0, 1, 0).applyQuaternion(r);
   b.quaternion.copy(_r.setFromUnitVectors(_ax, _d)).multiply(r);
 }
-function applyArms(dt, k) {
+function applyArms(dt, stiff) {
   if (!BODY) return;
-  const a = Math.min(1, dt * k);
+  const KU = springK(...(stiff ? [40, 1] : [14, 0.4]), dt), KF = springK(...(stiff ? [40, 1] : [12, 0.35]), dt);
   for (const side of ['L', 'R']) {
     const T = ARM[side], sx = side === 'L' ? 1 : -1;
-    let C = armCur[side]; if (!C) C = armCur[side] = { u: T.u.slice(), f: T.f.slice() };
-    for (const key of ['u', 'f']) for (let i = 0; i < 3; i++) C[key][i] += (T[key][i] - C[key][i]) * a;
+    let C = armCur[side]; if (!C) C = armCur[side] = { u: T.u.slice(), f: T.f.slice(), vu: [0, 0, 0], vf: [0, 0, 0] };
+    for (const key of ['u', 'f']) { const [pp, pv, vp, vv] = key === 'u' ? KU : KF, V = C['v' + key]; for (let i = 0; i < 3; i++) { const p = C[key][i] - T[key][i], v = V[i]; C[key][i] = p * pp + v * pv + T[key][i]; V[i] = p * vp + v * vv; } }
     const toModel = v => new THREE.Vector3().addScaledVector(BODY.left, v[0] * sx).addScaledVector(BODY.up, v[1]).addScaledVector(BODY.fwd, v[2]).normalize();
     const up = side === 'L' ? B.armL : B.armR, fo = side === 'L' ? B.foreL : B.foreR;
     if (up) { aimBone(up, toModel(C.u)); up.updateMatrixWorld(true); }
@@ -104,8 +112,8 @@ function applyArms(dt, k) {
   }
 }
 // How he carries himself on this walk: re-rolled every time he sets off, so no two walks look the same.
-const sty = { arm: 0.35, hip: 0.38, cadence: 0.9, pockets: false, lean: 0 };
-function restyle() { sty.arm = 0.18 + Math.random() * 0.3; sty.hip = 0.4 + Math.random() * 0.1; sty.cadence = 0.78 + Math.random() * 0.3; sty.pockets = Math.random() < 0.18; sty.lean = (Math.random() - 0.4) * 0.12; }
+const sty = { arm: 0.35, hip: 0.38, cadence: 0.9, pockets: false, lean: 0, roll: 0 };
+function restyle() { sty.asym = 0.85 + Math.random() * 0.3; sty.arm = 0.18 + Math.random() * 0.3; sty.hip = 0.4 + Math.random() * 0.1; sty.cadence = 0.78 + Math.random() * 0.3; sty.pockets = Math.random() < 0.18; sty.lean = (Math.random() - 0.4) * 0.12; }
 // Gait geometry: one full cycle (two steps) covers 2 x step length, step length = 2 * leg * sin(hip swing). Moving the
 // body by exactly that per cycle keeps the planted foot from sliding: what read as shuffling was the legs cycling ~3x
 // faster than the body moved.
@@ -114,17 +122,25 @@ const cycleLen = () => 4 * LEG * Math.sin(sty.hip);
 const walkSpeed = () => cycleLen() * sty.cadence;   // px/s
 const frac = x => x - Math.floor(x);
 const bump = (p, c, w) => { const d = frac(p - c + 0.5) - 0.5; return Math.exp(-(d * d) / (2 * w * w)); };
+const gait = a => a * a * (3 - 2 * a);   // stride amount -> speed share: he pushes off from a standstill and settles over two steps, never a step change
 function poseStand(ph, amt) {          // ph: walk phase 0..1, amt: 0 still .. 1 full stride
   // Per leg, phase 0 = heel strike: hip flexed forward, then extends back through stance, swings forward from ~0.6.
   // Knee: a small give as the foot takes weight (~0.12), a big bend to clear the ground mid-swing (~0.72).
   const leg = p => [-sty.hip * Math.cos(2 * Math.PI * p) * amt, (0.06 + 0.2 * bump(p, 0.12, 0.07) + 1.05 * bump(p, 0.72, 0.1)) * amt + 0.04];
   const [hL, kL] = leg(ph), [hR, kR] = leg(ph + 0.5);
   rot(B.thighL, hL); rot(B.shinL, kL); rot(B.thighR, hR); rot(B.shinR, kR);
+  // At rest he is never a mannequin: the weight sits on one leg (contrapposto), shifts to the other every 4-8 s, and sways a little between
+  const w0 = 1 - Math.min(1, amt * 3), sd = st.stance || 0, ws = Math.sin(t * 0.9) * 0.5;
+  sty.sway = -(sd * 0.04 + ws * 0.04) * w0;   // the chest's counter-roll, written with the chest in frame()
+  if (w0 > 0) { const free = sd > 0 ? 'R' : 'L', k = Math.abs(sd) * w0; mix(B['thigh' + free], -0.12, 0, 0, k); mix(B['shin' + free], 0.25, 0, 0, k); }
   const s = -Math.cos(2 * Math.PI * ph) * amt;   // >0 while the left leg is back: the left arm swings forward
+  sty.roll = Math.sin(2 * Math.PI * ph) * amt;   // the pelvis drops toward the swing leg and twists with the stride; the chest counters it (frame())
+  rot(B.hips, 0, sty.roll * 0.06, sty.roll * 0.08 + (sd * 0.05 + ws * 0.05) * w0);   // standing: the weight on one hip, swaying a little
   const sw = sty.pockets ? 0.05 : sty.arm, tt = performance.now() / 1000, out = sty.pockets ? 0.05 : 0.13;
   // arms swing opposite the legs; a slow drift keeps them from ever looking pinned
-  arm('L', [out + Math.sin(tt * 0.7) * 0.03, -1, s * sw + Math.sin(tt * 0.9) * 0.04], sty.pockets ? [-0.1, -0.7, 0.45] : [0.04, -1, 0.18 + s * sw * 1.2]);
-  arm('R', [out + Math.sin(tt * 0.6 + 2) * 0.03, -1, -s * sw + Math.sin(tt * 0.8 + 1) * 0.04], sty.pockets ? [-0.1, -0.7, 0.45] : [0.04, -1, 0.18 - s * sw * 1.2]);
+  const asym = sty.asym || 1, o2 = out + 0.04 * Math.abs(s);   // the elbow bends as the arm comes forward (a rod no more); the right arm swings a little more or less than the left
+  arm('L', [o2 + Math.sin(tt * 0.7) * 0.03, -1, s * sw + Math.sin(tt * 0.9) * 0.04], sty.pockets ? [-0.1, -0.7, 0.45] : [0.04, -1, 0.18 + Math.max(0, s) * sw * 1.6]);
+  arm('R', [o2 + Math.sin(tt * 0.6 + 2) * 0.03, -1, -s * sw * asym + Math.sin(tt * 0.8 + 1) * 0.04], sty.pockets ? [-0.1, -0.7, 0.45] : [0.04, -1, 0.18 + Math.max(0, -s) * sw * 1.6 * asym]);
 }
 function poseHop(vy) {   // rising: knees tucked; falling: legs reach for the floor
   const up = vy < 0 ? 1 : Math.max(0, 1 - vy / 500);
@@ -187,7 +203,16 @@ model.updateMatrixWorld(true);
 { const wl = B.armL.getWorldPosition(new THREE.Vector3()), wr = B.armR.getWorldPosition(new THREE.Vector3()), inv = model.getWorldQuaternion(new THREE.Quaternion()).invert();
   const left = wl.sub(wr).applyQuaternion(inv); left.y = 0; left.normalize(); const up = new THREE.Vector3(0, 1, 0);
   BODY = { left, up, fwd: new THREE.Vector3().crossVectors(left, up).normalize() }; }
-poseSit(0); applyPose(1, 1e9); applyArms(1, 1e9); model.updateMatrixWorld(true);
+// Eyes: two dark beads on the front of the head (the glb's head is a featureless sphere, so every look was invisible). The head is
+// the sphere from the neck top to the top of the box; the beads sit on its front, a little above centre, and blink from frame().
+const skull = bone(/^DEF-spine.?006_/) || B.head, eyes = [];
+{ const hp = skull.getWorldPosition(new THREE.Vector3()), hr = (standBox.max.y - hp.y) / 2, hc = hp.clone().addScaledVector(BODY.up, hr), ws = skull.getWorldScale(new THREE.Vector3()).x || 1;
+  const mat = new THREE.MeshBasicMaterial({ color: 0x141414 }), at = p => skull.worldToLocal(p.clone());
+  for (const sx of [-1, 1]) { const m = new THREE.Mesh(new THREE.SphereGeometry(hr * 0.16 / ws, 10, 8), mat); m.frustumCulled = false; skull.add(m);
+    m.position.copy(at(hc.clone().addScaledVector(BODY.fwd, hr * 0.88).addScaledVector(BODY.left, sx * hr * 0.4).addScaledVector(BODY.up, hr * 0.1)));
+    m.userData.base = m.position.clone(); m.userData.left = at(hc.clone().add(BODY.left)).sub(at(hc)).multiplyScalar(hr * 0.1); eyes.push(m); } }
+let blinkAt = 2, blinkT = 0;
+poseSit(0); applyPose(1, true); applyArms(1, true); model.updateMatrixWorld(true);
 const seatBox = new THREE.Box3().setFromObject(model, true);
 const hipY = B.thighL ? B.thighL.getWorldPosition(new THREE.Vector3()).y : seatBox.min.y + (seatBox.max.y - seatBox.min.y) * 0.45;
 const seat = new THREE.Vector3((seatBox.min.x + seatBox.max.x) / 2, hipY - (seatBox.max.y - seatBox.min.y) * 0.06, 0);
@@ -202,8 +227,15 @@ const PITCH = Math.acos(Math.max(0.2, Math.min(0.95, (ARMLEN - THIGH) / SPINE)))
 const hip = new THREE.Vector3(feet.x, hipY, 0);
 const CRAWL_H = Math.max(ARMLEN, THIGH + SPINE * Math.cos(PITCH)) + CFG.size * 0.16;   // shoulders plus his head
 
+// Dust: a hard landing (above half the usual fall speed) kicks 3-8 grey motes up from his feet for ~0.4 s (Celeste's landing gate). Points on his own canvas.
+const DUST_N = 8, dustPos = new Float32Array(DUST_N * 3).fill(1e5), dust = Array.from({ length: DUST_N }, () => ({ life: 0, vx: 0, vy: 0 }));
+const dustPts = new THREE.Points(new THREE.BufferGeometry().setAttribute('position', new THREE.BufferAttribute(dustPos, 3)), new THREE.PointsMaterial({ color: 0xb4b4b4, size: Math.max(3, 4 * K), sizeAttenuation: false, transparent: true, opacity: 0.45, depthWrite: false }));
+dustPts.frustumCulled = false;
+function kickDust(x, y, n) { let k = 0; for (const d of dust) { if (d.life > 0 || k >= n) continue; const a = -Math.PI / 2 + (Math.random() - 0.5) * 2.1, v = (60 + Math.random() * 80) * K; d.life = 0.3 + Math.random() * 0.2; d.vx = Math.cos(a) * v; d.vy = -Math.sin(a) * v; d.x = x + (Math.random() - 0.5) * 24 * K; d.y = y - 2; k++; } st.dustN = (st.dustN || 0) + k; }
+function stepDust(dt) { let any = false; dust.forEach((d, i) => { if (d.life <= 0) { dustPos[i * 3 + 1] = 1e5; return; } any = true; d.life -= dt; d.vy += 500 * K * dt; d.x += d.vx * dt; d.y += d.vy * dt; d.vx *= Math.max(0, 1 - 3 * dt);
+  dustPos[i * 3] = d.x - scrollX - innerWidth / 2; dustPos[i * 3 + 1] = innerHeight / 2 - (d.y - scrollY); dustPos[i * 3 + 2] = 2; }); dustPts.geometry.attributes.position.needsUpdate = true; dustPts.visible = any; }
 const view = new THREE.Group(), inner = new THREE.Group();
-inner.add(model); inner.scale.setScalar(S); view.add(inner); scene.add(view);
+inner.add(model); inner.scale.setScalar(S); view.add(inner); scene.add(view, dustPts);
 view.rotation.x = CFG.viewTilt * Math.PI / 180;
 
 // ---------- the world: floors and solids, in page coordinates ----------
@@ -215,12 +247,12 @@ const clipX = q => { const c = q.sc && scrollers.get(q.sc); if (!c) return q;
   const a = Math.max(q.u1, c.l), b = Math.min(q.u2, c.r);
   if ('y' in q) { q.x1 = a; q.x2 = b; } else if (b > a) { q.l = a; q.r = b; } else q.l = q.r = -1e9;   // ink scrolled out of its box is not there
   return q; };
-const skipSel = '#scion-hud,#scion-say,#scion-ask,#scion-dove,#agent-layer,script,style,svg,canvas,nav:not(.mindex),.msheet';   // .msheet: the phone sheet is invisible until opened; .mindex: the phone project list is content, not chrome (hidden on desktop)
+const skipSel = '#scion-hud,#scion-say,#scion-ask,#scion-dove,#hugo-hit,#hugo-hud,#agent-layer,script,style,svg,canvas,nav:not(.mindex),.msheet';   // .msheet: the phone sheet is invisible until opened; .mindex: the phone project list is content, not chrome (hidden on desktop)
 // phones: faded-out layers (a view mid-switch, a panel at opacity 0) are not there for him
 const hidden = e => (e.checkVisibility ? !e.checkVisibility({ opacityProperty: true, visibilityProperty: true }) : false) || covered(e);
 // ...and so is anything another layer sits on top of (checked at its top edge and centre; off screen it cannot be judged, so it counts)
 const covered = e => { const r = e.getBoundingClientRect(), d = e.ownerDocument, cx = (r.left + r.right) / 2;
-  const hits = [d.elementFromPoint(cx, r.top + Math.min(4, r.height / 2)), d.elementFromPoint(cx, (r.top + r.bottom) / 2)].filter(Boolean);
+  const hits = [d.elementFromPoint(cx, r.top + Math.min(4, r.height / 2)), d.elementFromPoint(cx, (r.top + r.bottom) / 2)].filter(h => h && !h.closest(skipSel));   // the agents' own layers (the dove's grab box on the name) cover nothing: with them the name's ledges vanished while the dove perched there and he was born off screen, seconds late
   return hits.length > 0 && !hits.some(h => e.contains(h)); };
 function scan() {
   floors = []; ink = []; textInk = []; seams = []; cards = []; scrollers.clear();
@@ -331,7 +363,7 @@ const pickPlace = () => pickFloor(true, 0);
 // He never teleports and never follows the visitor. Off screen he keeps living; we just do not draw him.
 const G = 1400;   // px/s2, page gravity
 const st = { z: 0, zs: 0, w: 0.5, lanes: [0], par: 0, hopY: 0, floor: null, x: 0, y: 0, vx: 0, vy: 0, air: false, dir: 1, mode: 'walk', ph: 0, amt: 0, swing: 0, swingV: 0, idleUntil: 0, land: 0,
-  held: false, hover: false, px: 0, py: 0, tilt: 0, spdK: 1, crouch: 0, headH: CFG.size, look: 0, gestName: null, vxw: 0, hand: null, hitsSeen: 0, relOrder: null };
+  ax: 0, held: false, hover: false, px: 0, py: 0, tilt: 0, spdK: 1, crouch: 0, headH: CFG.size, look: 0, gestName: null, vxw: 0, hand: null, hitsSeen: 0, relOrder: null };
 // Limbs as damped pendulums: each has an angle and angular velocity and is driven by the body's acceleration.
 const limbs = { thighL: [0, 0], thighR: [0, 0], shinL: [0, 0], shinR: [0, 0], armL: [0, 0], armR: [0, 0], foreL: [0, 0], foreR: [0, 0] };
 let lastVx = 0, lastVy = 0;
@@ -387,9 +419,9 @@ function gesture(dt, sitting, still) {
       if (g.name === 'curious' && dv) st.interest = { x: dv.x, y: dv.y - 10, what: 'dove' };
     }
   }
-  if (!gest && st.pendGest && sitting) { gest = { side: 1, amp: 1, f: 1, ...st.pendGest, t0: t }; st.pendGest = null; }   // the nap his mind wanted, once he is down
+  if (!gest && st.pendGest && (sitting || st.pendGest.any)) { gest = { side: 1, amp: 1, f: 1, ...st.pendGest, t0: t }; st.pendGest = null; }   // the nap his mind wanted, once he is down
   if (!gest && t > gestAt && !(st.goal && st.goal.rel) && !st.crouch) {
-    if (!inView() || Math.random() > 0.2) { gestAt = t + 1.5; return; }   // off camera nobody sees it (and nothing stale plays on re-entry); on camera a 20% roll per idle loop (Celeste)
+    if (!inView() || Math.random() > 0.35) { gestAt = t + 0.8; return; }   // off camera nobody sees it (and nothing stale plays on re-entry); on camera a 35% roll per idle loop (Celeste)
     st.interest = interestNear();
     const list = (sitting ? SIT : STAND).filter(n => n !== lastGest);   // never the same act twice running
     gest = { name: list[(Math.random() * list.length) | 0], t0: t, dur: 2.5 + Math.random() * 4.5, side: Math.random() < 0.5 ? -1 : 1, amp: 0.7 + Math.random() * 0.5, f: 0.8 + Math.random() * 0.6 }; lastGest = gest.name;
@@ -399,7 +431,7 @@ function gesture(dt, sitting, still) {
   const u = (t - gest.t0) / gest.dur;
   if (u >= 1) {
     if (gest.rel && st.relOrder && st.relOrder.id === gest.rel) { st.relOrder.gDone = true; relEnd('ok', { stayed: !!dv && Math.hypot(dv.x - st.x, dv.y - st.y) < CFG.size * 2 }); }
-    gest = null; gestAt = t + 3; return;   // 3 s of plain standing before the next variant may roll
+    gest = null; gestAt = t + 1; return;   // a second of plain standing (breathing, weight shifting) before the next variant may roll
   }
   const w = Math.min(1, u * 4, (1 - u) * 4), A = gest.amp, sd = gest.side, ph = (t - gest.t0) * (gest.f || 1);
   const S1 = sd > 0 ? 'R' : 'L';   // the arm on the gesture's side
@@ -493,12 +525,14 @@ function gesture(dt, sitting, still) {
       armMix('L', [0.3, -0.85, 0.42], [-0.95, 0.12, 0.3], w); armMix('R', [0.3, -0.85, 0.42], [-0.95, 0.2, 0.36], w); mix(B.head, -0.1, 0, 0, w); break; }
     case 'peer': mix(B.chest, 0.35, 0, 0, w); mix(B.head, 0.5, 0, 0, w); armMix('L', [0.3, -0.8, 0.35], [0.1, -0.9, 0.3], w); armMix('R', [0.3, -0.8, 0.35], [0.1, -0.9, 0.3], w); break;   // looking down over the edge
     case 'hands': armMix('L', [0.15, -0.8, 0.5], [-0.6, -0.2, 0.75], w); armMix('R', [0.15, -0.8, 0.5], [-0.6, -0.25, 0.7], w); break;
+    case 'wave': armMix(st.dir > 0 ? 'R' : 'L', [0.6, 0.85, 0.2], [0.15 + Math.sin(ph * 9) * 0.3, 0.95, 0.1], w); lookGoal = -0.25 * st.dir; mix(B.head, -0.05, 0, sd * 0.1, w); break;   // hello again: the hand nearer you, up and waving
   }
 }
 
 window.__hugo = st;   // read-only peek for debugging
 window.__hugoFloors = () => allFloors;   // the ledges he scans are the food's colliders too (bond.js skips support:false seams)
-if (/[?&]debug/.test(location.search)) window.__hugoDbg = { get floors() { return floors; }, get t() { return t; }, get gest() { return gest && gest.name; }, miss: why => missed(why), clear: (x, y, h) => clear(x, y, h), get ink() { return ink; }, transits: () => { const g = graph(); return g ? g.transits : null; }, route: () => transitRoute(), graph: () => graph(), go: () => { const r = transitRoute(); if (r) { st.goal = null; st.route = r; nextLeg(); } return !!r; }, get sq() { return st.sq || 0; } };
+if (/[?&]debug/.test(location.search)) window.__hugoDbg = { get floors() { return floors; }, get t() { return t; }, get gest() { return gest && gest.name; }, miss: why => missed(why), clear: (x, y, h) => clear(x, y, h), get ink() { return ink; }, transits: () => { const g = graph(); return g ? g.transits : null; }, route: () => transitRoute(), graph: () => graph(), go: () => { const r = transitRoute(); if (r) { st.goal = null; st.route = r; nextLeg(); } return !!r; }, get sq() { return st.sq || 0; }, bones: () => { const o = {}; for (const [k, b] of Object.entries({ head: skull, chest: B.chest, hips: B.hips })) { b.getWorldPosition(_hv); o[k] = [+(_hv.x + innerWidth / 2 + scrollX).toFixed(1), +(innerHeight / 2 - _hv.y + scrollY).toFixed(1)]; } return o; }, get lid() { return eyes[0] ? eyes[0].scale.y : 1; }, get shade() { return shadeCss; }, get att() { return att; }, get brace() { return st.brace || 0; },
+  walk: dx => { const f = st.floor; if (!f) return false; st.goal = { f, x: Math.max(f.x1 + HALF_W, Math.min(f.x2 - HALF_W, st.x + dx)), until: t + 20 }; st.route = null; if (st.mode !== 'walk') { st.mode = 'walk'; restyle(); } return true; }, park: s => { st.goal = null; st.route = null; if (st.mode === 'walk') st.mode = 'idle'; st.idleUntil = t + s; }, hop: v => hopUp(v) };   // scripted beats for the harness
 st.dims = { THIGH, ARMLEN, SPINE, PITCH, CRAWL_H, size: CFG.size };
 // Hit area follows him; the canvas itself never takes the pointer.
 const hit = document.createElement('div'); hit.id = 'hugo-hit'; hit.setAttribute('aria-label', 'Hugo. Press to pick him up, let go to drop him.');
@@ -508,7 +542,7 @@ Object.assign(hud.style, { position: 'fixed', left: 0, top: 0, zIndex: 9999, poi
   color: 'var(--muted, #777)', whiteSpace: 'pre', opacity: 0, transition: 'opacity .2s' });
 document.body.append(hit, hud);
 let lastDown = 0, pointerId = null, pvx = 0, pvy = 0, ppx = 0, ppy = 0, ptime = 0, grabAt = 0, grabX = 0, grabY = 0, dragged = false;
-hit.addEventListener('pointerenter', () => { st.hover = true; window.MORTAL?.heard('hugo'); });
+hit.addEventListener('pointerenter', () => { st.hover = true; st.hoverAt = t + 0.15 + Math.random() * 0.15; window.MORTAL?.heard('hugo'); });   // he notices you after a human beat, not on the same frame
 hit.addEventListener('pointerleave', () => { if (!st.held) st.hover = false; });
 hit.addEventListener('pointerdown', e => {
   const now = performance.now();
@@ -544,6 +578,24 @@ const release = e => {
   const sp = Math.hypot(pvx, pvy); window.REL?.ev('visitor', sp > 600 ? 'tossed' : 'released', 'hugo', Math.min(1, sp / 1800), { stress: st.stress || 0 }); poke(sp > 600 ? 'the cursor threw me' : 'the cursor let me go');
 };
 addEventListener('pointerup', release); addEventListener('pointercancel', release);
+let hiddenAt = 0;
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) { hiddenAt = performance.now(); return; }
+  if (!hiddenAt || performance.now() - hiddenAt < 30000 || st.held || st.air || st.dead) return;   // asleep while the tab was away (no frames run): a stretch on waking
+  gest = { name: 'stretch', t0: t, dur: 2.4, side: 1, amp: 1, f: 1 }; if (st.mode === 'walk') { st.mode = 'idle'; st.idleUntil = t + 2.6; st.amt = 0; }
+});
+// Reactions to the visitor: a human delay (N(220, 40) ms, 150-300), one deliberate reaction per 8-12 s, at most 3 of a kind per visit and
+// each kind on its own 4-12 s cooldown (oneko's restraint): a glance and release, never a stare.
+const att = { nextAt: 0, kinds: {}, log: [] };
+function react(kind, fn) {
+  const Kd = att.kinds[kind] || (att.kinds[kind] = { n: 0, at: 0 });
+  if (calm || t < att.nextAt || t < Kd.at || Kd.n >= 3) return false;
+  Kd.n++; Kd.at = t + 4 + Math.random() * 8; att.nextAt = t + 8 + Math.random() * 4;
+  const delay = Math.max(150, Math.min(300, 220 + (Math.random() + Math.random() + Math.random() - 1.5) * 80)), trig = t;
+  setTimeout(() => { fn(); att.log.push({ kind, trig, at: t, ms: Math.round(delay) }); }, delay); return true;
+}
+const glanceAt = (x, y) => { st.glance = { x, y, until: t + 0.8 + Math.random() * 1.2 }; };
+addEventListener('pointerdown', e => { if (!st.held && e.target !== hit && !e.target.closest?.('#hugo-hit')) react('tap', () => glanceAt(e.clientX + scrollX, e.clientY + scrollY)); }, { passive: true });
 
 // ---------- what his mind perceives, and what it can ask of his body ----------
 // The cursor, seen from his size: a huge thing that roams the page, sometimes still, sometimes near, sometimes the hand
@@ -555,6 +607,8 @@ addEventListener('pointermove', e => {
   if (d > 2) pointer.movedAt = now;
   const near = Math.hypot(pointer.cx + scrollX - st.x, pointer.cy + scrollY - (st.y - CFG.size / 2)) < 160;
   if (near && !pointer.near && !st.held) poke('the cursor came close');
+  const close = Math.hypot(pointer.cx + scrollX - st.x, pointer.cy + scrollY - (st.y - CFG.size / 2)) < CFG.size * 3;   // within three of him: a glance (budgeted, delayed)
+  if (close && !pointer.close && !st.held && !st.hover) react('glance', () => glanceAt(pointer.cx + scrollX, pointer.cy + scrollY)); pointer.close = close;
   if (near) window.MORTAL?.heard('hugo');   // the visitor's attention: no isolation while the cursor keeps him company
   pointer.near = near;
 }, { passive: true });
@@ -647,7 +701,7 @@ window.__hugoLife = alive => { if (!alive === !!st.dead) return; st.dead = !aliv
 // Contact shadow (depth cue): his own element in the agents' layer, never the page. Touching his feet it reads as standing;
 // during a lane hop it stays on the floor and shrinks (lifted), and behind the content it slides up and back (receding).
 const shade = layer.appendChild(document.createElement('div')); let shadeCss = '';
-Object.assign(shade.style, { position: 'absolute', left: 0, top: 0, width: '64px', height: '12px', margin: '-6px 0 0 -32px', borderRadius: '50%', pointerEvents: 'none',
+Object.assign(shade.style, { position: 'absolute', left: 0, top: 0, width: Math.round(CFG.size * 0.6) + 'px', height: Math.round(CFG.size * 0.1) + 'px', margin: `${-Math.round(CFG.size * 0.05)}px 0 0 ${-Math.round(CFG.size * 0.3)}px`, borderRadius: '50%', pointerEvents: 'none',
   background: 'radial-gradient(closest-side, rgba(0,0,0,.34), rgba(0,0,0,0))', opacity: 0 });
 // Occluders in the renderer: a depth-only quad (no colour) just in front of the figure per card he is behind, so the GPU drops his
 // fragments there. 1 unit = 1 css px at z 0; a quad at z ZP is scaled by (P - ZP) / P to cover the same screen rect. No clip-path on
@@ -978,6 +1032,7 @@ function relStep(f) {
   else if (st.relGap != null && st.goal && st.goal.rel === o.id && d && (d.mode === 'perch' || o.ex === 'chase')) relGoal(o, { x: d.x - (Math.sign(d.x - st.x) || 1) * st.relGap, y: d.y });   // the bird moved: after it
   const ph = R.phase; st.relBusy = !!(st.relOrder && ph && ph.stage !== 'resolve');
 }
+let returning = false; try { const ls = +localStorage.getItem('hugo.lastSeen') || 0; returning = ls > 0 && Date.now() - ls > 3600e3; localStorage.setItem('hugo.lastSeen', Date.now()); } catch {}   // he remembers you were here
 let bornTries = 0, lastSY = 0, curSY = 0, jumpAt = -1e9;   // lastSY: the scroll before the latest jump, to keep him put on screen across a view switch
 function born() {   // first appearance: a floor in view with standing room
   const spots = inView => { const c = [];
@@ -990,12 +1045,12 @@ function born() {   // first appearance: a floor in view with standing room
   if (!bornTries && !st.bornOnce) {
     const xs = []; for (const nm of floors) if (nm.name && nm.y > scrollY && nm.y < scrollY + innerHeight) for (let x = nm.x1 + HALF_W * 0.6; x <= nm.x2 - HALF_W * 0.6; x += 6) if (clear(x, nm.y, SIT_H + 4)) xs.push({ nm, x });   // both words, end to end
     if (xs.length) { const { nm, x } = xs[(Math.random() * xs.length) | 0]; st.bornOnce = true; st.floor = nm; st.x = x; st.y = footY(nm, x); st.dir = Math.random() < 0.5 ? -1 : 1; st.mode = 'sit'; st.sitK = 1;
-      st.idleUntil = t + 8 + Math.random() * 10; st.pendGest = { name: SIT[(Math.random() * SIT.length) | 0], dur: 3 + Math.random() * 4, side: Math.random() < 0.5 ? -1 : 1, amp: 0.7 + Math.random() * 0.5 }; return true; }
+      st.idleUntil = t + 8 + Math.random() * 10; st.pendGest = returning ? { name: 'wave', dur: 2.4, side: 1, amp: 1, any: true } : { name: SIT[(Math.random() * SIT.length) | 0], dur: 3 + Math.random() * 4, side: Math.random() < 0.5 ? -1 : 1, amp: 0.7 + Math.random() * 0.5 }; return true; }
   }
   let c = spots(true);
   if (!c.length && (bornTries = (bornTries || 0) + 1) > 90) c = spots(false);   // nothing in view for ~1.5 s: start anywhere he fits
   if (!c.length) return false;
-  const p = c[(Math.random() * c.length) | 0]; st.floor = p.f; st.x = p.x; st.y = footY(p.f, p.x); st.dir = Math.random() < 0.5 ? -1 : 1; st.bornOnce = true; return true;
+  const p = c[(Math.random() * c.length) | 0]; st.floor = p.f; st.x = p.x; st.y = footY(p.f, p.x); st.dir = Math.random() < 0.5 ? -1 : 1; st.bornOnce = true; if (returning) st.pendGest = { name: 'wave', dur: 2.4, side: 1, amp: 1, any: true }; return true;
 }
 function refloor(f) {   // the page reflows; keep the floor glued to its element
   if (f.screen) { const E = scrollY + innerHeight - 30; if (E < f.y && f.y - CFG.size < scrollY + innerHeight) f.y = E; return f.y - E > -40; }   // the screen's bottom edge: it carries him up while any of him shows (never out through the bottom), stays put under him once the view has left him below (a climb or the lost case brings him back), and lets go when the view moves on down (he falls to the next ledge)
@@ -1007,7 +1062,17 @@ function refloor(f) {   // the page reflows; keep the floor glued to its element
   const r = f.el.getBoundingClientRect(), top = r.top + oy, bottom = r.bottom + oy;
   f.x1 = f.u1 = r.left + ox; f.x2 = f.u2 = r.right + ox; clipX(f); fit(f); f.y = Math.abs(f.y - bottom) < Math.abs(f.y - top) ? bottom : top; return true;
 }
-function step(dt) {
+function settle(f, dt) {   // arriving (or stopped for a sit): the stride winds down over ~0.4 s and the body keeps its momentum through it (feet in phase with the ground), never a dead stop
+  if (st.amt > 0) { const d = st.slideDir || st.dir, go = gait(st.amt), nx = st.x + d * walkSpeed() * go * dt * (st.spdK || 1);
+    if (onFloor(f, nx) && Math.abs(footY(f, nx) - st.y) <= 6 && clear(nx + d * 10, f.y, CFG.size + 4)) { st.x = nx; st.ph += dt * sty.cadence * go; } }
+  st.amt = Math.max(0, st.amt - dt * 2.5);
+}
+function step(dt) {   // the body's own velocity and acceleration, measured from where he actually went (only on the ground: in the air and in your hand st.vx is the integrator's)
+  const x0 = st.x, ground = !st.air && !st.held;
+  stepBody(dt);
+  if (ground && !st.air && !st.held) { const v = (st.x - x0) / dt; st.ax += ((v - st.vx) / dt - st.ax) * Math.min(1, dt * 10); st.vx = v; } else st.ax = 0;
+}
+function stepBody(dt) {
   if (st.held) {   // he hangs from the hand: a stiff spring to the pointer, so the body lags and swings a little
     const ax = (st.px - st.x) * 180 - st.vx * 22, ay = (st.py - st.y) * 180 - st.vy * 22;
     st.vx += ax * dt; st.vy += ay * dt; st.x += st.vx * dt; st.y += st.vy * dt;
@@ -1035,7 +1100,7 @@ function step(dt) {
     if (py - CFG.size < scrollY + innerHeight && st.y > E && (!f || f.y > E)) f = { y: E, x1: 0, x2: pageW, el: document.body, screen: true, support: true };
     st.landF = f;   // where his shadow falls while he is up
     const ly = f ? footY(f, st.x) : 0;   // where his feet land: the letter tops under him on a text ledge
-    if (f && st.y >= ly && st.vy > 0) { if (f === st.dropF) st.x = Math.max(f.x1 + HALF_W, Math.min(f.x2 - HALF_W, st.x)); st.dropF = null; st.dropIn = false; st.y = footY(f, st.x); st.floor = f; st.air = false; st.squash = Math.max(0.4, Math.min(1, st.vy / 600)); st.sqAt = t; st.vy = 0; st.vx = 0; st.land = 0.23; st.hop = false; st.mode = 'walk'; st.tilt = 0;   // land: a squash (x1.3, y0.7) recovering in ~0.23 s (Celeste's 1.75/s)
+    if (f && st.y >= ly && st.vy > 0) { if (f === st.dropF) st.x = Math.max(f.x1 + HALF_W, Math.min(f.x2 - HALF_W, st.x)); st.dropF = null; st.dropIn = false; st.y = footY(f, st.x); st.floor = f; st.air = false; st.squash = Math.max(0.4, Math.min(1, st.vy / 600)); st.sqAt = t; if (st.vy > 420) kickDust(st.x, st.y, 3 + Math.round(5 * Math.min(1, (st.vy - 420) / 600))); st.vy = 0; st.vx = 0; st.land = 0.23; st.hop = false; st.mode = 'walk'; st.tilt = 0;   // land: a squash (x1.3, y0.7) recovering in ~0.23 s (Celeste's 1.75/s)
       if (st.pounce) { window.REL?.ev('hugo', 'pounceLand', 'dove', 0, { x: st.x, y: st.y }); st.pounce = null; relEnd('ok'); st.mode = 'idle'; st.idleUntil = t + 0.8; }
       else if (gest && gest.rel) st.mode = 'idle';
       if ((st.shaken || 0) > 0.35) { window.REL?.ev('hugo', 'fell', null, Math.min(0.8, st.shaken), { x: st.x, y: st.y }); poke('landed hard'); }
@@ -1084,14 +1149,14 @@ function step(dt) {
   if (st.mode !== 'prep') relStep(f);
   if (st.dazed && st.mode === 'walk') { st.mode = 'idle'; st.idleUntil = t + 0.5; }   // seeing stars: he stands where he is
   if (st.mode === 'walk') {
-    if (st.land > 0) { st.land -= dt; return; }
+    if (st.land > 0) return;   // the landing's beat (st.land decays in frame())
     if ((st.sitK || 0) > 0.04 || (st.crawlK || 0) > 0.05) { st.amt = 0; return; }   // still getting up
     if (st.throwing) { st.amt = Math.max(0, st.amt - dt * 6); return; }   // he plants his feet to throw or lift the bird
     // Purpose: where he walks comes from his drives (autonomy(), via the Mortal Agent kernel) or from REL; with no goal he
     // does not wander off on a whim, he stands and the next beat decides. Being seen: back in view, he stops working his way there.
     if (inView() && st.toView) { st.toView = false; st.away = 0; if (st.goal?.toView) st.goal = null; }
     if (!st.goal) { st.mode = 'idle'; st.idleUntil = t + 0.75; return; }
-    const d0 = st.dir;
+    const d0 = st.dir; st.brake = 1;
     if (st.goal) {
       const g = st.goal;
       if (!refloor(g.f) || t > g.until) giveUp('never got there');   // could not get there: try elsewhere for a while
@@ -1109,7 +1174,7 @@ function step(dt) {
           else { st.mode = 'idle'; st.idleUntil = t + 8 + Math.random() * 12; }
           return;
         }
-        st.dir = Math.sign(g.x - st.x) || st.dir;
+        st.dir = Math.sign(g.x - st.x) || st.dir; st.brake = Math.abs(g.x - st.x) / (walkSpeed() * 0.6);   // the last 0.6 s of the way: shorter, slower steps into the stop
       } else if (g.f.y < f.y - 4) {   // above him
         const dh = f.y - g.f.y, under = st.x >= g.f.x1 + HALF_W - 1 && st.x <= g.f.x2 - HALF_W + 1 && clear(st.x, g.f.y, CFG.size + 4);   // a goal clamped to the ledge's end counts as under it (a strict test had him turning on the spot for 25 s)   // under it, and with room on top right here (else he walks to the spot he chose first)
         if (dh > CFG.size * 2.2) {   // too high in one go: climb the highest thing he can reach from here, a stepping stone toward it
@@ -1129,16 +1194,19 @@ function step(dt) {
       }
     }
     if (st.relOrder && st.relOrder.ex === 'stalk') { const d = window.__scion; if (d && d.face === Math.sign(st.x - d.x)) { st.amt = Math.max(0, st.amt - dt * 8); return; } }   // it is looking: freeze
-    if (st.dir !== d0 && st.amt > 0.5) { st.skid = t + 0.15; st.amt = 0; }   // reversing at speed: a skid, then off the other way (at a walk he just turns)
-    if (st.skid > t) return;
-    const go = 0.35 + 0.65 * st.amt;   // he eases into and out of his stride (~0.1 s up, ~0.2 s down)
+    if (st.dir !== d0 && st.amt > 0.5) { st.skid = t + 0.3; st.skidV = d0 * walkSpeed() * gait(st.amt) * (st.spdK || 1); st.amt = 0; }   // reversing at speed: a skid with travel (0.3 s, sliding to a stop), then off the other way (at a walk he just turns)
+    if (st.skid > t) { const nx = st.x + st.skidV * ((st.skid - t) / 0.3) * dt; if (onFloor(f, nx) && clear(nx + Math.sign(st.skidV) * 10, f.y, CFG.size + 4)) st.x = nx; return; }   // the skid: planted, sliding to a stop
+    if (st.turn) return;   // a turn: planted on one foot, the legs do not cycle
+    { const lim = st.dir > 0 ? Math.min(f.x2, scrollX + innerWidth - HALF_W * 0.7) - HALF_W * 0.4 - st.x : st.x - Math.max(f.x1, scrollX + HALF_W * 0.7) - HALF_W * 0.4;   // a ledge end or the screen's edge ahead: shorter steps into it, as into a goal
+      if (lim < walkSpeed() * 0.6) st.brake = Math.min(st.brake, Math.max(0, lim) / (walkSpeed() * 0.6)); }
+    const go = gait(st.amt);   // from a standstill: 0.4 s to full stride, leaning into it (frame()); the stop settles in idle below
     const k = (st.spdK || 1) * (window.REL ? window.REL.body('hugo').speedK : 1) * (st.carrying ? 0.7 : 1);   // a run, a creep, a sore leg, a bird in hand
     const nx = st.x + st.dir * walkSpeed() * go * dt * k;
     const past = st.dir > 0 ? nx + HALF_W * 0.4 > Math.min(f.x2, scrollX + innerWidth - HALF_W * 0.7) : nx - HALF_W * 0.4 < Math.max(f.x1, scrollX + HALF_W * 0.7);
     if (past) {   // a ledge (or the side of the screen): stand at the edge a moment and look down (Shimeji, Celeste's teeter), then step off onto the ledge below or turn back
       if (!(st.edgeAt > 0)) { st.edgeAt = t + 0.3 + Math.random() * 0.3; st.mode = 'idle'; st.idleUntil = st.edgeAt; st.amt = 0; if (inView()) gest = { name: 'peer', t0: t, dur: 1, side: st.dir, amp: 1, f: 1 }; return; }
       st.edgeAt = 0;
-      if (dropTo(nx, f.y)) { st.air = true; st.hop = true; st.vx = st.dir * 20; st.vy = -160; st.x = nx; fallBehind(nx, f.y, st.dropF.y); return; }   // nearly straight down, onto the ledge he looked at, not past it (behind a picture in the way)
+      if (dropTo(nx, f.y)) { st.mode = 'prep'; st.prep = { f: st.dropF, until: t + 0.12, drop: true, nx }; st.amt = 0; return; }   // a crouch, then a small forward arc onto the ledge he looked at (prep below), not past it (behind a picture in the way)
       if (st.goal && st.goal.toView && st.away >= 4 && lost()) return;   // left off camera with no ledge he can step down to: the lost case
       if (st.goal) giveUp('no way down');   // nothing to step down to: that place is not reachable from here (no pacing to the edge and back)
       st.dir = -st.dir; st.mode = 'idle'; st.idleUntil = t + 0.8 + Math.random() * 1.5; return;
@@ -1146,7 +1214,7 @@ function step(dt) {
     st.edgeAt = 0;
     if (f.runs && Math.abs(footY(f, nx) - st.y) > 6) {   // the next letter is taller or shorter than the one he is on: a small hop up / step down onto it (the walk itself takes the smaller steps)
       const ny = footY(f, nx); st.dropF = f; st.air = true; st.hop = true; st.floor = null; st.vy = -Math.sqrt(2 * G * (Math.max(0, st.y - ny) + 12)); st.vx = st.dir * Math.max(40, walkSpeed() * 0.8); st.amt = 0; return; }
-    if (clear(nx + st.dir * 10, f.y, CFG.size + 4)) { st.x = nx; st.ph += dt * sty.cadence * go * k; st.amt = Math.min(1, st.amt + dt * 10); }   // the walk phase advances with distance (one cycle per cycleLen), so feet never slide
+    if (clear(nx + st.dir * 10, f.y, CFG.size + 4)) { st.x = nx; st.ph += dt * sty.cadence * go * k; st.amt = Math.min(1, st.amt + dt * 2.5, Math.max(0.25, st.brake)); st.slideDir = st.dir; }   // the walk phase advances with distance (one cycle per cycleLen), so feet never slide
     else if (!st.relBusy && inView() && clear(nx + st.dir * 10, f.y, CRAWL_H + 4) && clear(st.x, f.y, CRAWL_H + 4) && !walls.some(w => w.crawl && w.f === f && w.dir === st.dir && t - w.t < 30)) { st.mode = 'crawl'; st.crawlT = t; st.amt = 0; }   // too low to walk under, room to crawl (a gap you can see): down on his hands and knees
     else {
       st.amt = Math.max(0, st.amt - dt * 5);
@@ -1156,6 +1224,7 @@ function step(dt) {
     if ((st.sitK || 0) > 0.04) { st.prep.until += dt; if (st.prep.t0 != null) st.prep.t0 += dt; return; }   // on his feet first
     if (t > st.prep.until) {
       const P = st.prep;
+      if (P.drop) { st.air = true; st.hop = true; st.vx = st.dir * 70 * K; st.vy = -120; st.x = P.nx; st.mode = 'walk'; fallBehind(P.nx, f.y, P.f.y); return; }   // the step-down's push-off
       if (P.pounce) { const dx = P.pounce.x - st.x; st.air = true; st.hop = true; st.pounce = P.pounce; st.floor = null; st.dir = Math.sign(dx) || st.dir; st.vx = Math.sign(dx) * Math.min(260, Math.abs(dx) * 1.9); st.vy = -380; st.mode = 'walk'; return; }
       // P.over: the top of the thing in front of him, not a ledge overhead: the hop carries him across onto it
       if (!P.climb) { st.air = true; st.hop = true; st.floor = null; st.vy = -Math.sqrt(2 * G * (P.dh + 26)); st.mode = 'walk';
@@ -1170,8 +1239,8 @@ function step(dt) {
     if (past) { if (dropTo(nx, f.y)) { st.air = true; st.hop = true; st.vx = st.dir * 60; st.vy = -60; st.x = nx; st.mode = 'walk'; } else st.dir = -st.dir; return; }
     if (clear(nx + st.dir * 10, f.y, CRAWL_H + 4)) { st.x = nx; st.ph += dt * 0.85 * k; }
     else { walls.push({ f, dir: st.dir, t, crawl: true }); st.dir = -st.dir; st.crawlT = t; poke('a dead end, even crawling'); missed('dead end'); }   // remembered, so he does not crawl straight back in   // too tight even on all fours: back out the way he came
-  } else if (st.mode === 'idle') { st.amt = Math.max(0, st.amt - dt * 5); if (t > st.idleUntil && st.goal) { st.mode = 'walk'; restyle(); } }
-  else if (st.mode === 'sit') {
+  } else if (st.mode === 'idle') { settle(f, dt); if (t > st.idleUntil && st.goal) { st.mode = 'walk'; restyle(); } }
+  else if (st.mode === 'sit') { settle(f, dt);
     st.swingV += (-st.swing * 9 - st.swingV * 1.6) * dt; st.swing += st.swingV * dt;
     if (!st.dead && Math.sin(t * 1.3) * Math.sin(t * 0.37) > 0.995) st.swingV += 2;   // now and then a kick of the legs (a slow beat, not dice)
     if (t > st.idleUntil && st.goal) st.mode = 'walk';   // he gets up when there is somewhere to go
@@ -1203,7 +1272,11 @@ function frame(now) {
   }
   if (st.dead && st.floor && !st.held && !st.air && st.mode !== 'climb') { st.goal = null; st.amt = 0; st.idleUntil = t + 1; st.mode = clear(st.x, st.floor.y, SIT_H + 4) ? 'sit' : 'idle'; }   // he can still fall or be carried
   if (!reduced) { for (let r = dt; r > 1e-6; r -= 0.05) step(Math.min(0.05, r)); } else st.mode = 'idle';
-  { const goal = st.mode === 'sit' && !st.held && !st.air ? 1 : 0;
+  st.land = Math.max(0, (st.land || 0) - dt);
+  if (st.air && !st.wasAir) st.airAt = t; if (!st.air && st.wasAir && st.floor) st.landT = 0.35; st.wasAir = st.air;   // takeoff and touchdown moments: the stretch and the follow-through hang off them
+  if (t > (st.stanceAt || 0)) { st.stanceAt = t + 4 + Math.random() * 4; st.stanceGoal = st.stanceGoal ? -st.stanceGoal : (Math.random() < 0.5 ? -1 : 1); }
+  st.stance = (st.stance || 0) + ((st.stanceGoal || 0) - (st.stance || 0)) * Math.min(1, dt * 3);   // the weight moves over, it does not snap
+  { const goal = st.mode === 'sit' && !st.held && !st.air && st.amt < 0.05 ? 1 : 0;   // he sits once his stride has settled
     if (st.held || st.air || st.mode === 'climb') st.sitK = 0;
     else { const k0 = st.sitK || 0, rate = dt / (goal ? 0.8 : 0.7); st.sitK = goal > k0 ? Math.min(goal, k0 + rate) : Math.max(goal, k0 - rate); } }
   const sitE = (st.sitK || 0) * (st.sitK || 0) * (3 - 2 * (st.sitK || 0));
@@ -1212,7 +1285,7 @@ function frame(now) {
     else { const k0 = st.crawlK || 0, rate = dt / 0.45; st.crawlK = goal > k0 ? Math.min(goal, k0 + rate) : Math.max(goal, k0 - rate); } }
   const crawlE = (st.crawlK || 0) * (st.crawlK || 0) * (3 - 2 * (st.crawlK || 0));
   st.look = look; st.gestName = gest ? gest.name : null; st.headH = Math.min(CFG.size + (SIT_H - CFG.size) * sitE, CFG.size + (CRAWL_H - CFG.size) * crawlE);   // H1: what the dove and REL read off him
-  st.vxw = st.mode === 'walk' && !st.air ? (st.amt < 0.05 ? 0 : 1) * st.dir * walkSpeed() * (0.35 + 0.65 * st.amt) * (st.spdK || 1) : st.vx;
+  st.vxw = st.mode === 'walk' && !st.air ? st.dir * walkSpeed() * gait(st.amt) * (st.spdK || 1) : st.vx;
   const sy = st.y - scrollY;
   const DP = window.DEPTH, here = DP ? DP.at(st.y, { noFront: true }) : { w: 0.5, lanes: [0] };   // his section's phase w and the lanes it has now (no front lane: he would cover words)
   st.w = here.w; st.lanes = here.lanes;
@@ -1238,15 +1311,39 @@ function frame(now) {
   else if (sitE > 0.999) { poseLean = 0; poseSit(st.swing); inner.position.copy(seat).multiplyScalar(-S); }
   else if (sitE > 0.001) { poseSitting(sitE); inner.position.lerpVectors(feet, seat, sitE).multiplyScalar(-S); }   // on his way down or up
   else if (crawlE > 0.001) { poseLean = 0; poseCrawl(st.ph, crawlE); inner.position.lerpVectors(feet, hip, crawlE).multiplyScalar(-S); }   // on all fours, pivoting at the hips
-  else { poseLean = 0; poseStand(st.ph, st.land > 0 ? 0 : st.amt); if (st.land > 0) { rot(B.thighL, -0.45); rot(B.thighR, -0.45); rot(B.shinL, 0.8); rot(B.shinR, 0.8); }
+  else { poseLean = 0; poseStand(st.ph, st.land > 0 ? 0 : st.amt);
+    if (st.land > 0) { const kn = 0.5 + (st.squash || 0.5); rot(B.thighL, -0.45 * kn); rot(B.thighR, -0.45 * kn); rot(B.shinL, 0.8 * kn); rot(B.shinR, 0.8 * kn); }   // knees give with the impact
+    if ((st.landT || 0) > 0) { const u = 1 - st.landT / 0.35, e = (1 - u) * (1 - u); mix(B.head, 0.3 * e * (st.squash || 0.5) * 2, 0, 0, 1); st.landT -= dt; }   // follow-through: the head keeps going down, then comes back (the arms overshoot on their own springs)
+    if (st.turn && st.mode === 'walk') { const u = Math.min(1, (t - st.turn.t0) / st.turn.dur), e = Math.sin(u * Math.PI);   // the pivot: weight on one bent leg, arms counter-swing
+      mix(B.thighR, -0.3, 0, 0, e); mix(B.shinR, 0.45, 0, 0, e); mix(B.thighL, 0.1, 0, 0, e); armMix('L', [0.2, -0.9, -0.35], [0.1, -0.9, -0.2], e); armMix('R', [0.2, -0.9, 0.35], [0.1, -0.9, 0.3], e); }
     if (st.crouch > 0) { mix(B.thighL, -0.45, 0, 0, st.crouch); mix(B.thighR, -0.45, 0, 0, st.crouch); mix(B.shinL, 0.8, 0, 0, st.crouch); mix(B.shinR, 0.8, 0, 0, st.crouch); mix(B.chest, 0.35, 0, 0, st.crouch); }   // low, creeping
     inner.position.copy(feet).multiplyScalar(-S); }
   // hovering: he looks at the pointer
-  if (st.hover && !st.held) { const dx = (st.px || st.x) - st.x; lookGoal = Math.max(-0.9, Math.min(0.9, dx / 200)); }
+  if (st.hover && !st.held && t >= (st.hoverAt || 0)) { const dx = (st.px || st.x) - st.x; lookGoal = Math.max(-0.9, Math.min(0.9, dx / 200)); }
+  if (st.glance && t < st.glance.until && !st.held) lookGoal = Math.max(-0.9, Math.min(0.9, (st.glance.x - st.x) / 200));   // the glance: eyes and head to it, then released
   if ((st.watch || 0) > t && pointer.in && !st.held) { st.interest = { x: pointer.cx + scrollX, y: pointer.cy + scrollY, what: 'cursor' }; lookGoal = Math.max(-0.9, Math.min(0.9, (st.interest.x - st.x) / 200)); }   // his mind chose to watch it: his eyes follow it
-  { const d = window.__scion; if (d && !st.held && Math.hypot(d.x - st.x, d.y - st.y) < CFG.size * 4 && Math.random() < dt * 0.8) lookGoal = Math.max(-1, Math.min(1, (d.x - st.x) / 200)); }   // glances at the dove
-  rot(B.head, -0.05 + Math.sin(t * 0.7) * 0.03, look + (st.mode === 'walk' && !st.air ? 0 : -0.2 * st.dir), 0);
-  rot(B.chest, Math.sin(t * 1.6) * 0.015 + (st.mode === 'walk' ? sty.lean * st.amt : 0) + (sitE > 0.001 && sitE < 0.999 ? poseLean : 0));
+  { const d = window.__scion; if (d && !st.held && Math.hypot(d.x - st.x, d.y - st.y) < CFG.size * 4 && Math.random() < dt * (st.amt > 0.5 ? 0.15 : 0.8)) lookGoal = Math.max(-1, Math.min(1, (d.x - st.x) / 200)); }   // glances at the dove
+  // Lean: into acceleration and against braking (measured ax, capped at 16 deg), plus a little forward at speed; 60 % in the chest,
+  // 40 % as a whole-body tilt about the feet (Sackboy leans from the ground up).
+  const lean = st.air || st.held ? 0 : Math.max(-0.28, Math.min(0.28, (st.ax || 0) * st.dir * 0.0012)) + 0.06 * st.amt; st.lean = lean;
+  const turnRem = st.turn ? Math.atan2(Math.sin(st.turn.to - st.yaw), Math.cos(st.turn.to - st.yaw)) : 0;   // through a turn the head leads the body
+  rot(B.head, -0.05 + Math.sin(t * 0.7) * 0.04 + Math.sin(t * 1.9) * 0.02 - (lean - 0.06 * st.amt) * 0.8, look + Math.sin(t * 0.53) * 0.08 + Math.max(-0.6, Math.min(0.6, turnRem * 0.4)) + (st.mode === 'walk' && !st.air ? 0 : -0.2 * st.dir), 0);
+  rot(B.chest, Math.sin(t * 1.6) * 0.045 + (st.mode === 'walk' ? sty.lean * st.amt : 0) + (sitE > 0.001 && sitE < 0.999 ? poseLean : 0) + lean * 0.6, -sty.roll * 0.05, -sty.roll * 0.04 + (sty.sway || 0));
+  if (st.glance && t < st.glance.until && !st.held) mix(B.head, Math.max(-0.35, Math.min(0.3, (st.glance.y - (st.y - CFG.size * 0.8)) / 300)), 0, 0, 1);   // and a nod toward its height
+  // The page moving under his feet: a slow scroll he leans against and watches, a fast one (> 600 px/s) he crouches and grabs through,
+  // a violent one (> 2000 px/s) he hangs on to and looks up. Eases in over ~0.15 s, lets go over ~0.5 s.
+  st.scrollV = (st.scrollV || 0) * Math.exp(-dt * 4); st.scrollS = (st.scrollS || 0) * Math.exp(-dt * 4);
+  { const sv = st.scrollS, want = calm || st.air || st.held || sitE > 0.02 || crawlE > 0.02 || st.mode === 'climb' ? 0 : sv > 2000 ? 1 : sv > 600 ? 0.66 : sv > 120 ? 0.33 : 0, b0 = st.brace || 0;
+    if (want > b0) st.braceSign = Math.sign(st.scrollV) || 1;
+    const b = st.brace = b0 + (want - b0) * Math.min(1, dt * (want > b0 ? 9 : 2.5));
+    if (b > 0.01) { const grab = Math.max(0, (b - 0.33) / 0.67), up = Math.max(0, (b - 0.66) / 0.34);
+      mix(B.thighL, -0.5, 0, 0, b); mix(B.thighR, -0.4, 0, 0, b); mix(B.shinL, 0.85, 0, 0, b); mix(B.shinR, 0.7, 0, 0, b); mix(B.chest, 0.25, 0, 0, b);
+      mix(B.head, -0.35 * st.braceSign - 0.3 * up, 0, 0, b);
+      if (grab > 0) { const u = [0.8 - 0.5 * up, 0.05 + 0.85 * up, 0.15], f = [0.7 - 0.4 * up, 0.45 + 0.5 * up, 0.25]; armMix('L', u, f, grab); armMix('R', u, f, grab); } } }
+  // Eyes: they lead the head (a saccade toward where he is about to look), and blink for 120 ms every 3-6 s.
+  if (t > blinkAt) { blinkAt = t + 3 + Math.random() * 3; blinkT = 0.12; }
+  { const lid = blinkT > 0 ? Math.max(0.08, Math.abs(blinkT - 0.06) / 0.06) : 1, sac = Math.max(-1, Math.min(1, lookGoal - look)); blinkT -= dt;
+    for (const e of eyes) { e.scale.y = lid; e.position.copy(e.userData.base).addScaledVector(e.userData.left, sac); } }
   if (crawlE > 0.001) { mix(B.head, -PITCH * 0.8, 0, 0, crawlE); mix(B.chest, 0, 0, 0, crawlE); }   // on all fours he still looks where he is going
   const midSit = sitE > 0.02 && sitE < 0.97;   // no gestures while he is getting down or up
   // The hold is ending (REL decided lift or throw): that takes his arms at once, whatever he was doing with them.
@@ -1259,23 +1356,24 @@ function frame(now) {
     if (kind === 'cradle') { const b = Math.sin(t * 2.2) * 0.04; armMix('L', [0.15, -0.55, 0.7], [-0.75, 0.25 + b, 0.55], 1); armMix('R', [0.15, -0.55, 0.7], [-0.75, 0.25 - b, 0.55], 1); lookGoal = sd * 0.3; mix(B.head, 0.3, 0, 0, 1); }   // cradled, looking down at it
     else armMix((sd > 0) === (st.dir > 0) ? 'R' : 'L', [0.3, -0.1, 0.9], [0.2, 0.2, 1], 1);   // held out at arm's length
   }
-  applyPose(dt, st.held || st.air ? 30 : 12); applyArms(dt, st.held || st.air ? 30 : 10);
+  applyPose(dt, st.held || st.air); applyArms(dt, st.held || st.air);
   const yawGoal = st.mode === 'lane' && st.hopL ? (st.hopL.to < 0 ? st.dir * (Math.PI / 2 + 0.7) : st.dir * (Math.PI / 2 - 0.9)) :   // into the page or out of it, through profile
     st.mode === 'climb' ? Math.PI : crawlE > 0.3 ? (st.dir > 0 ? Math.PI / 2 : -Math.PI / 2) :(st.mode === 'sit' || sitE > 0.5) && !st.air ? -0.35 : st.dir > 0 ? Math.PI / 2 - 0.45 : -Math.PI / 2 + 0.45;
   if (st.yaw == null) st.yaw = yawGoal;
   // A reversal is never a mirror flip: he turns through profile over 0.2 s (eased), the direction locked for the turn; small
   // changes of bearing ease in as before.
-  if (Math.abs(Math.atan2(Math.sin(yawGoal - st.yaw), Math.cos(yawGoal - st.yaw))) > 0.6 && !(st.turn && st.turn.to === yawGoal)) st.turn = { from: st.yaw, to: yawGoal, t0: t, dur: 0.2 };
+  if (Math.abs(Math.atan2(Math.sin(yawGoal - st.yaw), Math.cos(yawGoal - st.yaw))) > 0.6 && !(st.turn && st.turn.to === yawGoal)) { st.turn = { from: st.yaw, to: yawGoal, t0: t, dur: 0.22 }; if (st.mode === 'walk' && !st.air) st.amt = 0; }
   if (st.turn) { const u = Math.min(1, (t - st.turn.t0) / st.turn.dur), d = Math.atan2(Math.sin(st.turn.to - st.turn.from), Math.cos(st.turn.to - st.turn.from)); st.yaw = st.turn.from + d * u * u * (3 - 2 * u); if (u >= 1) st.turn = null; }
   else { let dyaw = yawGoal - st.yaw; dyaw = Math.atan2(Math.sin(dyaw), Math.cos(dyaw)); st.yaw += dyaw * Math.min(1, dt * 7); }
   inner.rotation.y = st.yaw;
-  const bob = st.mode === 'walk' && !st.air ? (1 - Math.cos(4 * Math.PI * st.ph)) * 0.5 * CFG.size * 0.022 * st.amt : 0;
-  const crouch = st.land > 0 ? -st.land * 20 : 0;
-  view.rotation.z = st.held || st.air ? -st.tilt : -st.dir * PITCH * crawlE;   // leans into the motion; crawling, his back tips forward over his hands
+  const bob = !st.air && (st.mode === 'walk' || st.mode === 'idle') ? (1 - Math.cos(4 * Math.PI * st.ph)) * 0.5 * CFG.size * 0.04 * st.amt : 0;   // 4 % of his height: a walk you can see at 64 px
+  const crouch = st.land > 0 ? -st.land * 20 * K : 0;
+  view.rotation.z = st.held || st.air ? -st.tilt : -st.dir * PITCH * crawlE - lean * 0.4 * st.dir;   // leans into the motion; crawling, his back tips forward over his hands
   const vy = sy - (st.hopY || 0) + st.par, lsc = DP ? DP.scaleOf(st.zs) : 1;   // vy: drawn height (lane-hop arc, parallax); lsc: lane scale
   const squ = st.sqAt == null || st.air ? 1 : Math.min(1, (t - st.sqAt) / 0.23), sq = squ < 1 ? (st.squash || 0) * (1 - squ) * (1 - squ) : 0;   // landing squash: a 0.23 s envelope from the landing, eased out, exactly 1,1 after (never tied to a mode's recovery branch)
   st.sq = sq;
-  view.scale.set(lsc * (1 + 0.3 * sq), lsc * (1 - 0.3 * sq), lsc);
+  const str = st.air && st.vy < 0 && t - (st.airAt || -1) < 0.12 ? 1 - (t - st.airAt) / 0.12 : 0;   // takeoff: a 0.12 s stretch up from the feet
+  view.scale.set(lsc * (1 + 0.3 * sq - 0.12 * str), lsc * (1 - 0.3 * sq + 0.15 * str), lsc);
   renderer.toneMappingExposure = 1 - 0.22 * Math.max(0, -st.zs);   // the back lane sits in the page's haze: a little dimmer (Inside, Silksong)
   view.position.set(st.x - scrollX - innerWidth / 2, innerHeight / 2 - vy + bob + crouch + THIGH * crawlE, 0);
   { const d = window.__scion; let best = null;   // H1: his hand (the one nearer the bird) in page coords
@@ -1296,10 +1394,11 @@ function frame(now) {
     const occ = behind && DP ? DP.occluders(box, -1) : [];
     occlude(occ);
     // contact shadow: on the floor under his feet, shrinking with his height above it (a hop, a fall)
-    const lf = st.air ? st.landF : st.floor, fy = lf ? lf.y : st.y, lift = (st.hopY || 0) + (st.air ? Math.max(0, fy - st.y) : 0), k = Math.max(0, 1 - lift / 400);
-    const sx = st.x - st.zs * 6, sy2 = fy + st.zs * 4 + st.par, hidden = st.held || k <= 0 || (st.air && !lf) || (st.zs < -0.3 && occ.length > 0) || st.mode === 'climb';
-    const css = hidden ? '' : `translate(${Math.round(sx)}px,${Math.round(sy2)}px) scale(${(lsc * (0.55 + 0.45 * k)).toFixed(2)},${(lsc * (0.55 + 0.45 * k)).toFixed(2)})|${(0.85 * k).toFixed(2)}`;
+    const lf = st.air ? st.landF : st.floor, fy = lf ? lf.y : st.y, lift = (st.hopY || 0) + (st.air ? Math.max(0, fy - st.y) : 0), k = Math.max(0.45, 1 - lift / (1.5 * CFG.size));   // the blob shrinks and fades with height: the cue that a fall has weight
+    const sx = st.x - st.zs * 6, sy2 = fy + st.zs * 4 + st.par, hidden = st.held || (st.air && !lf) || (st.zs < -0.3 && occ.length > 0) || st.mode === 'climb';
+    const css = hidden ? '' : `translate(${Math.round(sx)}px,${Math.round(sy2)}px) scale(${(lsc * k * (1 + 0.5 * sq)).toFixed(2)},${(lsc * k).toFixed(2)})|${Math.min(1, 0.85 * k * k + 0.35 * sq).toFixed(2)}`;   // impact: wider and darker for the squash's 0.23 s
     if (css !== shadeCss) { shadeCss = css; if (css) { const [tr, op] = css.split('|'); shade.style.transform = tr; shade.style.opacity = op; } else shade.style.opacity = 0; } }
+  stepDust(dt);
   renderer.render(scene, camera);
 }
 let scrolledAt = 0;
@@ -1307,7 +1406,8 @@ let scrolledAt = 0;
 // lag the page by his lane; standing on something visible he stays glued to it. The lag fades out over time (dt-based, frame()).
 const free = () => st.air || st.mode === 'lane' || (st.z < 0 && st.floor && st.floor.section);
 addEventListener('scroll', () => { if (free() && st.zs) st.par += (scrollY - curSY) * 0.12 * -st.zs; }, { passive: true });
-addEventListener('scroll', () => { if (Math.abs(scrollY - curSY) > 120) { lastSY = curSY; jumpAt = performance.now(); } curSY = scrollY; dirty = true; scrolledAt = performance.now(); }, { passive: true });
+addEventListener('scroll', () => { const now = performance.now(), gap = Math.max(16, Math.min(100, now - scrolledAt)); const v = (scrollY - curSY) / gap * 1000, a = 1 - Math.exp(-gap / 150); st.scrollV = (st.scrollV || 0) + (v - (st.scrollV || 0)) * a; st.scrollS = (st.scrollS || 0) + (Math.abs(v) - (st.scrollS || 0)) * a;   // page speed under his feet, px/s (150 ms averages: signed for where he looks, unsigned for how hard he braces)
+  if (Math.abs(scrollY - curSY) > 120) { lastSY = curSY; jumpAt = performance.now(); } curSY = scrollY; dirty = true; scrolledAt = now; }, { passive: true });
 // Phone carousels scroll an element, not the window (element scroll events do not bubble: listen in the capture phase).
 // The swiped cards' ledges and ink shift at once, he rides the card under him, and a full re-measure follows once it settles.
 document.addEventListener('scroll', e => {
