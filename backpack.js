@@ -90,7 +90,7 @@ export async function boot({ model, B, rest, st, armMix, mix, springK, body, glb
   const run = (kind, item, fast) => new Promise(res => { if (kind === 'take') hand = B.handL.getWorldPosition(_v).z > B.handR.getWorldPosition(_p).z ? 'L' : 'R'; job = { kind, item, u: 0, dur: fast ? 0.55 : 1.7, res }; });
   const moving = () => st.air || st.held || st.dead || st.mode === 'climb' || st.mode === 'lane' || (st.mode === 'walk' && st.amt > 0.15);
   const api = {
-    get busy() { return !!job; }, get holding() { return holding; }, get pack() { return file === 'pack' ? 'quaternius' : file; }, get clearance() { return { pen: +(maxPen * packW).toFixed(2), push: +(pushS * packW).toFixed(2) }; },
+    get busy() { return !!job; }, get holding() { return holding; }, get pack() { return file === 'pack' ? 'quaternius' : file; }, get clearance() { return { pen: +(maxPen * packW).toFixed(2), push: +(pushS * packW).toFixed(2), shoulderGap: +gapS.toFixed(2) }; },
     take(item) { if (!items[item]) return Promise.reject(new Error('take: book or food'));
       if (job || moving()) return Promise.resolve(false);
       if (holding === item) return Promise.resolve(true);
@@ -142,6 +142,12 @@ export async function boot({ model, B, rest, st, armMix, mix, springK, body, glb
         pos.setXYZ(i * 2, p.x + _b.x, p.y + _b.y, p.z + _b.z); pos.setXYZ(i * 2 + 1, p.x - _b.x, p.y - _b.y, p.z - _b.z); }
       pos.needsUpdate = true; S.mesh.geometry.computeVertexNormals(); S.mesh.geometry.computeBoundingSphere();
     }
+  }
+  let gapS = 0;
+  function belowShoulder() {   // the pack's centre never rises above the carrying shoulder (the swing arcs round it, not over it)
+    const sh = (hand === 'R' ? B.armL : B.armR).getWorldPosition(_a).y, c = _b.set(0, 0.5, 0).applyMatrix4(pack.matrixWorld), lim = sh - packW * 0.12;
+    if (c.y > lim) { _m.makeTranslation(0, lim - c.y, 0); root.matrix.premultiply(_m); root.matrixWorldNeedsUpdate = true; root.updateMatrixWorld(true); c.y = lim; }
+    gapS = sh - c.y;
   }
   function clearBody(dt) {   // push the pack out along its own +z until its near face clears his skin (measured every frame)
     root.updateMatrixWorld(true); _inv.copy(pack.matrixWorld).invert(); let pen = -1e9;
@@ -205,7 +211,7 @@ export async function boot({ model, B, rest, st, armMix, mix, springK, body, glb
     lastC = (lastC || new THREE.Vector3()).copy(_p);
     if (sway[0] > 0) { sway[0] = 0; sway[1] = Math.min(0, sway[1]); }   // the follow-through swings out from his back, never in past it
     swing.rotation.x = sway[0];
-    place(swingU); clearBody(dt); buildStraps(swingU, offW);
+    place(swingU); clearBody(dt); belowShoulder(); buildStraps(swingU, offW);
     lid.rotation.x = OPEN * flapU;
     for (const n of Object.keys(items)) if (n !== itemName) items[n].visible = false;
     if (itemName) placeItem(itemName, itemU);

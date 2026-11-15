@@ -1656,4 +1656,4 @@ document.addEventListener('scroll', e => {
 new MutationObserver(ms => { if (ms.some(m => m.target !== hit && m.target !== hud && !(m.target.closest && m.target.closest(skipSel)))) dirty = true; }).observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class', 'open', 'style'] });
 requestAnimationFrame(frame);
 // The backpack (backpack.js, realms/hugo/pack): loaded after his first frame so it never delays him; it owns window.__pack.
-let packPose = null; requestAnimationFrame(() => setTimeout(() => import('./backpack.js?v=20261115p7').then(m => m.boot({ model, B, rest, st, armMix, mix, springK, body: () => BODY, glb: CFG.glb })).then(f => { packPose = f; }, e => console.warn('backpack', e)), 0));
+let packPose = null; requestAnimationFrame(() => setTimeout(() => import('./backpack.js?v=20261115p8').then(m => m.boot({ model, B, rest, st, armMix, mix, springK, body: () => BODY, glb: CFG.glb })).then(f => { packPose = f; }, e => console.warn('backpack', e)), 0));
