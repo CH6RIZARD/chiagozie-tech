@@ -30,7 +30,6 @@ try { if (localStorage.getItem('theme') === 'light') document.documentElement.da
 <link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/environments/RoomEnvironment.js">
 <link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/libs/meshopt_decoder.module.js">
 <link rel="preload" as="fetch" href="realms/hugo/hugo.glb" crossorigin>
-<link rel="preload" as="fetch" href="dove.glb" crossorigin>
 <style>
 /* ---- tokens: re-skin here ---- */
 :root{
@@ -472,12 +471,12 @@ body.simple>section,body.simple>footer,body.simple>.mindex{display:none!importan
 
 <nav class="mindex" aria-label="Projects"><div class="wrap">
   <span class="lbl">Tap any product to open the real build</span>
-  <button class="mrow" type="button" data-open="void"><img class="th dv" src="realms/thumbs/dev-void.webp" alt="" width="60" height="60"><span class="tx"><span class="k">Live cams · mobile</span><span class="n">THE VOID</span><span class="sp">Supabase Postgres + PostGIS, RLS, HLS live streams, libsignal E2E DMs.</span></span><svg class="ch" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></button>
-  <button class="mrow" type="button" data-open="ezer"><img class="th dv" src="realms/thumbs/dev-ezer.webp" alt="" width="60" height="60"><span class="tx"><span class="k">Store-ready · fintech</span><span class="n">EZER</span><span class="sp">Fastify + Prisma (19 models), double-entry ledger, Plaid Transfer ACH.</span><span class="l">Subscriptions become decisions.</span></span><svg class="ch" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></button>
-  <button class="mrow" type="button" data-open="hugo"><img class="th dv" src="realms/thumbs/dev-hugo.png" alt="" width="60" height="60"><span class="tx"><span class="k">Walkable · in dev</span><span class="n">Hugo</span><span class="sp">Three.js, 120 Hz fixed-step physics, MuJoCo skeleton over WebSocket.</span></span><svg class="ch" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></button>
-  <button class="mrow" type="button" data-open="trading"><img class="th dv" src="realms/thumbs/dev-morgan.png" alt="" width="60" height="60"><span class="tx"><span class="k">Live bot · mobile</span><span class="n">Morgan Futures</span><span class="sp">Python + Flask on Railway, Kraken data, Claude API gate, Rithmic execution.</span></span><svg class="ch" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></button>
-  <button class="mrow" type="button" data-open="revelation"><img class="th dv" src="realms/thumbs/dev-revelation.png" alt="" width="60" height="60"><span class="tx"><span class="k">Live site</span><span class="n">Revelation</span><span class="sp">Node + Express, live counts over SSE, failover across 3 storage backends.</span><span class="l">Publishing that survives losing its database.</span></span><svg class="ch" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></button>
-  <button class="mrow" type="button" data-open="impact"><img class="th dv" src="realms/thumbs/dev-maren.png" alt="" width="60" height="60"><span class="tx"><span class="k">Three live stores</span><span class="n">Stores</span><span class="sp">Headless Shopify Storefront API, Astro static site, Express backend.</span><span class="l">Impact Threads, MAREN and Sly Sculpted.</span></span><svg class="ch" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></button>
+  <button class="mrow" type="button" data-open="void"><img class="th dv" loading="lazy" src="realms/thumbs/dev-void.webp" alt="" width="60" height="60"><span class="tx"><span class="k">Live cams · mobile</span><span class="n">THE VOID</span><span class="sp">Supabase Postgres + PostGIS, RLS, HLS live streams, libsignal E2E DMs.</span></span><svg class="ch" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></button>
+  <button class="mrow" type="button" data-open="ezer"><img class="th dv" loading="lazy" src="realms/thumbs/dev-ezer.webp" alt="" width="60" height="60"><span class="tx"><span class="k">Store-ready · fintech</span><span class="n">EZER</span><span class="sp">Fastify + Prisma (19 models), double-entry ledger, Plaid Transfer ACH.</span><span class="l">Subscriptions become decisions.</span></span><svg class="ch" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></button>
+  <button class="mrow" type="button" data-open="hugo"><img class="th dv" loading="lazy" src="realms/thumbs/dev-hugo.png" alt="" width="60" height="60"><span class="tx"><span class="k">Walkable · in dev</span><span class="n">Hugo</span><span class="sp">Three.js, 120 Hz fixed-step physics, MuJoCo skeleton over WebSocket.</span></span><svg class="ch" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></button>
+  <button class="mrow" type="button" data-open="trading"><img class="th dv" loading="lazy" src="realms/thumbs/dev-morgan.png" alt="" width="60" height="60"><span class="tx"><span class="k">Live bot · mobile</span><span class="n">Morgan Futures</span><span class="sp">Python + Flask on Railway, Kraken data, Claude API gate, Rithmic execution.</span></span><svg class="ch" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></button>
+  <button class="mrow" type="button" data-open="revelation"><img class="th dv" loading="lazy" src="realms/thumbs/dev-revelation.png" alt="" width="60" height="60"><span class="tx"><span class="k">Live site</span><span class="n">Revelation</span><span class="sp">Node + Express, live counts over SSE, failover across 3 storage backends.</span><span class="l">Publishing that survives losing its database.</span></span><svg class="ch" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></button>
+  <button class="mrow" type="button" data-open="impact"><img class="th dv" loading="lazy" src="realms/thumbs/dev-maren.png" alt="" width="60" height="60"><span class="tx"><span class="k">Three live stores</span><span class="n">Stores</span><span class="sp">Headless Shopify Storefront API, Astro static site, Express backend.</span><span class="l">Impact Threads, MAREN and Sly Sculpted.</span></span><svg class="ch" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></button>
   <button class="mrow" type="button" data-open="frame"><span class="ic">AI</span><span class="tx"><span class="k">Architecture</span><span class="n">Mortal Agent Frame</span><span class="l">Mortality-gated agent runtime. Hugo's dorm is its first substrate.</span></span><svg class="ch" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></button>
   <button class="mrow" type="button" data-open="work"><span class="ic">W</span><span class="tx"><span class="k">What I do</span><span class="n">What I've shipped</span><span class="l">Fintech backends, real-time 3D, live media, resilient services.</span></span><svg class="ch" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></button>
   <button class="mrow" type="button" data-open="concepts"><span class="ic">D</span><span class="tx"><span class="k">Designed</span><span class="n">Concepts</span><span class="l">SCION AI, THE PHXNE, glasses, Price Action and more.</span></span><svg class="ch" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></button>
@@ -506,7 +505,7 @@ body.simple>section,body.simple>footer,body.simple>.mindex{display:none!importan
   <div class="split">
     <div>
     <div class="stage" data-src="realms/hugo/index.html" data-allow="fullscreen; pointer-lock">
-      <img class="poster" src="realms/posters/hugo.jpg" alt="Hugo standing between two beds in the modeled dorm room">
+      <img class="poster" loading="lazy" src="realms/posters/hugo.jpg" alt="Hugo standing between two beds in the modeled dorm room">
       <button class="enter" type="button"><span>Enter the dorm</span></button>
       <div class="tools"><a href="realms/hugo/index.html" target="_blank" rel="noopener">Open full</a><button type="button" class="fs">Fullscreen</button></div>
     </div>
@@ -542,7 +541,7 @@ body.simple>section,body.simple>footer,body.simple>.mindex{display:none!importan
       </div>
     </div>
     <div class="phone-wrap"><div class="phone tiPhone"><i class="tiBtn b1"></i><i class="tiBtn b2"></i><i class="tiBtn b3"></i><i class="tiBtn b4"></i><i class="home"></i><div class="island"></div><div class="screen tiScreen stage" data-src="__VOID__" data-allow="fullscreen; autoplay">
-      <img class="poster" src="realms/posters/void.jpg" alt="The Void">
+      <img class="poster" loading="lazy" src="realms/posters/void.jpg" alt="The Void">
       <button class="enter" type="button"><span>Jump into The Void</span></button>
     </div></div></div>
   </div>
@@ -563,7 +562,7 @@ body.simple>section,body.simple>footer,body.simple>.mindex{display:none!importan
       <div><b>Card</b><span>Pay-in-4 virtual card designed; sequenced debit-first until a sponsor bank is in place. Not marketed until the program exists.</span></div>
     </div></div>
     <div class="phone-wrap"><div class="phone tiPhone"><i class="tiBtn b1"></i><i class="tiBtn b2"></i><i class="tiBtn b3"></i><i class="tiBtn b4"></i><i class="home"></i><div class="island"></div><div class="screen tiScreen stage" data-src="__EZER__" data-allow="clipboard-write">
-      <img class="poster" src="realms/posters/ezer.jpg" alt="EZER onboarding screen">
+      <img class="poster" loading="lazy" src="realms/posters/ezer.jpg" alt="EZER onboarding screen">
       <button class="enter" type="button"><span>Open EZER</span></button>
     </div></div></div>
   </div>
@@ -579,7 +578,7 @@ body.simple>section,body.simple>footer,body.simple>.mindex{display:none!importan
     <div>
       <div class="monitor tiMonitor">
         <div class="stage desk" data-src="https://revelati6n.com" data-allow="">
-          <img class="poster" src="realms/posters/revelation.jpg" alt="">
+          <img class="poster" loading="lazy" src="realms/posters/revelation.jpg" alt="">
           <button class="enter" type="button"><span>Open Revelation · desktop</span></button>
           <div class="tools"><a href="https://revelati6n.com" target="_blank" rel="noopener">Open full</a></div>
         </div>
@@ -805,7 +804,7 @@ document.getElementById('copyEmail').addEventListener('click',e=>{e.preventDefau
   });
 })();
 const LOCAL = /^(127\.0\.0\.1|localhost)$/.test(location.hostname);
-const BUILD = '20261030i';
+const BUILD = '20261114a';
 const EZER_URL = LOCAL ? 'http://127.0.0.1:8766/' : 'https://ezer-demo.daniel4chigs.workers.dev/';
 // Morgan Futures mobile app (Expo web export), served at its own root like EZER.
 const MORGAN_URL = LOCAL ? 'http://127.0.0.1:8767/' : 'https://morgan-demo.daniel4chigs.workers.dev/app/';
@@ -887,7 +886,11 @@ window.SCION_CONFIG = { size: matchMedia('(max-width:760px)').matches ? 16 : 26,
   classic.reduce((p, l) => p.then(() => add(l.getAttribute('href'))), Promise.resolve()).then(() => ext).then(ext => {
     window.SCION_GLB = 'dove.glb' + ext;
     window.HUGO_CONFIG = { size: matchMedia('(max-width:760px)').matches ? 64 : 150, glb: 'realms/hugo/hugo.glb' + ext };
-    for (const l of mods) add(l.getAttribute('href'), 'module');
+    const [dove, hugo] = mods.map(l => l.getAttribute('href'));
+    add(hugo, 'module');
+    // The dove's body is fetched after Hugo's has landed: on a slow link the two would split the line and both come late (capped: the dove never waits past 5 s).
+    const landed = () => performance.getEntriesByType('resource').some(e => e.name.includes('realms/hugo/hugo'));
+    new Promise(res => { if (landed()) return res(); const o = new PerformanceObserver(() => { if (landed()) { o.disconnect(); res(); } }); o.observe({ type: 'resource' }); setTimeout(res, 5000); }).then(() => add(dove, 'module'));
   });
 }
 
