@@ -1,5 +1,6 @@
 // Hugo's backpack: a CC0 rucksack (Quaternius, poly.pizza/m/vF7TuXCPDH) on his back whose front lid is cut free and opens on its
-// hinge onto a real mouth. He swings it off one shoulder, opens a pocket, pulls the book or the bird's seed bag into his hand, and puts it back.
+// hinge onto a real mouth. ?pack=leather swaps in the leather pack (realms/hugo/pack/CREDITS.txt); only the
+// chosen one is fetched. Every pack file has the same nodes: pack, flap, hinge (extras.open), mouth, hole. He swings it off one shoulder, opens a pocket, pulls the book or the bird's seed bag into his hand, and puts it back.
 // Loaded by hugo3d.js after his first frame; boot() returns the per-frame pose hook it calls before the joint springs.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
@@ -26,15 +27,16 @@ function makeSeedBag() {   // a little burlap sack tied at the neck
 
 export async function boot({ model, B, rest, st, armMix, mix, springK, body, glb }) {
   const BODY = body(); if (!BODY || !B.chest || !B.handR) return null;
-  const url = new URL('realms/hugo/pack/pack.meshopt.glb' + (/\.wasm$/.test(glb || '') ? '.wasm' : ''), document.baseURI).href;
+  const pick = new URLSearchParams(location.search).get('pack'), file = pick === 'leather' ? 'leather' : 'pack';
+  const url = new URL(`realms/hugo/pack/${file}.meshopt.glb` + (/\.wasm$/.test(glb || '') ? '.wasm' : ''), document.baseURI).href;
   const gltf = await new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).loadAsync(url);
   let scene = model; while (scene.parent) scene = scene.parent;
-  const pack = gltf.scene.getObjectByName('pack'), lid = new THREE.Group(), mouth = new THREE.Object3D();
-  lid.position.set(0, 0.921, -0.132); pack.add(lid); pack.updateMatrixWorld(true); lid.attach(pack.getObjectByName('flap'));   // re-pivot on the hinge (meshopt quantizing moves node origins)
-  mouth.position.set(0, 0.66, 0.1); pack.add(mouth);   // the opening the lid covers, where things come out
+  const pack = gltf.scene.getObjectByName('pack'), hinge = pack.getObjectByName('hinge'), mouth = pack.getObjectByName('mouth'), hole = pack.getObjectByName('hole'), lid = new THREE.Group(), OPEN = hinge.userData.open || -1.9;
+  lid.position.copy(hinge.position); pack.add(lid); pack.updateMatrixWorld(true); lid.attach(pack.getObjectByName('flap'));   // re-pivot on the hinge (meshopt quantizing moves node origins)
   pack.traverse(o => { if (o.isMesh) { const c = o.material.color; o.material = mat(c); o.material.side = THREE.DoubleSide; o.frustumCulled = false; } });
+  const box = new THREE.Box3().setFromObject(pack, true);   // the closed pack in its own units (1 tall); box.min.z is the side against him
   // the inside: dark under the lid, so the open pack reads as a hole, not as more canvas
-  { const d = new THREE.Mesh(new THREE.CircleGeometry(0.5, 12), new THREE.MeshBasicMaterial({ color: 0x2a2520, side: THREE.DoubleSide })); d.scale.set(0.58, 0.36, 1); d.rotation.x = -Math.PI / 2; d.position.set(0, 0.64, 0.08); pack.add(d); }
+  if (hole) { const d = new THREE.Mesh(new THREE.CircleGeometry(0.5, 12), new THREE.MeshBasicMaterial({ color: 0x2a2520, side: THREE.DoubleSide })); d.scale.set(hole.scale.x, hole.scale.z, 1); d.rotation.x = -Math.PI / 2; d.position.copy(hole.position); pack.add(d); }
   const root = new THREE.Group(), swing = new THREE.Group();   // root: placed every frame in world space; swing: the follow-through, pivoted at the pack's top
   root.matrixAutoUpdate = false; swing.position.y = 1; pack.position.y = -1; swing.add(pack); root.add(swing); scene.add(root);
 
@@ -46,6 +48,19 @@ export async function boot({ model, B, rest, st, armMix, mix, springK, body, glb
   const backModel = new THREE.Matrix4().makeBasis(_x.copy(BODY.left).negate(), _y.copy(BODY.up), _z.copy(BODY.fwd).negate())   // pocket side faces back (right-handed: his right, up, back)
     .scale(_s.setScalar(H)).setPosition(chestM.clone().addScaledVector(BODY.fwd, -D).addScaledVector(BODY.up, -H * 0.5));
   const chestModel = new THREE.Matrix4().copy(B.chest.matrixWorld).premultiply(toModel), backLocal = chestModel.invert().multiply(backModel);   // the pack in the chest's frame
+  // His real surface: torso skin vertices (the ones the spine bones carry), sampled at rest; each frame their skinned positions
+  // push the pack out until its near face clears them by 3.5 % of his height, whatever he is doing (leaning, sitting, climbing).
+  const skins = []; model.traverse(o => { if (o.isSkinnedMesh) skins.push(o); });
+  const samples = [], up0 = BODY.up.clone(), hipsM = mp(B.hips), headM = mp(B.head); let hMin = 1e9, hMax = -1e9;
+  for (const sk of skins) { const sw = sk.geometry.attributes.skinWeight, si = sk.geometry.attributes.skinIndex, bones = sk.skeleton.bones, n = sk.geometry.attributes.position.count, w = new THREE.Vector3();
+    const toM = new THREE.Matrix4().multiplyMatrices(toModel, sk.matrixWorld), cand = [];
+    for (let i = 0; i < n; i++) { sk.getVertexPosition(i, w).applyMatrix4(toM); const h = w.dot(up0); hMin = Math.min(hMin, h); hMax = Math.max(hMax, h);
+      let best = 0, bi = 0; for (let k = 0; k < 4; k++) { const x = sw.getComponent(i, k); if (x > best) { best = x; bi = si.getComponent(i, k); } }
+      if (/spine(?!.?00[456])/i.test(bones[bi].name)) cand.push(i); }
+    const stride = Math.max(1, Math.floor(cand.length / 96)); for (let k = 0; k < cand.length; k += stride) samples.push([sk, cand[k]]); }
+  const CLEAR = 0.035 * (hMax - hMin) / H;   // clearance in pack units
+  let capR = 0; { const ab = headM.clone().sub(hipsM), w = new THREE.Vector3();
+    for (const [sk, i] of samples) { sk.getVertexPosition(i, w).applyMatrix4(new THREE.Matrix4().multiplyMatrices(toModel, sk.matrixWorld)); const t = Math.max(0, Math.min(1, w.clone().sub(hipsM).dot(ab) / ab.lengthSq())); capR = Math.max(capR, w.distanceTo(hipsM.clone().addScaledVector(ab, t))); } }
   save.forEach((q, i) => q && [B.hips, B.chest][i].quaternion.copy(q)); model.updateMatrixWorld(true);
 
   const items = { book: makeBook(), food: makeSeedBag() }, ITEM_H = { book: 0.5, food: 0.46 };
@@ -55,12 +70,12 @@ export async function boot({ model, B, rest, st, armMix, mix, springK, body, glb
   const cpts = new THREE.Points(new THREE.BufferGeometry().setAttribute('position', new THREE.BufferAttribute(cpos, 3)), new THREE.PointsMaterial({ color: 0xe0cf98, size: 3, sizeAttenuation: false }));
   cpts.frustumCulled = false; scene.add(cpts);
 
-  let hand = 'R', job = null, holding = null, dropped = false, shakeT = 0, reading = 0, sway = [0, 0, 0, 0], lastC = null, lastV = new THREE.Vector3(), packW = 0;
+  let hand = 'R', job = null, holding = null, dropped = false, shakeT = 0, reading = 0, sway = [0, 0, 0, 0], lastC = null, lastV = new THREE.Vector3(), packW = 0, pushS = 0, maxPen = 0;
   // take: the hand on the camera's side holds the item, so it shows
   const run = (kind, item, fast) => new Promise(res => { if (kind === 'take') hand = B.handL.getWorldPosition(_v).z > B.handR.getWorldPosition(_p).z ? 'L' : 'R'; job = { kind, item, u: 0, dur: fast ? 0.55 : 1.7, res }; });
   const moving = () => st.air || st.held || st.dead || st.mode === 'climb' || st.mode === 'lane' || (st.mode === 'walk' && st.amt > 0.15);
   const api = {
-    get busy() { return !!job; }, get holding() { return holding; },
+    get busy() { return !!job; }, get holding() { return holding; }, get pack() { return file === 'pack' ? 'quaternius' : file; }, get clearance() { return { pen: +(maxPen * packW).toFixed(2), push: +(pushS * packW).toFixed(2) }; },
     take(item) { if (!items[item]) return Promise.reject(new Error('take: book or food'));
       if (job || moving()) return Promise.resolve(false);
       if (holding === item) return Promise.resolve(true);
@@ -81,7 +96,23 @@ export async function boot({ model, B, rest, st, armMix, mix, springK, body, glb
       B.chest.getWorldPosition(_p2); _p2.addScaledVector(fw, packW * 0.5).addScaledVector(up, -packW * 0.7).add(_x.set(0, 0, packW * 0.45));   // in front at his belly, a little toward us
       const a = sm(u); _p.lerp(_p2, a).add(_x.set(0, 0, Math.sin(a * Math.PI) * packW * 0.6)); _q.slerp(_q2, a);   // arcs out past his side, never through him
     }
-    root.matrix.compose(_p, _q, _s); root.matrixWorldNeedsUpdate = true; packW = _s.x;
+    packW = _s.x;
+    if (u > 0 && u < 1) {   // mid-swing: keep the pack's centre outside his body capsule (hips to head, radius from his skin)
+      const ms = model.getWorldScale(_v).x; B.hips.getWorldPosition(_x); B.head.getWorldPosition(_y); const ab = _y.sub(_x), t = Math.max(0, Math.min(1, _g.copy(_p).sub(_x).dot(ab) / ab.lengthSq()));
+      const c = _x.addScaledVector(ab, t), d = _g.copy(_p).sub(c), need = capR * ms + packW * (box.max.z - box.min.z) * 0.5, len = d.length();
+      if (len < need) _p.addScaledVector(len > 1e-3 ? d.divideScalar(len) : _g.set(0, 0, 1), need - len);
+    }
+    root.matrix.compose(_p, _q, _s); root.matrixWorldNeedsUpdate = true;
+  }
+  const _w = new THREE.Vector3(), _inv = new THREE.Matrix4();
+  function clearBody(dt) {   // push the pack out along its own +z until its near face clears his skin (measured every frame)
+    root.updateMatrixWorld(true); _inv.copy(pack.matrixWorld).invert(); let pen = -1e9;
+    for (const [sk, i] of samples) { sk.getVertexPosition(i, _w).applyMatrix4(sk.matrixWorld).applyMatrix4(_inv);
+      if (_w.x < box.min.x - CLEAR || _w.x > box.max.x + CLEAR || _w.y < box.min.y || _w.y > box.max.y) continue;
+      pen = Math.max(pen, box.min.z + CLEAR - _w.z); }
+    maxPen = pen; const need = Math.max(0, pen);   // measured on the unpushed placement: the push this frame needs
+    pushS = need >= pushS ? need : Math.max(need, pushS - dt * 0.4);   // out at once, back in slowly (no jitter)
+    if (pushS > 0) { _g.set(0, 0, 1).transformDirection(pack.matrixWorld); _m.makeTranslation(_g.x * pushS * packW, _g.y * pushS * packW, _g.z * pushS * packW); root.matrix.premultiply(_m); root.matrixWorldNeedsUpdate = true; root.updateMatrixWorld(true); }
   }
   function placeItem(name, t) {   // t: 0 at the pocket mouth .. 1 in his hand
     const it = items[name]; it.visible = t > 0; if (!t) return;
@@ -133,9 +164,10 @@ export async function boot({ model, B, rest, st, armMix, mix, springK, body, glb
       const fw = _z.copy(BODY.fwd).applyQuaternion(model.getWorldQuaternion(_q2)), T = Math.max(-0.35, Math.min(0.35, acc.dot(fw) * 0.0005 - acc.y * 0.0002)) * (1 - swingU);
       const [pp, pv, vp, vv] = springK(9, 0.3, dt), p = sway[0] - T, v0 = sway[1]; sway[0] = p * pp + v0 * pv + T; sway[1] = p * vp + v0 * vv; }
     lastC = (lastC || new THREE.Vector3()).copy(_p);
+    if (sway[0] > 0) { sway[0] = 0; sway[1] = Math.min(0, sway[1]); }   // the follow-through swings out from his back, never in past it
     swing.rotation.x = sway[0];
-    place(swingU);
-    lid.rotation.x = -1.9 * flapU;
+    place(swingU); clearBody(dt);
+    lid.rotation.x = OPEN * flapU;
     for (const n of Object.keys(items)) if (n !== itemName) items[n].visible = false;
     if (itemName) placeItem(itemName, itemU);
     let bagAt = null;

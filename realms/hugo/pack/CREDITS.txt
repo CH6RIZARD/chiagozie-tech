@@ -1,7 +1,11 @@
-pack.meshopt.glb (and the .wasm copy, same bytes)
-  Source: "Backpack" by Quaternius, https://poly.pizza/m/vF7TuXCPDH
-  License: CC0 1.0 (public domain dedication); credit given anyway.
-  Changes: recoloured to a light matte palette, the front lid (with its tab, buckle and the strap over it) cut into a
-  hinged piece (node "flap", re-pivoted in backpack.js), the body's top cap under the lid removed so it opens onto a
-  mouth, scaled to 1 unit tall, meshopt-compressed (212 KB -> 20 KB).
+Hugo's backpacks. Each file is cut the same way (static "pack", hinged "flap", markers "hinge"/"mouth"/"hole"),
+scaled to 1 unit tall and meshopt-compressed. The .wasm copies are the same bytes.
+
+pack.meshopt.glb (default)
+  "Backpack" by Quaternius, https://poly.pizza/m/vF7TuXCPDH. License: CC0 1.0.
+  Recoloured to a light matte look; front lid (tab, buckle, strap over it) hinged; body top under it opened into a mouth.
+leather.meshopt.glb (?pack=leather)
+  Backpack by mickeymoose1204, CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/)
+  https://sketchfab.com/3d-models/backpack-1bb0c9be995747e9abe0831d94066fc8
+
 Book and seed bag: procedural meshes in backpack.js (no third-party assets).
