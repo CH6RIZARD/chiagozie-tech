@@ -497,6 +497,28 @@ body.simple>section,body.simple>footer,body.simple>.mindex{display:none!importan
   </div></div></div>
 </div></section>
 
+<!-- THE VOID -->
+<section class="realm" id="void"><div class="wrap">
+  <div class="top">
+    <div><div class="kicker"><span class="st live">Live cams</span><span class="st">Mobile · social</span></div><h2>THE VOID</h2></div>
+    <div><p class="about">A physiological ranking algorithm rather than standard behavior modeling. On-device sensing reads camera pulse (rPPG), fingertip heart rate and HRV, Bluetooth heart-rate straps, facial expression, touch dynamics and hand tremor, scores each against your own baseline and maps it to arousal, attention and valence on the media the user engages with. An on-device model learns from that behavior and serves more of what moves you, mixed by a fusion ranker (social, interest, behavioral, physio-affinity and controversy signals, Thompson-sampling weights) into an almost addictive feed. Built as a mobile app on Supabase Postgres with PostGIS and row-level security, HLS live streams and libsignal end-to-end encrypted DMs. Wrapped in the UI of international news, niche live streams, reels and feeds, and a unique polls and discussion module.</p><p class="how">Tap a nation · live rooms, polls and the feed · anonymous by default</p></div>
+  </div>
+  <div class="split with-phone">
+    <div class="aside">
+      <div class="spec">
+        <div><b>Stack</b><span>Expo · Supabase · PostGIS · libsignal · hls.js · Three.js · Swift on-device sensing + ranker (Thompson-sampling bandit)</span></div>
+        <div><b>Ranking</b><span>Physiological ranking. Built: on-device sensing for iOS and Android reads touch speed, reversals and pauses, hand motion and tremor, front-camera blink, gaze and smile, a camera pulse, a 30-second fingertip heart rate and HRV reading, and Bluetooth heart-rate straps. Each signal is scored against a per-user baseline, fused into arousal, attention and valence, and lag-aligned to the post on screen. Swift ranker wired into the iOS build: the predicted physiological response to each post becomes a learned reward term beside social, interest, behavioral and controversy scores, with weights tuned by a Thompson-sampling bandit. Live feed today: dwell and reactions train interest, split into engaged and niche buckets and interleaved by a tunable ratio.</span></div>
+        <div><b>Data</b><span>Supabase Postgres with PostGIS and row-level security. Region codes derived server-side by a spatial trigger. Stream health written by a scheduled function so dead cams degrade instead of hang.</span></div>
+        <div><b>Privacy</b><span>End-to-end encrypted DMs over libsignal. No email, no password, no location column anywhere in the schema. Camera and heart-rate sensing are opt-in, processed in memory on the phone, quantized with local differential privacy and never stored or uploaded.</span></div>
+      </div>
+    </div>
+    <div class="phone-wrap"><div class="phone tiPhone"><i class="tiBtn b1"></i><i class="tiBtn b2"></i><i class="tiBtn b3"></i><i class="tiBtn b4"></i><i class="home"></i><div class="island"></div><div class="screen tiScreen stage" data-src="__VOID__" data-allow="fullscreen; autoplay">
+      <img class="poster" loading="lazy" src="realms/posters/void.jpg" alt="The Void">
+      <button class="enter" type="button"><span>Jump into The Void</span></button>
+    </div></div></div>
+  </div>
+</div></section>
+
 <!-- HUGO -->
 <section class="realm" id="hugo"><div class="wrap">
   <div class="top">
@@ -523,28 +545,6 @@ body.simple>section,body.simple>footer,body.simple>.mindex{display:none!importan
         <div><b>Infra</b><span>MuJoCo on rented Vast.ai GPUs behind a Cloudflare tunnel; the laptop itself cannot run MuJoCo.</span></div>
       </div>
     </aside>
-  </div>
-</div></section>
-
-<!-- THE VOID -->
-<section class="realm" id="void"><div class="wrap">
-  <div class="top">
-    <div><div class="kicker"><span class="st live">Live cams</span><span class="st">Mobile · social</span></div><h2>THE VOID</h2></div>
-    <div><p class="about">A physiological ranking algorithm rather than standard behavior modeling. On-device sensing reads camera pulse (rPPG), fingertip heart rate and HRV, Bluetooth heart-rate straps, facial expression, touch dynamics and hand tremor, scores each against your own baseline and maps it to arousal, attention and valence on the media the user engages with. An on-device model learns from that behavior and serves more of what moves you, mixed by a fusion ranker (social, interest, behavioral, physio-affinity and controversy signals, Thompson-sampling weights) into an almost addictive feed. Built as a mobile app on Supabase Postgres with PostGIS and row-level security, HLS live streams and libsignal end-to-end encrypted DMs. Wrapped in the UI of international news, niche live streams, reels and feeds, and a unique polls and discussion module.</p><p class="how">Tap a nation · live rooms, polls and the feed · anonymous by default</p></div>
-  </div>
-  <div class="split with-phone">
-    <div class="aside">
-      <div class="spec">
-        <div><b>Stack</b><span>Expo · Supabase · PostGIS · libsignal · hls.js · Three.js · Swift on-device sensing + ranker (Thompson-sampling bandit)</span></div>
-        <div><b>Ranking</b><span>Physiological ranking. Built: on-device sensing for iOS and Android reads touch speed, reversals and pauses, hand motion and tremor, front-camera blink, gaze and smile, a camera pulse, a 30-second fingertip heart rate and HRV reading, and Bluetooth heart-rate straps. Each signal is scored against a per-user baseline, fused into arousal, attention and valence, and lag-aligned to the post on screen. Swift ranker wired into the iOS build: the predicted physiological response to each post becomes a learned reward term beside social, interest, behavioral and controversy scores, with weights tuned by a Thompson-sampling bandit. Live feed today: dwell and reactions train interest, split into engaged and niche buckets and interleaved by a tunable ratio.</span></div>
-        <div><b>Data</b><span>Supabase Postgres with PostGIS and row-level security. Region codes derived server-side by a spatial trigger. Stream health written by a scheduled function so dead cams degrade instead of hang.</span></div>
-        <div><b>Privacy</b><span>End-to-end encrypted DMs over libsignal. No email, no password, no location column anywhere in the schema. Camera and heart-rate sensing are opt-in, processed in memory on the phone, quantized with local differential privacy and never stored or uploaded.</span></div>
-      </div>
-    </div>
-    <div class="phone-wrap"><div class="phone tiPhone"><i class="tiBtn b1"></i><i class="tiBtn b2"></i><i class="tiBtn b3"></i><i class="tiBtn b4"></i><i class="home"></i><div class="island"></div><div class="screen tiScreen stage" data-src="__VOID__" data-allow="fullscreen; autoplay">
-      <img class="poster" loading="lazy" src="realms/posters/void.jpg" alt="The Void">
-      <button class="enter" type="button"><span>Jump into The Void</span></button>
-    </div></div></div>
   </div>
 </div></section>
 
