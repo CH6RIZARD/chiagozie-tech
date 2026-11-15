@@ -72,7 +72,7 @@
       tens: { hugo: 0, dove: 0 }, conf: { hugo: 0, dove: 0 }, frameRead: { hugo: .3, dove: .3 },
       bid: { hugo: { answered: .6 }, dove: { answered: .6 } }, bidOpen: { hugo: null, dove: null },
       body: { dove: { ruffled: 0, sore: 0, dazed: 0, hits: 0, lastHit: null, heldBy: null, heldUntil: 0 }, hugo: { ruffled: 0, sore: 0, dazed: 0, hits: 0, lastHit: null, heldBy: null, heldUntil: 0 } },
-      cur: { hugo: null, dove: null }, imp: { hugo: [], dove: [] }, cool: { hugo: {}, dove: {} }, exAt: { hugo: {}, dove: {} }, exRun: { hugo: null, dove: null }, contactAt: { hugo: -9, dove: -9 },
+      cur: { hugo: null, dove: null }, ownUntil: { hugo: 0, dove: 0 }, imp: { hugo: [], dove: [] }, cool: { hugo: {}, dove: {} }, exAt: { hugo: {}, dove: {} }, exRun: { hugo: null, dove: null }, contactAt: { hugo: -9, dove: -9 },
       rung: { hugo: {}, dove: {} }, lastShow: { hugo: -9, dove: -9 }, lastStrike: { hugo: -9, dove: -9 },
       hold: { who: null, t0: 0, tier: 0, by: 'visitor', stress: 0 }, lastHold: { hugo: -1e9, dove: -1e9 }, grabAt: -1e9,
       crumb: null, log: [], M: newM(), ph: null, mem: null, acc: 1, ids: 0,
@@ -511,7 +511,7 @@
     if (visitorHolds(who) || (who === 'dove' && S.body.dove.heldBy === 'hugo')) { S.cur[who] = null; return null; }
     if (who === 'dove' && S.t < S.reflexUntil) return null;
     let cur = S.cur[who];
-    if (cur && S.t > cur.until) { S.cur[who] = cur = null; }
+    if (cur && S.t > cur.until) { S.cur[who] = cur = null; S.ownUntil[who] = S.t + (who === 'dove' ? U(12, 25) : U(8, 18)); }   // after an exchange its own life gets a turn: the bond was ordering the dove 6x more than it lived
     if (cur && cur.imp) return cur;
     const q = S.imp[who];
     while (q.length && q[0].exp < S.t) q.shift();
@@ -531,6 +531,7 @@
         S.cur[who] = o; startEx(who, o, c); return o;
       }
     }
+    if (!cur && S.t < S.ownUntil[who]) return null;   // its own turn (impulses, staged and reflex orders above still cut in)
     let best = null, bestU = 0, curU = 0; const scored = [];
     for (const e of EX) {
       const u = util(e, who, c); if (u <= 0) continue;
@@ -541,7 +542,7 @@
       cur.evalAt = S.t;
       if (!best || best.id === cur.ex || bestU < 1.35 * curU) return cur;
     }
-    if (!best || bestU < .12) { S.cur[who] = null; return null; }
+    if (!best || bestU < .3) { S.cur[who] = null; return null; }   // .12 let any faint urge order the body every 0.75 s
     scored.sort((a, b) => b[0] - a[0]);
     const top = scored.slice(0, 3); let tot = 0; for (const s of top) tot += s[0] * s[0];
     let r = rnd() * tot, ch = top[0];
@@ -553,7 +554,7 @@
   function done(who, id, result = 'ok', data = {}) {
     if (!S) return;
     const o = S.cur[who]; if (!o || o.id !== id) return;
-    S.cur[who] = null;
+    S.cur[who] = null; if (!o.imp) S.ownUntil[who] = S.t + (who === 'dove' ? U(12, 25) : U(8, 18));   // its own life's turn after an exchange
     if (result !== 'ok') return;
     const o2 = OTHER[who], ph = S.ph;
     switch (o.ex) {
