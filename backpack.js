@@ -89,13 +89,20 @@ export async function boot({ model, B, rest, st, armMix, mix, springK, body, glb
   // take: the hand on the camera's side holds the item, so it shows
   const run = (kind, item, fast) => new Promise(res => { if (kind === 'take') hand = B.handL.getWorldPosition(_v).z > B.handR.getWorldPosition(_p).z ? 'L' : 'R'; job = { kind, item, u: 0, dur: fast ? 0.55 : 1.7, res }; });
   const moving = () => st.air || st.held || st.dead || st.mode === 'climb' || st.mode === 'lane' || (st.mode === 'walk' && st.amt > 0.15);
+  const movingWhy = () => st.dead ? 'dead' : st.held ? 'being held' : st.air ? 'in the air' : st.mode === 'climb' ? 'climbing' : st.mode === 'lane' ? 'changing lane' : 'walking';
+  let lastWhy = null, lastPose = performance.now();
+  // Every take/stow resolves { ok, item, why }: ok:false says why (refused, interrupted, paused), never a silent no-op.
+  const no = why => (lastWhy = why, Promise.resolve({ ok: false, item: holding, why }));
+  setInterval(() => { if (job && performance.now() - lastPose > 1500) { const j = job; job = null; lastWhy = 'paused: he is not being drawn'; j.res({ ok: false, item: holding, why: lastWhy }); } }, 500);   // off-screen or a hidden tab: no frames, so no hang
   const api = {
     get busy() { return !!job; }, get holding() { return holding; }, get pack() { return file === 'pack' ? 'quaternius' : file; }, get clearance() { return { pen: +(maxPen * packW).toFixed(2), push: +(pushS * packW).toFixed(2), shoulderGap: +gapS.toFixed(2) }; },
     take(item) { if (!items[item]) return Promise.reject(new Error('take: book or food'));
-      if (job || moving()) return Promise.resolve(false);
-      if (holding === item) return Promise.resolve(true);
+      if (job) return no('busy: ' + job.kind + ' ' + job.item);
+      if (moving()) return no('refused: ' + movingWhy());
+      if (holding === item) return Promise.resolve({ ok: true, item, why: 'already holding it' });
       return holding ? api.stow().then(() => api.take(item)) : run('take', item); },   // busy at once, so a caller's next check sees it
-    stow() { if (!holding) return Promise.resolve(true); if (job) return new Promise(r => { const j = job, f = j.res; j.res = v => { f(v); r(api.stow()); }; }); return run('stow', holding); },
+    get why() { return lastWhy; },
+    stow() { if (!holding && !job) return Promise.resolve({ ok: true, item: null, why: 'nothing in hand' }); if (job) return new Promise(r => { const j = job, f = j.res; j.res = v => { f(v); r(api.stow()); }; }); return run('stow', holding); },
     shake() { if (holding !== 'food' || job) return false; shakeT = 1.1; return true; },
   };
   window.__pack = api;
@@ -175,7 +182,11 @@ export async function boot({ model, B, rest, st, armMix, mix, springK, body, glb
   let F = null;
   const pose = dt => {
     dt = Math.min(dt, 0.1);
-    if (moving() && (holding || job) && !(job && job.kind === 'stow')) { if (job) { const j = job; job = null; j.res(false); } if (holding) run('stow', holding, true); }
+    lastPose = performance.now();
+    if (moving() && (holding || job) && !(job && job.kind === 'stow')) {
+      const why = 'interrupted: ' + movingWhy();
+      if (job) { const j = job; lastWhy = why; job = { kind: 'stow', item: j.item, u: 1 - j.u, dur: 0.55, res: () => {} }; j.res({ ok: false, item: null, why }); }   // reversed from where it was
+      else { lastWhy = 'stowed: ' + movingWhy(); run('stow', holding, true); } }
     // the take timeline (stow plays it backwards): swing off, flap open, item out into the hand, flap shut, swing back
     let u = 1, swingU = 0, flapU = 0, itemU = holding ? 1 : 0, itemName = holding, wShoulder = 0, wPocket = 0, wHold = holding ? 1 : 0, wPack = 0;
     if (job) {
@@ -183,7 +194,7 @@ export async function boot({ model, B, rest, st, armMix, mix, springK, body, glb
       swingU = Math.min(sm(u / 0.3), 1 - sm((u - 0.82) / 0.18)); flapU = Math.min(sm((u - 0.26) / 0.14), 1 - sm((u - 0.72) / 0.12));
       itemU = u < 0.42 ? 0 : sm((u - 0.45) / 0.25) * 0.98 + 0.02;
       wShoulder = Math.sin(Math.PI * Math.min(1, u / 0.32)); wPocket = Math.min(sm((u - 0.3) / 0.12), 1 - sm((u - 0.5) / 0.2)); wHold = sm((u - 0.55) / 0.2); wPack = swingU;
-      if (job.u >= 1) { const j = job; job = null; holding = j.kind === 'take' ? j.item : null; j.res(true); }
+      if (job.u >= 1) { const j = job; job = null; holding = j.kind === 'take' ? j.item : null; j.res({ ok: true, item: holding, why: j.kind === 'take' ? 'taken' : 'stowed' }); }
     }
     // arms: right reaches to the left strap, the left holds the swung pack, the right goes into the pocket, then holds the item
     if (wShoulder > 0) armMix(hand, [-0.15, 0.25, 0.55], [-0.75, 0.55, -0.1], wShoulder);
