@@ -25,6 +25,7 @@ try { if (localStorage.getItem('theme') === 'light') document.documentElement.da
 <link rel="modulepreload" href="dove3d.js?v=20261115s1" data-agent>
 <link rel="modulepreload" href="hugo3d.js?v=20261115s2p7p9" data-agent>
 <link rel="modulepreload" href="backpack.js?v=20261115p9">
+<link rel="modulepreload" href="void3d.js?v=20261115a">
 <link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.min.js">
 <link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/loaders/GLTFLoader.js">
 <link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/utils/BufferGeometryUtils.js">
@@ -126,6 +127,8 @@ nav a.cta{color:var(--accent)}
 .aside figure{margin:0;border:1px solid var(--line);border-radius:4px;overflow:hidden;background:var(--stage)}
 .aside figure img{display:block;width:100%;height:auto}
 .aside figcaption{font-family:var(--mono);font-size:11px;letter-spacing:.04em;color:var(--muted);padding:10px 12px;border-top:1px solid var(--line);background:var(--paper)}
+.charview #void-stage{display:flex;justify-content:center;align-items:center;min-height:300px;padding:12px 0}
+.charview #void-stage canvas{display:block;touch-action:pan-y}
 .spec{border-top:1px solid var(--rule);font-size:14px}
 .spec div{display:grid;grid-template-columns:96px 1fr;gap:12px;padding:10px 0;border-bottom:1px solid var(--rule)}
 .spec b{font-family:var(--mono);font-weight:400;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);padding-top:3px}
@@ -509,6 +512,7 @@ body.simple>section,body.simple>footer,body.simple>.mindex{display:none!importan
   </div>
   <div class="split with-phone">
     <div class="aside">
+      <figure class="charview"><div id="void-stage" aria-label="The Void's mascot, a rigged real-time 3D figure, slowly turning"></div><figcaption>The mascot, rigged. Real-time glTF · drag to turn.</figcaption></figure>
       <div class="spec">
         <div><b>Stack</b><span>Expo · Supabase · PostGIS · libsignal · hls.js · Three.js · Swift on-device sensing + ranker (Thompson-sampling bandit)</span></div>
         <div><b>Ranking</b><span>Physiological ranking. Built: on-device sensing for iOS and Android reads touch speed, reversals and pauses, hand motion and tremor, front-camera blink, gaze and smile, a camera pulse, a 30-second fingertip heart rate and HRV reading, and Bluetooth heart-rate straps. Each signal is scored against a per-user baseline, fused into arousal, attention and valence, and lag-aligned to the post on screen. Swift ranker wired into the iOS build: the predicted physiological response to each post becomes a learned reward term beside social, interest, behavioral and controversy scores, with weights tuned by a Thompson-sampling bandit. Live feed today: dwell and reactions train interest, split into engaged and niche buckets and interleaved by a tunable ratio.</span></div>
@@ -898,6 +902,9 @@ window.SCION_CONFIG = { size: matchMedia('(max-width:760px)').matches ? 16 : 26,
     new Promise(res => { if (landed()) return res(); const o = new PerformanceObserver(() => { if (landed()) { o.disconnect(); res(); } }); o.observe({ type: 'resource' }); setTimeout(res, 5000); }).then(() => add(dove, 'module'));
   });
 }
+
+// The Void mascot viewer: independent of the agents (its own GLB + ext detection), mounts into #void-stage if present.
+{ const s = document.createElement('script'); s.type = 'module'; s.src = 'void3d.js?v=20261115a'; document.head.append(s); }
 
 // Phones keep an old copy of this page (restored tabs, back-forward cache): if the server has a newer one, reload once.
 addEventListener('pageshow', () => fetch(location.pathname, { method: 'HEAD', cache: 'no-store' }).then(r => {
