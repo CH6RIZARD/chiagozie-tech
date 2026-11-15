@@ -885,7 +885,8 @@ loadTHREE(function(){
     'border-radius:6px;pointer-events:none;text-align:center;display:none';
   document.body.appendChild(mjCap);
   const mjCaption=(d,head)=>{mjCap.style.display='block';
-    mjCap.textContent=head+(d&&d.act?` · ${d.act.replace(/_/g,' ')}`:'')+(d&&d.why&&d.why!=='idle'&&d.why!==d.act?` (${d.why.replace(/ x\d\.\d+/,'')})`:'');};
+    mjCap.textContent=head+(d&&d.act?` · ${d.act.replace(/_/g,' ')}`:'')+(d&&d.why&&d.why!=='idle'&&d.why!==d.act?` (${d.why.replace(/ x\d\.\d+/,'')})`:'')+
+    (d&&/wander|go_home/.test(d.act||'')?' · his walk is still a slow balance shuffle (~1 cm/s); a real gait is not built yet':'');};
   let _rp=null;   // {frames, i, timer, head}
   function mjReplay(){
     if(_rp||(_mj&&_mj.readyState===1))return;
