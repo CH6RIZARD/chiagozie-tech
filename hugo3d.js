@@ -159,6 +159,7 @@ function poseClimb(C) {
     rot(B.thighL, 0.1); rot(B.thighR, -0.2); rot(B.shinL, 0.4); rot(B.shinR, 0.6); rot(B.chest, -0.05);
   } else if (C.ph === 'hang') {   // hanging by his hands, legs swinging a little
     arm('L', [0.22, 1, 0.3], [0.12, 1, 0.25]); arm('R', [0.22, 1, 0.3], [0.12, 1, 0.25]);
+    if ((st.hangK || 1) > 1.5) rot(B.head, -0.45);   // a long hang: he looks up at where he is going
     const sw = Math.sin(t * 4) * 0.15; rot(B.thighL, sw); rot(B.thighR, -sw); rot(B.shinL, 0.25); rot(B.shinR, 0.3);
   } else {   // pulling up: hands stay on the edge while the body rises past them, one knee comes up and over
     const a = Math.min(1, u * 1.3), ua = [0.22, 1 - 1.9 * a, 0.3 + 0.35 * a], fa = [0.12, 1 - 2 * a, 0.25 + 0.5 * a];
@@ -309,7 +310,7 @@ function scan() {
   if (od) pass(od, os);
   floors.push({ y: groundY(), x1: 0, x2: document.documentElement.scrollWidth, el: document.body, ground: true, support: true });   // the page bottom; Read less: the screen's bottom edge (a one-screen room has a solid floor)
   floors.forEach(fit); seams.forEach(fit);   // only ledges with standing room somewhere along them (no climbing into a gap and crawling there)
-  floors = floors.filter(f => f.ground || f.x2 - f.x1 < 2 * HALF_W || [0, 1, 2, 3, 4, 5, 6, 7, 8].some(i => clear(f.x1 + HALF_W + (f.x2 - f.x1 - 2 * HALF_W) * i / 8, f.y, CFG.size + 4)));
+  floors = floors.filter(f => f.ground || f.name || f.x2 - f.x1 < 2 * HALF_W || [0, 1, 2, 3, 4, 5, 6, 7, 8].some(i => clear(f.x1 + HALF_W + (f.x2 - f.x1 - 2 * HALF_W) * i / 8, f.y, CFG.size + 4)));
   // The back lane's own floor: each section's bottom edge (support:false, so food never settles there)
   const secs = window.DEPTH ? window.DEPTH.sections : [];
   secs.forEach((sec, i) => { if (sec.top + sec.h < scrollY - vh * 1.5 || sec.top + sec.h > scrollY + vh * 2.5) return;
@@ -387,8 +388,8 @@ const _hv = new THREE.Vector3();
 // ---------- body language ----------
 // When he is not walking he does something: each gesture has its own timing, side and size, drawn fresh every time.
 // ?pose=name forces one (for checking the poses).
-const STAND = ['look', 'hips', 'scratch', 'cross', 'stretch', 'weight', 'tap', 'behind', 'look', 'weight', 'dance', 'curious', 'curious'];
-const SIT = ['lean', 'chin', 'kick', 'look', 'kick', 'hands', 'nap', 'curious'];
+const STAND = ['look', 'hips', 'scratch', 'cross', 'weight', 'tap', 'look', 'weight', 'curious', 'curious'];   // small texture only: the bigger acts are the kernel's repertoire (autonomy)
+const SIT = ['lean', 'chin', 'kick', 'look', 'kick', 'hands', 'curious'];
 const forced = new URLSearchParams(location.search).get('pose');
 const pickOf = a => a[(Math.random() * a.length) | 0];
 let gest = null, gestAt = 0, lastGest = null;
@@ -525,13 +526,20 @@ function gesture(dt, sitting, still) {
       armMix('L', [0.3, -0.85, 0.42], [-0.95, 0.12, 0.3], w); armMix('R', [0.3, -0.85, 0.42], [-0.95, 0.2, 0.36], w); mix(B.head, -0.1, 0, 0, w); break; }
     case 'peer': mix(B.chest, 0.35, 0, 0, w); mix(B.head, 0.5, 0, 0, w); armMix('L', [0.3, -0.8, 0.35], [0.1, -0.9, 0.3], w); armMix('R', [0.3, -0.8, 0.35], [0.1, -0.9, 0.3], w); break;   // looking down over the edge
     case 'hands': armMix('L', [0.15, -0.8, 0.5], [-0.6, -0.2, 0.75], w); armMix('R', [0.15, -0.8, 0.5], [-0.6, -0.25, 0.7], w); break;
+    case 'point': { const tg = st.interest || { x: st.x + sd * 100, y: st.y - CFG.size }, dx = tg.x - st.x, up = Math.max(-0.3, Math.min(0.6, (st.y - CFG.size * 0.75 - tg.y) / 250)), e = Math.sin(Math.min(1, u * 1.4) * Math.PI);   // there: the arm straight at it, eyes with it
+      armMix(dx > 0 ? (st.dir > 0 ? 'R' : 'L') : (st.dir > 0 ? 'L' : 'R'), [0.2, 0.25 + up, 0.9], [0.1, 0.3 + up, 0.95], w * Math.min(1, e * 1.5)); lookGoal = Math.max(-1, Math.min(1, dx / 160)); mix(B.head, -0.25 * up, 0, 0, w); break; }
+    case 'yawn': { const e = Math.sin(Math.min(1, u * 1.3) * Math.PI) * A; armMix(S1, [0.45, 0.35, 0.6], [-0.7, 0.75, 0.55], w * e); armMix(S1 === 'L' ? 'R' : 'L', [0.6, 0.7, -0.1], [0.3, 0.95, -0.1], w * e * 0.8); mix(B.head, -0.3 * e, 0, 0, w); mix(B.chest, -0.1 * e, 0, 0, w); break; }   // a hand to the mouth, the other arm up, head back
+    case 'lie': { const e = Math.min(1, u * 2.5) * Math.min(1, (1 - u) * 2.5);   // lying back on the ledge, hands behind his head, legs out
+      mix(B.chest, -0.85 * e, 0, 0, w); mix(B.head, -0.2 * e, 0, 0, w); mix(B.thighL, -0.35, 0, 0.08, w * e); mix(B.thighR, -0.3, 0, -0.08, w * e); mix(B.shinL, 0.2, 0, 0, w * e); mix(B.shinR, 0.25, 0, 0, w * e);
+      armMix('L', [0.5, 0.6, -0.4], [-0.9, 0.5, -0.3], w * e); armMix('R', [0.5, 0.6, -0.4], [-0.9, 0.5, -0.3], w * e); break; }
+    case 'lookup': mix(B.head, -0.45 * A, 0, sd * 0.1, w); mix(B.chest, -0.1, 0, 0, w); armMix(S1, [0.5, 0.75, 0.45], [-0.75, 0.55, 0.35], w); lookGoal = sd * 0.2; break;   // a hand over the eyes, looking up
     case 'wave': armMix(st.dir > 0 ? 'R' : 'L', [0.6, 0.85, 0.2], [0.15 + Math.sin(ph * 9) * 0.3, 0.95, 0.1], w); lookGoal = -0.25 * st.dir; mix(B.head, -0.05, 0, sd * 0.1, w); break;   // hello again: the hand nearer you, up and waving
   }
 }
 
 window.__hugo = st;   // read-only peek for debugging
 window.__hugoFloors = () => allFloors;   // the ledges he scans are the food's colliders too (bond.js skips support:false seams)
-if (/[?&]debug/.test(location.search)) window.__hugoDbg = { get floors() { return floors; }, get t() { return t; }, get gest() { return gest && gest.name; }, miss: why => missed(why), clear: (x, y, h) => clear(x, y, h), get ink() { return ink; }, transits: () => { const g = graph(); return g ? g.transits : null; }, route: () => transitRoute(), graph: () => graph(), go: () => { const r = transitRoute(); if (r) { st.goal = null; st.route = r; nextLeg(); } return !!r; }, get sq() { return st.sq || 0; }, bones: () => { const o = {}; for (const [k, b] of Object.entries({ head: skull, chest: B.chest, hips: B.hips })) { b.getWorldPosition(_hv); o[k] = [+(_hv.x + innerWidth / 2 + scrollX).toFixed(1), +(innerHeight / 2 - _hv.y + scrollY).toFixed(1)]; } return o; }, get lid() { return eyes[0] ? eyes[0].scale.y : 1; }, get shade() { return shadeCss; }, get att() { return att; }, get brace() { return st.brace || 0; },
+if (/[?&]debug/.test(location.search)) window.__hugoDbg = { get floors() { return floors; }, get t() { return t; }, get gest() { return gest && gest.name; }, miss: why => missed(why), clear: (x, y, h) => clear(x, y, h), get ink() { return ink; }, transits: () => { const g = graph(); return g ? g.transits : null; }, route: () => transitRoute(), graph: () => graph(), go: () => { const r = transitRoute(); if (r) { st.goal = null; st.route = r; nextLeg(); } return !!r; }, get sq() { return st.sq || 0; }, bones: () => { const o = {}; for (const [k, b] of Object.entries({ head: skull, chest: B.chest, hips: B.hips })) { b.getWorldPosition(_hv); o[k] = [+(_hv.x + innerWidth / 2 + scrollX).toFixed(1), +(innerHeight / 2 - _hv.y + scrollY).toFixed(1)]; } return o; }, get lid() { return eyes[0] ? eyes[0].scale.y : 1; }, get shade() { return shadeCss; }, get att() { return att; }, get brace() { return st.brace || 0; }, get why() { return pokeWhy; }, get intent() { return window.MORTAL && window.MORTAL.why ? window.MORTAL.why('hugo') : null; }, get beh() { return st.beh ? { id: st.beh.id, kind: st.beh.kind, b: st.beh.p.b } : null; },
   walk: dx => { const f = st.floor; if (!f) return false; st.goal = { f, x: Math.max(f.x1 + HALF_W, Math.min(f.x2 - HALF_W, st.x + dx)), until: t + 20 }; st.route = null; if (st.mode !== 'walk') { st.mode = 'walk'; restyle(); } return true; }, park: s => { st.goal = null; st.route = null; if (st.mode === 'walk') st.mode = 'idle'; st.idleUntil = t + s; }, hop: v => hopUp(v) };   // scripted beats for the harness
 st.dims = { THIGH, ARMLEN, SPINE, PITCH, CRAWL_H, size: CFG.size };
 // Hit area follows him; the canvas itself never takes the pointer.
@@ -606,7 +614,7 @@ addEventListener('pointermove', e => {
   pointer.sp = pointer.sp * 0.7 + (d / (Math.max(16, now - pointer.at) / 1000)) * 0.3; pointer.cx = e.clientX; pointer.cy = e.clientY; pointer.at = now; pointer.in = true;
   if (d > 2) pointer.movedAt = now;
   const near = Math.hypot(pointer.cx + scrollX - st.x, pointer.cy + scrollY - (st.y - CFG.size / 2)) < 160;
-  if (near && !pointer.near && !st.held) poke('the cursor came close');
+  if (near && !pointer.near && !st.held) { poke('the cursor came close'); notice('cursor_near', { x: pointer.cx + scrollX, y: pointer.cy + scrollY, what: 'cursor' }); }
   const close = Math.hypot(pointer.cx + scrollX - st.x, pointer.cy + scrollY - (st.y - CFG.size / 2)) < CFG.size * 3;   // within three of him: a glance (budgeted, delayed)
   if (close && !pointer.close && !st.held && !st.hover) react('glance', () => glanceAt(pointer.cx + scrollX, pointer.cy + scrollY)); pointer.close = close;
   if (near) window.MORTAL?.heard('hugo');   // the visitor's attention: no isolation while the cursor keeps him company
@@ -746,7 +754,7 @@ function missed(why) {
 }
 // A goal he cannot reach from here: struck off for a while; a miss only when someone (the bird, the visitor) wanted it, never a place
 // he picked himself (a blocked point is rejected and another chosen, Animal Crossing's wander)
-function giveUp(why) { const g = st.goal; st.goal = null; st.route = null; if (!g) return; if (g.rel) relEnd('fail'); else { avoid.set(g.f, t + 60 + Math.random() * 60); if (!g.auto) missed(why); } }
+function giveUp(why) { const g = st.goal; st.goal = null; st.route = null; if (st.beh) st.beh.failed = 1; if (!g) return; if (g.rel) relEnd('fail'); else { avoid.set(g.f, t + 60 + Math.random() * 60); if (!g.auto) missed(why); } }
 // A wall ahead (words or a box he cannot walk or crawl under). A person does not walk into it over and over: he gets on
 // top of it if he can, lets go of a goal that lies past it, and remembers it; boxed in on both sides, he climbs out or
 // sits it out instead of pacing.
@@ -907,7 +915,7 @@ function dropIn(p = pickPlace()) {
 function comeBack() {
   const p = pickPlace(); st.goal = null; st.route = null; st.toView = true;
   if (p) { const r = plan(p.f, p.x); if (r && r.length) { st.route = r; if (nextLeg()) return; } }
-  st.route = null; if (st.away >= 4) lost();   // no route: a relocation only once he has been fully off camera for 4 s
+  st.route = null; if (st.away >= 4.5) lost();   // no route: a relocation only once he has been fully off camera for 4 s
 }
 // The lost case: in by the edge the content comes from. The view went down past him (he is above): a climb in over the bottom edge
 // onto a support within reach of it; up past him (he is below): the drop-in from the top.
@@ -923,6 +931,7 @@ function climbIn() {
 const lost = () => st.y < scrollY ? climbIn() || dropIn() : dropIn();
 function hopUp(vy) { if (!st.floor || st.mode === 'sit' || (st.sitK || 0) > 0.04) return; st.dropF = st.floor; st.air = true; st.hop = true; st.floor = null; st.vx = 0; st.vy = -vy; st.mode = 'walk'; }   // a hop on the spot comes down on the ledge it left, never past it
 function applyOrder(o) {
+  if (st.beh) behEnd(false); window.MORTAL?.mark?.('hugo', 'rel:' + o.ex, 'bond'); st.relRun = (st.relRun || 0) + 1;   // the bond takes his body: the kernel's move stops, and the order goes on the record
   relClear(); st.relOrder = o; st.spdK = o.spdK || 1; st.crouch = o.crouch || 0;
   const d = window.__scion;
   st.relGap = o.goal && d && TRACK.has(o.ex) ? Math.abs(o.goal.x - d.x) : null;
@@ -977,80 +986,243 @@ function forage(f) {
   st.food = { id: E.item.id, tries: 0, miss: 0 }; window.MORTAL?.done('hugo');
   return forage(f);
 }
-// His own life between orders: drives -> goals -> actions through the Mortal Agent kernel (no dice, no timers). Self-directed
-// moves wait for the frame's pressure (>= .45); keeping himself in the visitor's view is a body reflex, like the dove's.
+// ---------- his own life between orders (patch 5): a repertoire, chosen with memory by the Mortal Agent kernel ----------
+// What he can do is registered once (id, category, utility, duration); the kernel picks with cooldowns, novelty, this visitor's
+// persona, commitment and plans (2-4 steps with a purpose), and every execution gets its own speed, size, side and pauses (p).
+// RUN[id](p, o, ctx) starts the move and says how it ends: 'goal' (his route/goal resolves), 'gest' (that gesture plays out),
+// 'timer' (st.beh.until), or false (cannot, here and now). steps: more RUN-like functions to run in order after the first ends.
+const RUN = {};
+const gestOf = (name, dur, p, extra) => ({ name, t0: t, dur, side: p.side, amp: p.amp, f: 0.75 + 0.6 * (p.speed - 0.8) / 0.45, beh: 1, ...(extra || {}) });
+const standGest = (name, dur, p, extra) => { if (st.mode === 'sit' && !(extra && extra.sit) && st.floor && !clear(st.x, st.floor.y, CFG.size + 4)) return false; if (st.mode === 'sit' && !(extra && extra.sit)) st.mode = 'idle'; if (st.mode !== 'sit') st.mode = 'idle'; st.amt = 0; st.goal = null; st.idleUntil = t + dur + 0.2; gest = gestOf(name, dur, p, extra); return 'gest'; };
+const sitGest = (name, dur, p) => { if (!st.floor || !clear(st.x, st.floor.y, SIT_H + 4)) return false; st.goal = null; st.mode = 'sit'; st.idleUntil = t + dur + 0.5; st.pendGest = { ...gestOf(name, dur, p), any: false }; return 'gest'; };
+const endX = (f, side) => (side > 0 ? f.x2 - HALF_W - 3 : f.x1 + HALF_W + 3);   // the end of his ledge on that side
+const walkOn = (f, x, p, extra) => { if (!f || !clear(x, f.y, CFG.size + 4)) return false; st.spdK = p.speed * ((extra && extra.run) || 1); goTo(f, x, { auto: 1, ...(extra || {}) }); return 'goal'; };
+const toPlace = (q, p, extra) => { if (!q) return false; let r = plan(q.f, q.x, q.z || 0); if (r && !r.length) r = null; st.spdK = p.speed * ((extra && extra.run) || 1); if (r) { st.route = r; nextLeg(); } else if (!routeTo(q.f, q.x, { auto: 1 }, q.z || 0)) return false; return 'goal'; };
+const drawPlace = (n, pick) => { let p = null, r = null; for (let i = 0; i < n && !r; i++) { const q = pick(); if (!q) break; p = p || q; if ((r = plan(q.f, q.x, q.z || 0)) && !r.length) r = null; if (r) p = q; } return p; };   // up to n draws, the first the graph has a way to wins
+const headingEl = title => title ? [...document.querySelectorAll('h1,h2,h3')].find(h => h.textContent.replace(/\s+/g, ' ').trim().slice(0, 60) === title && h.getClientRects().length) : null;
+const underEl = el => { if (!el) return null; const r = el.getBoundingClientRect(); return floorNear(r.left + scrollX + Math.min(r.width, 300) / 2, r.top + scrollY); };
+const planPick = (o, ctx) => { if (o && o.plan && o.step === 0 && o.plan.pick) st.planTarget = o.plan.pick(ctx) || null; return o && o.plan ? st.planTarget : null; };
+const cursorPt = () => (pointer.in ? { x: pointer.cx + scrollX, y: pointer.cy + scrollY, what: 'cursor' } : st.tapAt && t - st.tapAt.t < 20 ? { x: st.tapAt.x, y: st.tapAt.y, what: 'touch' } : { x: scrollX + innerWidth / 2, y: scrollY + innerHeight * 0.85, what: 'visitor' });
+const lookAt = (pt, dur) => { if (!pt) return; st.interest = pt; st.glance = { x: pt.x, y: pt.y, until: t + dur }; st.dir = Math.sign(pt.x - st.x) || st.dir; };
+const dovePt = () => { const d = window.__scion; return d ? { x: d.x, y: d.y - 10, what: 'dove' } : null; };
+const REACH = () => CFG.size * 3.5;   // a leap from the screen's edge: up to 3.5 bodies (the climb tween carries him; the hang and pull-up sell it)
+const ledgesAbove = () => floors.filter(q => q !== st.floor && !q.ground && !q.screen && q.y < st.y - 8 && q.y >= st.y - REACH() && q.y > scrollY + 20 && q.x2 - q.x1 > 2 * HALF_W + 16);
+const onLedgeX = q => Math.max(q.x1 + HALF_W + 6, Math.min(q.x2 - HALF_W - 6, st.x));
+const overMe = () => ledgesAbove().filter(q => st.x > q.x1 + HALF_W - 1 && st.x < q.x2 - HALF_W + 1 && clear(onLedgeX(q), q.y, CFG.size + 4)).sort((a, b) => b.y - a.y)[0] || null;   // the lowest ledge passing right over him
+const grab = (q, x, p) => { if (!q || !clear(x, q.y, CFG.size + 4)) return false; st.goal = null; st.route = null; st.dir = Math.sign(x - st.x) || st.dir; st.mode = 'prep'; st.amt = 0; st.prep = { f: q, dh: st.y - q.y, until: t + 0.12 + 0.12 * p.durK, climb: true, over: x }; return 'goal'; };
+Object.assign(RUN, {
+  // --- moves (where he goes comes from the kernel's plan or novelty; speed from p) ---
+  walk_to: (p, o, ctx) => { const tg = planPick(o, ctx); if (tg) { const q = underEl(tg.el); if (q) return toPlace({ f: q.f, x: q.x + p.side * 18, z: 0 }, p); const r = tg.el.getBoundingClientRect(), k = toPlace(pickToward(Math.sign(r.top + scrollY - st.y) || 1), p); if (k) return k; }   // nowhere to stand at it: a step toward it
+    return toPlace(drawPlace(4, pickPlace) || pickToward(st.dir), p); },
+  run_to: (p, o, ctx) => { const tg = planPick(o, ctx), q = tg ? underEl(tg.el) : null; return toPlace(q ? { f: q.f, x: q.x, z: 0 } : drawPlace(3, pickPlace), p, { run: 1.8 }); },
+  sprint_across: p => { const f = st.floor; if (!f || f.x2 - f.x1 < 2 * HALF_W + 120) return false; const x = endX(f, Math.abs(f.x2 - st.x) > Math.abs(st.x - f.x1) ? 1 : -1); return Math.abs(x - st.x) > 100 ? walkOn(f, x, p, { run: 2.2 }) : false; },
+  pace: p => { const f = st.floor, x0 = st.x; if (!f) return false; const x1 = Math.max(f.x1 + HALF_W + 4, Math.min(f.x2 - HALF_W - 4, x0 + p.side * (60 + 70 * p.amp))); if (Math.abs(x1 - x0) < 40 || !walkOn(f, x1, p)) return false;
+    st.beh.steps = [() => walkOn(f, x0, p)]; return 'goal'; },
+  back_away: (p, o, ctx) => { const f = st.floor; if (!f) return false; const from = ctx.dove && ctx.dove.dist < 260 ? ctx.dove : cursorPt(), away = -(Math.sign(from.x - st.x) || st.dir);
+    const x = Math.max(f.x1 + HALF_W + 4, Math.min(f.x2 - HALF_W - 4, st.x + away * (120 + 100 * p.amp))); if (Math.abs(x - st.x) < 50) return false; const k = walkOn(f, x, p, { run: 0.8 }); if (k) lookAt(from, 2.5); return k; },
+  follow_dove: (p, o, ctx) => { const d = ctx.dove; if (!d) return false; const q = floorNear(d.x - p.side * (60 + 40 * p.amp), d.y); if (!q || q.f.y > scrollY + innerHeight - 10) return false; return toPlace({ f: q.f, x: q.x, z: 0 }, p); },
+  step_down: p => toPlace(pickToward(1), p),
+  climb_up: p => toPlace(pickToward(-1), p),
+  hang_edge: p => { const q = pickToward(-1); if (!q || st.y - q.f.y < CFG.size * 1.2) return false; st.hangK = 2.5 + 2 * p.amp; st.beh.lookUp = 1; return toPlace(q, p); },   // the climb, with a long hang looking up
+  hop: p => { if (!st.floor || st.mode === 'sit') return false; hopUp(200 + 110 * p.amp); st.beh.until = t + 1.3; return 'timer'; },
+  trip_recover: p => { const f = st.floor; if (!f) return false; const x = endX(f, p.side); if (Math.abs(x - st.x) < 160 || !walkOn(f, x, p, { run: 2 })) return false; st.beh.tripAt = t + 0.5 + 0.5 * p.durK; return 'goal'; },
+  transit: (p, o, ctx) => { if (!ctx.tr) return false; st.spdK = p.speed; st.route = ctx.tr; st.transitAt = t; return nextLeg() ? 'goal' : false; },
+  peek_behind: (p, o, ctx) => { if (!ctx.lanesBack || !laneHop(-1)) return false; st.peek = true; st.beh.until = t + 2.5 + 2 * p.durK; return 'timer'; },
+  // --- looking ---
+  look_around: p => standGest('look', 2.5 + 2 * p.durK, p),
+  look_visitor: (p, o) => { const pt = (o && o.x) || cursorPt(); lookAt(pt, 3 * p.durK); st.watch = pointer.in ? t + 3 * p.durK : 0; return standGest('curious', 2.5 + 1.5 * p.durK, p); },
+  glance_section: (p, o) => { const el = o && o.x && o.x.el, r = el && el.getBoundingClientRect(); lookAt(r ? { x: r.left + scrollX + r.width / 2, y: r.top + scrollY, what: 'heading' } : { x: st.x + p.side * 200, y: scrollY + innerHeight / 2 }, 2); return standGest('look', 2 + p.durK, p); },
+  look_scroll: (p, o) => { const up = (o && o.x && o.x.v || st.scrollV || 1) < 0; lookAt({ x: st.x + p.side * 40, y: st.y + (up ? -1 : 1) * CFG.size * 2, what: 'the page' }, 1.6); return standGest('peer', 1.2 + 0.6 * p.durK, p, up ? { name: 'look' } : {}); },
+  stare_dove: (p, o, ctx) => (ctx.dove && ctx.dove.dist < CFG.size * 4 ? standGest('stare', 2 + p.durK, p) : false),
+  point_project: (p, o, ctx) => { const el = (ctx.hover && ctx.hover.el) || (st.planTarget && st.planTarget.el); if (!el) return false; const r = el.getBoundingClientRect(); lookAt({ x: r.left + scrollX + r.width / 2, y: r.top + scrollY + Math.min(r.height, 200) / 2, what: 'project' }, 3); return standGest('point', 2.2 + p.durK, p); },
+  // --- rest ---
+  sit_edge: p => { const f = st.floor; if (!f || f.screen || f.ground) return false; const x = endX(f, p.side); if (!clear(x, f.y, SIT_H + 4)) return false;
+    const sit = () => { st.dir = p.side; return sitGest('kick', 4 + 4 * p.durK, p); }; if (Math.abs(x - st.x) < 12) return sit(); if (!walkOn(f, x, p)) return false; st.beh.steps = [sit]; return 'goal'; },
+  lie_down: p => sitGest('lie', 5 + 5 * p.durK, p),
+  nap: p => sitGest('nap', 7 + 6 * p.durK, p),
+  stand_up_slow: p => { if (st.mode !== 'sit') return false; st.mode = 'idle'; st.idleUntil = t + 1.2; st.pendGest = { ...gestOf('stretch', 2.5 + p.durK, p), any: true }; st.beh.until = t + 3 + p.durK; return 'timer'; },
+  stretch: p => standGest('stretch', 2 + 1.5 * p.durK, p),
+  yawn: p => standGest('yawn', 2 + p.durK, p, st.mode === 'sit' ? { sit: 1 } : {}),
+  // --- fidgets and small business ---
+  scratch: p => standGest('scratch', 1.8 + 1.2 * p.durK, p),
+  hips: p => standGest('hips', 2 + 1.5 * p.durK, p),
+  cross_arms: p => standGest('cross', 2.5 + 2 * p.durK, p),
+  dance: p => standGest('dance', 3 + 2.5 * p.durK, p),
+  wave: (p, o) => { lookAt((o && o.x) || cursorPt(), 2.5); return standGest('wave', 1.8 + p.durK, p); },
+  test_ledge: p => { const f = st.floor; if (!f || f.screen || f.ground) return false; const x = endX(f, p.side); if (Math.abs(x - st.x) > 12 && !walkOn(f, x, p)) return false;
+    const peer = () => { st.dir = p.side; return standGest('peer', 1.2 + 0.6 * p.durK, p); }, tap = () => standGest('tap', 1.4 + 0.8 * p.durK, p);
+    if (Math.abs(x - st.x) <= 12) { st.beh.steps = [tap]; return peer(); } st.beh.steps = [peer, tap]; return 'goal'; },
+  lean_letter: (p, o, ctx) => (ctx.textLedge || ctx.wallNear ? standGest('lean', 3 + 2 * p.durK, p) : false),
+  balance_serif: (p, o, ctx) => (ctx.textLedge ? standGest('weight', 2.5 + p.durK, p, { amp: 1.3 * p.amp }) : false),
+  kick_crumb: (p, o, ctx) => { const c = ctx.crumb; if (!c) return false; const f = st.floor; if (Math.abs(c.x - st.x) > 24) { if (!f || Math.abs(c.y - f.y) > 12 || !walkOn(f, c.x - (Math.sign(c.x - st.x) || 1) * 22, p)) return false; st.beh.steps = [() => standGest('tap', 1.4, p)]; return 'goal'; } return standGest('tap', 1.4, p); },
+  // --- the dove ---
+  greet_dove: (p, o, ctx) => (ctx.dove ? (lookAt(dovePt(), 2.5), standGest('greet', 2.2 + p.durK, p)) : false),
+  shoo_dove: (p, o, ctx) => (ctx.dove && ctx.dove.dist < CFG.size * 3.5 ? standGest('shoo', 1.8 + p.durK, p) : false),
+  // --- the screen's bottom edge during a scroll: a catch, never a home. Each is a different way off it. ---
+  edge_run_climb: p => { const f = st.floor, n = ledgesAbove().map(q => ({ q, x: onLedgeX(q) })).filter(o => clear(o.x, o.q.y, CFG.size + 4) && clear(o.x, f.y, CFG.size + 4)).sort((a, b) => Math.abs(a.x - st.x) - Math.abs(b.x - st.x))[0];
+    if (n) { if (Math.abs(n.x - st.x) < CFG.size * 0.5) return grab(n.q, n.x, p); const k = walkOn(f, n.x, p, { run: 1.7 }); if (k) { st.beh.steps = [() => grab(n.q, onLedgeX(n.q), p)]; return k; } }   // run to under the nearest ledge in reach, leap for it
+    let q = drawPlace(4, pickPlace); if (q) { const k = toPlace(q, p, { run: 1.6 }); if (k) return k; }   // else a way up by the graph (walk along the edge, climb, stepping stones)
+    const L = scrollX + HALF_W + 8, Rr = scrollX + innerWidth - HALF_W - 8, c = cards.filter(c => c.b > scrollY && c.t < scrollY + innerHeight - 60).sort((a, b) => Math.abs((a.l + a.r) / 2 - st.x) - Math.abs((b.l + b.r) / 2 - st.x))[0];
+    const xs = [c && (c.l + c.r) / 2 + p.side * 40, st.x < scrollX + innerWidth / 2 ? Rr - 40 : L + 40, st.x < scrollX + innerWidth / 2 ? L + 40 : Rr - 40].filter(x => x != null).map(x => Math.max(L, Math.min(Rr, x)));   // none: run along the edge to under the nearest card, else to the far side, looking up for a way
+    for (const x of xs) if (Math.abs(x - st.x) >= 100 && clear(x, f.y, CFG.size + 4)) { lookAt({ x, y: scrollY + innerHeight * 0.3, what: 'up there' }, 2); return walkOn(f, x, p, { run: 1.8 }); } return false; },
+  edge_jump_grab: p => { const q = overMe(); if (!q) return false; st.hangK = 0.6; return grab(q, Math.max(q.x1 + HALF_W + 6, Math.min(q.x2 - HALF_W - 6, st.x + p.side * 10)), p); },   // a card or heading edge passing over him: a leap, a grab, up and over, quick
+  edge_hang_look: p => { const q = overMe(); if (!q || st.y - q.y < CFG.size * 1.2) return false; st.hangK = 3 + 2 * p.amp; return grab(q, onLedgeX(q), p); },   // the same leap, then a long hang looking up at where he is going
+  edge_hop_ledge: (p, o, ctx) => { if (ctx.edgeFor < 2) return false; if (!st.floor || st.mode === 'sit') return false; lookAt({ x: st.x + p.side * 30, y: scrollY + innerHeight * 0.25, what: 'up there' }, 1.5); hopUp(220 + 90 * p.amp);   // two seconds here already: a hop, a look up, and onto whatever ledge is passing
+    st.beh.until = t + 1.1; st.beh.steps = [() => { const q = overMe(); return q ? grab(q, onLedgeX(q), p) : (st.beh.until = t + 0.6, 'timer'); }]; return 'timer'; },
+  edge_look_up: p => { lookAt({ x: st.x + p.side * 30, y: scrollY + innerHeight * 0.2, what: 'up there' }, 2); return standGest('lookup', 1.2 + 0.8 * p.durK, p); },   // a hand over the eyes, scanning for a way up
+  edge_shrug: p => { lookAt(cursorPt(), 2); return standGest('hips', 1.2 + 0.8 * p.durK, p); },   // "well?" to the visitor, hands on his hips
+});
+// Utilities: needs x context (0..1); the kernel adds novelty, persona and memory. ctx comes from senseCtx() each decision.
+const HUGO_REP = [
+  { id: 'walk_to', cat: 'move', dur: 6, move: 1, u: c => 0.3 + 0.6 * c.mo.c },
+  { id: 'run_to', cat: 'move', dur: 4, move: 1, u: c => 0.15 + 0.5 * c.mo.c + 0.3 * (c.n.energy > 0.6 ? 1 : 0) },
+  { id: 'sprint_across', cat: 'move', dur: 3, move: 1, u: c => (c.longFloor && c.n.energy > 0.5 ? 0.45 : 0) },
+  { id: 'pace', cat: 'move', dur: 5, move: 1, u: c => 0.2 + 0.5 * c.mo.e },
+  { id: 'back_away', cat: 'move', dur: 3, move: 1, u: c => (c.near || (c.dove && c.dove.dist < 200) ? 0.5 : 0.1), on: ['cursor_near'] },
+  { id: 'follow_dove', cat: 'social', dur: 6, move: 1, u: c => (c.dove ? 0.3 + 0.4 * c.mo.s : 0) },
+  { id: 'step_down', cat: 'move', dur: 4, move: 1, u: c => (c.below ? 0.35 : 0) },
+  { id: 'climb_up', cat: 'climb', dur: 5, move: 1, u: c => (c.above ? 0.4 + 0.3 * c.mo.c : 0) },
+  { id: 'hang_edge', cat: 'climb', dur: 7, move: 1, u: c => (c.above ? 0.35 : 0) },
+  { id: 'hop', cat: 'play', dur: 1.5, u: c => 0.15 + 0.4 * (c.n.energy > 0.6 ? 1 : 0) + 0.2 * (c.dove ? 1 : 0), on: ['dove_landed'] },
+  { id: 'trip_recover', cat: 'move', dur: 4, move: 1, u: c => (c.longFloor ? 0.2 : 0) },
+  { id: 'transit', cat: 'move', dur: 8, move: 1, u: c => (c.tr ? 0.9 : 0) },
+  { id: 'peek_behind', cat: 'look', dur: 4, move: 1, u: c => (c.lanesBack && !c.edge ? 0.2 + 0.6 * c.mo.c : 0) },
+  { id: 'look_around', cat: 'look', dur: 3.5, u: c => 0.3 + 0.3 * c.mo.c, on: ['scroll_stop', 'tab_back'] },
+  { id: 'look_visitor', cat: 'look', dur: 3, u: c => 0.15 + 0.6 * c.mo.s, on: ['tap', 'cursor_near'] },
+  { id: 'glance_section', cat: 'look', dur: 2.5, u: c => (c.freshEl ? 0.4 : 0.1), on: ['section', 'scroll_stop'] },
+  { id: 'look_scroll', cat: 'look', dur: 1.6, u: 0.1, on: ['scroll_start'] },
+  { id: 'stare_dove', cat: 'social', dur: 3, u: c => (c.dove && c.dove.dist < CFG.size * 4 ? 0.4 : 0), on: ['dove_landed'] },
+  { id: 'point_project', cat: 'look', dur: 3, u: c => (c.hover ? 0.8 : 0) },
+  { id: 'sit_edge', cat: 'rest', dur: 7, u: c => 0.2 + 0.6 * c.fatigue + 0.2 * c.env.sleepy },
+  { id: 'lie_down', cat: 'rest', dur: 8, u: c => (c.sitting ? 0.3 + 0.6 * c.fatigue : 0.1 + 0.4 * c.fatigue) },
+  { id: 'nap', cat: 'rest', dur: 10, u: c => 0.6 * c.fatigue + 0.5 * c.env.sleepy },
+  { id: 'stand_up_slow', cat: 'rest', dur: 3, u: c => (c.sitting ? 0.5 : 0) },
+  { id: 'stretch', cat: 'rest', dur: 3, u: c => 0.2 + 0.3 * c.fatigue, on: ['tab_back'] },
+  { id: 'yawn', cat: 'rest', dur: 2.5, u: c => 0.1 + 0.5 * c.fatigue + 0.3 * c.env.sleepy },
+  { id: 'scratch', cat: 'fidget', dur: 2.5, u: 0.25 },
+  { id: 'hips', cat: 'fidget', dur: 3, u: 0.2 },
+  { id: 'cross_arms', cat: 'fidget', dur: 3.5, u: c => 0.15 + 0.3 * c.mo.s },
+  { id: 'dance', cat: 'play', dur: 4.5, u: c => 0.1 + 0.4 * (c.n.energy > 0.7 ? 1 : 0) },
+  { id: 'wave', cat: 'social', dur: 2.5, u: c => 0.1 + 0.4 * c.mo.s, on: ['tab_back', 'tap'] },
+  { id: 'test_ledge', cat: 'fidget', dur: 5, move: 1, u: c => (c.f && !c.f.screen && !c.f.ground ? 0.3 + 0.3 * c.mo.c : 0) },
+  { id: 'lean_letter', cat: 'fidget', dur: 4, u: c => (c.textLedge || c.wallNear ? 0.45 : 0) },
+  { id: 'balance_serif', cat: 'fidget', dur: 3, u: c => (c.textLedge ? 0.4 : 0) },
+  { id: 'kick_crumb', cat: 'fidget', dur: 4, move: 1, u: c => (c.crumb ? 0.5 : 0), on: ['crumb'] },
+  { id: 'greet_dove', cat: 'social', dur: 3, u: c => (c.dove ? 0.3 + 0.3 * c.mo.s : 0), on: ['dove_landed'] },
+  { id: 'shoo_dove', cat: 'social', dur: 2.5, u: c => (c.dove && c.dove.dist < CFG.size * 3.5 ? 0.3 : 0), on: ['dove_landed'] },
+  { id: 'edge_run_climb', cat: 'move', dur: 4, move: 1, edge: 1, u: 1 },
+  { id: 'edge_jump_grab', cat: 'climb', dur: 3, move: 1, edge: 1, grab: 1, u: c => (c.over ? 1 : 0) },
+  { id: 'edge_hang_look', cat: 'climb', dur: 5, move: 1, edge: 1, grab: 1, u: c => (c.over ? 0.8 : 0) },
+  { id: 'edge_hop_ledge', cat: 'play', dur: 2.5, move: 1, edge: 1, u: c => (c.edgeFor >= 2 ? 0.8 : 0) },
+  { id: 'edge_look_up', cat: 'look', dur: 2, edge: 1, u: 0.6 },
+  { id: 'edge_shrug', cat: 'social', dur: 2, edge: 1, u: c => (c.edgeFor >= 1.5 ? 0.5 : 0) },
+];
+const HUGO_PLANS = [   // purpose first: a trip has a payoff at its end (the research notes: "walk with no payoff does not exist in the table")
+  { goal: 'explore', purpose: 'see what is new here', when: c => (c.freshEl ? 0.5 + 0.5 * c.mo.c : 0), pick: c => c.freshEl && { el: c.freshEl }, steps: ['walk_to', 'look_around', 'sit_edge', 'look_visitor'] },
+  { goal: 'attention', purpose: 'show the visitor what they are looking at', when: c => (c.hover ? 0.9 : 0), pick: c => c.hover, steps: ['walk_to', 'point_project', 'look_visitor', 'back_away'] },
+  { goal: 'rest', purpose: 'a rest on an edge', when: c => 0.4 * c.fatigue + 0.3 * c.env.sleepy, steps: ['walk_to', 'sit_edge', 'yawn', 'nap'] },
+  { goal: 'play', purpose: 'play with the dove', when: c => (c.dove ? 0.3 + 0.4 * (c.n.energy > 0.6 ? 1 : 0) : 0), steps: ['follow_dove', 'greet_dove', 'hop'] },
+  { goal: 'inspect', purpose: 'inspect this ledge', when: c => (c.f && !c.f.screen && !c.f.ground ? 0.2 + 0.4 * c.mo.c : 0), steps: ['test_ledge', 'peek_behind', 'back_away'] },
+  { goal: 'traverse', purpose: 'up, across and down again', when: c => (c.above && c.n.energy > 0.5 ? 0.35 : 0), steps: ['climb_up', 'sprint_across', 'step_down'] },
+];
+if (window.MORTAL && window.MORTAL.repertoire) window.MORTAL.ready.then(() => { window.MORTAL.repertoire('hugo', HUGO_REP); window.MORTAL.plans('hugo', HUGO_PLANS); });
+// What the world did: noticed by the kernel (150-300 ms), budgeted, answered by the behaviours above that list the event.
+const notice = (type, x) => window.MORTAL && window.MORTAL.notice && window.MORTAL.notice('hugo', type, x);
+let scrollStopT = 0;
+addEventListener('scroll', () => { const now = performance.now(); if (now - scrolledAt > 400) notice('scroll_start', { v: scrollY - curSY }); clearTimeout(scrollStopT); scrollStopT = setTimeout(() => notice('scroll_stop'), 250); }, { passive: true });
+addEventListener('pointerdown', e => { if (st.held || e.target === hit || e.target.closest?.('#hugo-hit')) return; st.tapAt = { x: e.clientX + scrollX, y: e.clientY + scrollY, t, el: e.target.closest && e.target.closest('.realm, .poster, .stage, .phone-wrap, .mrow') }; notice('tap', { x: st.tapAt.x, y: st.tapAt.y, what: 'touch' }); }, { passive: true });
+document.addEventListener('visibilitychange', () => { if (!document.hidden) notice('tab_back'); });
+function hoverCard() {   // the project the visitor is on: the card under the cursor (desktop), or the one tapped in the last 8 s (phone)
+  let el = null;
+  if (pointer.in && performance.now() - pointer.movedAt < 8000) { const o = document.elementFromPoint(pointer.cx, pointer.cy); el = o && o.closest && o.closest('.realm, .poster, .stage, .phone-wrap, .mrow'); }
+  if (!el && st.tapAt && t - st.tapAt.t < 8) el = st.tapAt.el;
+  if (!el || el.closest(skipSel)) return null;
+  return { el: el.querySelector('h2, h3') || el, card: el };
+}
+function senseCtx(f) {
+  const M = window.MORTAL, R = window.REL, n = R.needs('hugo'), mo = M.mot('hugo'), d = window.__scion, now = performance.now();
+  const dove = d && d.mode === 'perch' && !d.held && Math.abs(d.y - (scrollY + innerHeight / 2)) < innerHeight ? { x: d.x, y: d.y, dist: Math.hypot(d.x - st.x, d.y - st.y) } : null;
+  if (d) { if (d.mode === 'perch' && st.doveMode === 'fly' && dove && dove.dist < 360) notice('dove_landed', dovePt()); st.doveMode = d.mode; }
+  const foods = R.foods ? R.foods.filter(it => it.settled && it.st !== 'gone' && it.holder !== 'hugo') : [], crumb = foods.find(it => Math.abs(it.x - st.x) < 240 && Math.abs(it.y - st.y) < 14) || null;
+  if (foods.length > (st.foodsN || 0) && crumb) notice('crumb', crumb); st.foodsN = foods.length;
+  if (t > (st.secAt || 0) && now - scrolledAt > 300) { st.secAt = t + 1; const mid = scrollY + innerHeight * 0.45; let best = null, bd = 1e9;   // the section the visitor is reading: the heading nearest the middle of the view
+    for (const h of document.querySelectorAll('h1,h2')) { const r = h.getBoundingClientRect(); if (!r.height) continue; const dy = Math.abs(r.top + scrollY - mid); if (dy < bd) { bd = dy; best = h; } }
+    if (best && best !== st.secEl) { if (st.secEl) notice('section', { el: best }); st.secEl = best; } }
+  const freshT = M.unvisitedInView('hugo')[0], freshEl = freshT ? headingEl(freshT) : null;
+  const tr = st.z === 0 && !f.screen && t - (st.transitAt ?? -1e9) > 40 && !((st.transitTry || 0) > t) ? (st.transitTry = t + 5, transitRoute()) : null;   // a card to go through (dear to look for: every 5 s at most)
+  return { f, edge: !!f.screen, edgeFor: f.screen ? t - (st.edgeSince ?? t) : 0, scrolling: now - scrolledAt < 400, sitting: st.mode === 'sit', near: pointer.near, hover: hoverCard(), dove, n, mo, env: M.env, fatigue: M.fatigue(n.energy), freshEl, crumb,
+    textLedge: !!f.text, wallNear: walls.some(w => w.f === f && t - w.t < 8), lanesBack: st.z === 0 && st.lanes.includes(-1), above: !!pickToward(-1), over: !!(f.screen && overMe()), below: !f.screen && !!pickToward(1), longFloor: f.x2 - f.x1 > 2 * HALF_W + 220, tr };
+}
+function behEnd(ok) { const B = st.beh; if (!B) return; st.beh = null; st.spdK = 1; st.hangK = null; window.MORTAL.ended('hugo', ok); st.idleUntil = Math.max(st.idleUntil || 0, t + (ok ? B.p.after : 0.4)); }
+const tryRun = fn => { try { return fn(); } catch (e) { if (!tryRun.warned) { tryRun.warned = 1; console.warn('hugo behaviour failed', st.beh && st.beh.id, e); } return false; } };   // one bad move never stalls the frame
+function behFree() { return !st.goal && !(st.route && st.route.length) && !st.air && !['prep', 'climb', 'lane', 'crawl'].includes(st.mode) && !(st.mode === 'walk' && st.amt >= 0.05); }
 function autonomy(f) {
-  const M = window.MORTAL, R = window.REL; if (!M || !M.alive('hugo') || st.relOrder || st.food || st.held || st.air || st.dead) return;
+  const M = window.MORTAL; if (!M || !M.next || !M.alive('hugo') || st.relOrder || st.food || st.held || st.dead || st.enter) return;
+  if (f && f.screen) { st.edgeSince ??= t; } else st.edgeSince = null;
   // Off camera for a moment while the visitor is not scrolling: back into view (a reflex, not a choice); AI otherwise sleeps off camera
-  if (st.away >= 1.5 && performance.now() - scrolledAt > 400 && !['prep', 'climb', 'lane', 'crawl'].includes(st.mode) && !(st.toView && (st.goal || (st.route && st.route.length)))) { comeBack(); return; }
-  if (st.goal) return;
-  if (!(st.mode === 'idle' || st.mode === 'sit' || (st.mode === 'walk' && st.amt < 0.05))) return;
-  const cur = M.current('hugo'); if (cur && cur.move) M.done('hugo');   // no goal left: that walk is over, however it ended (arrived, blocked, gave up)
+  if (st.away >= 1.5 && performance.now() - scrolledAt > 400 && !['prep', 'climb', 'lane', 'crawl'].includes(st.mode) && !(st.toView && (st.goal || (st.route && st.route.length)))) { if (st.beh) behEnd(false); comeBack(); return; }
+  const B = st.beh;
+  if (B) {   // something under way
+    if (B.failed) return behEnd(false);
+    if (!B.kind) { if (t < B.startAt) return; const k = tryRun(() => RUN[B.id](B.p, B.o, B.ctx)); if (!k) return behEnd(false); B.kind = k; return; }   // the pause before, then the move itself
+    if (B.tripAt && t > B.tripAt && st.mode === 'walk' && !st.air) { B.tripAt = 0; st.goal = null; st.amt = 0; st.mode = 'idle'; st.squash = 0.55; st.sqAt = t; kickDust(st.x, st.y, 4); st.idleUntil = t + 2; gest = gestOf('dust', 1.8, B.p); B.kind = 'gest'; return; }   // a toe caught: a stumble, dust, brushing himself off
+    if (B.lookUp && st.mode === 'climb' && st.climb) { lookGoal = st.dir * 0.3; st.glance = { x: st.x + st.dir * 60, y: st.climb.f.y - CFG.size, until: t + 0.3 }; }
+    if (Math.abs(st.x - (B.lastX ?? st.x)) > 3 || st.air || st.mode === 'climb' || st.mode === 'prep') { B.lastX = st.x; B.movedAt = t; } else B.lastX ??= st.x;
+    if (f && f.screen && B.kind === 'goal' && t - (B.movedAt ?? B.startAt) > 1.5) { st.goal = null; st.route = null; return behEnd(false); }   // on the edge a move that goes nowhere for 1.5 s is over: the next one takes it
+    const over = B.kind === 'goal' ? behFree() : B.kind === 'gest' ? !(gest && gest.beh) && !(st.pendGest && st.pendGest.beh) : t > (B.until || 0);
+    if (!over) { if (!(f && f.screen)) return; } else if (B.steps && B.steps.length) { const k = tryRun(B.steps.shift()); if (!k) return behEnd(false); B.kind = k; return; } else return behEnd(true);
+  }
   if (!inView()) return;   // off camera he waits for the come-back
-  // A card to go through (LittleBigPlanet): the route to the far side of a card in view with room on both sides, behind it. Not more
-  // often than every 40 s, looked for every 5 s. From the screen's edge or the page bottom (no home anyway) it is a reflex; elsewhere a beat.
-  const tr = st.z === 0 && t - (st.transitAt ?? -1e9) > 40 && !((st.transitTry || 0) > t) && (st.transitTry = t + 5, transitRoute());
-  if (tr && (f.screen || f.ground)) { st.route = tr; nextLeg(); return; }
-  if ((f.screen || f.ground) && !(st.catchTry > t)) { st.catchTry = t + 4;   // the screen's bottom edge (and the page bottom) is a catch, not a home: onto real furniture as soon as any is in view, by the graph (up to four draws) or the straight way (walk along the edge to under it, climb, a stepping stone at a time); never a drop-in from here
-    let p = null, r = null; for (let i = 0; i < 4 && !r; i++) { const q = pickPlace(); if (!q) break; p = q; r = plan(q.f, q.x, q.z || 0); if (r && !r.length) r = null; }
-    if (r) { st.route = r; nextLeg(); return; } if (p && routeTo(p.f, p.x, { auto: 1 }, p.z || 0)) return; }
-  if (t < st.idleUntil && !tr) return;   // a dwell (8-20 s where he arrived) runs its course, unless there is a card to go through
-  const n = R.needs('hugo'), mo = M.mot('hugo'), env = M.env, g = M.goal('hugo');
-  const gh = g && g.title ? [...document.querySelectorAll('h1,h2,h3')].find(h => h.textContent.replace(/\s+/g, ' ').trim().slice(0, 60) === g.title && h.getClientRects().length) : null;
-  const c = M.choose('hugo', [
-    tr && { id: 'transit', drive: 'curiosity', u: 0.9, move: true, minT: 6 },
-    { id: 'wander', drive: 'curiosity', u: Math.min(1, 0.25 + 1.2 * mo.c * (1 - novelty(st.x, st.y))), move: true, minT: 4 },
-    st.z === 0 && st.lanes.includes(-1) && t > (st.peekAt || 0) && !f.screen && !f.ground && { id: 'behind', drive: 'curiosity', u: Math.min(1, 0.15 + 0.7 * mo.c), move: true, minT: 6 },   // w: the back lane is open here now; a peek, not more often than every 20 s
-    gh && { id: 'goal', drive: 'curiosity', u: g.pri, move: true, minT: 6 },
-    pointer.in && { id: 'visitor', drive: 'consequence', u: mo.s, move: true, minT: 6 },
-    { id: 'rest', drive: 'survival', u: Math.min(1, M.fatigue(n.energy) * 0.9 + env.sleepy * 0.5), move: false, minT: 8, maxT: 15, urgent: n.energy < 0.2 },
-    { id: 'stay', drive: 'coherence', u: 0.25, move: false, minT: 3 },
-  ]);
-  if (!c) return;
-  const fail = () => M.done('hugo');
-  if (c.id === 'wander') {   // a place, not a direction: up to four draws, the first the graph has a way to wins (else the straight try, as before)
-    let p = null, r = null; for (let i = 0; i < 4 && !r; i++) { const q = pickPlace(); if (q && (r = plan(q.f, q.x, q.z || 0)) && !r.length) r = null; if (q) p = p || q; if (r) p = q; }
-    if (!p) p = pickToward(st.dir);
-    if (!p) fail(); else if (r) { st.route = r; nextLeg(); } else if (!routeTo(p.f, p.x, { auto: 1 }, p.z || 0)) fail(); }
-  else if (c.id === 'transit') { st.route = tr; nextLeg(); }
-  else if (c.id === 'behind') { if (laneHop(-1)) st.peek = true; else fail(); }
-  else if (c.id === 'goal') { const r = gh.getBoundingClientRect(), p = floorNear(r.left + scrollX + Math.min(r.width, 300) / 2, r.top + scrollY);
-    if (p && (g.tries = (g.tries || 0) + 1) <= 3) goTo(p.f, p.x, { auto: 1, goalId: g.id }); else { M.goalDone('hugo', g.id); fail(); } }   // three tries, then it lets that goal go
-  else if (c.id === 'visitor') { const p = floorNear(pointer.cx + scrollX, pointer.cy + scrollY); if (p) goTo(p.f, p.x, { auto: 1 }); else fail(); }
-  else if (c.id === 'rest' && st.mode !== 'sit' && st.floor && inView() && st.z === 0 && clear(st.x, st.floor.y, SIT_H + 4)) { st.mode = 'sit'; st.idleUntil = t + c.minT; if (env.night || n.energy < 0.3) st.pendGest = { name: 'nap', dur: c.minT }; }
+  if (f && f.screen ? t < (st.decideAt || 0) : (t < (st.decideAt || 0) || t < st.idleUntil || !behFree())) return;
+  st.decideAt = t + (f && f.screen ? 0.25 : 0.4);
+  const ctx = senseCtx(f), o = M.next('hugo', ctx); if (!o) return;
+  if (st.beh) { st.goal = null; st.route = null; if (gest && gest.beh) gest = null; st.pendGest = null; st.spdK = 1; st.hangK = null; }   // the kernel cut in (an interrupt, the edge): what he was doing stops here
+  st.beh = { id: o.id, p: o.p, o, ctx, kind: null, startAt: t + (o.ev || ctx.edge ? 0 : o.p.before) }; st.relRun = 0;
 }
 function relStep(f) {
   const R = window.REL; if (!R || t < (st.relAt || 0) || st.dead || st.dazed || st.mode === 'crawl' || (st.crawlK || 0) > 0.05) return;   // no standing up under a low ceiling for the bird
+  if (st.enter) return;   // the entrance plays out first
   st.relAt = t + 0.75;
   if (forage(f)) return;
   if (st.z !== 0 && st.route && st.route.length) { if (!st.goal && st.mode !== 'lane') nextLeg(); return; }   // mid-transit behind the page: the bird's orders wait, he finishes the crossing (an order that stopped him here would leave him hidden)
   const d = window.__scion;
   const reach = !!d && d.mode === 'perch' && !d.held && d.y >= st.y - CFG.size * 2.2 && floors.some(q => Math.abs(q.y - d.y) < 6 && d.x > q.x1 && d.x < q.x2);
   const o = R.want('hugo', { reach, floorY: f.y });
-  if (!o || (st.away >= 1.5 && !o.goal && !o.pounce)) { if (st.relOrder) relEnd('interrupted'); autonomy(f); return; }   // out of view, an order that keeps him standing (a sulk, a stare) yields to getting back where he is seen
+  if (!o || (st.away >= 1.5 && !o.goal && !o.pounce) || st.away >= 4.5) { if (st.relOrder) relEnd('interrupted'); autonomy(f); return; }   // fully off camera for 4.5 s: any order yields, nobody sees it   // out of view, an order that keeps him standing (a sulk, a stare) yields to getting back where he is seen
+  if (!st.relOrder && (st.relRun || 0) >= 3) { if (!(st.relHold > 0)) st.relHold = t + 6 + Math.random() * 4; if (t < st.relHold) { autonomy(f); return; } st.relHold = 0; st.relRun = 0; }   // three bond orders in a row: his own life gets a turn (6-10 s) before the bird again
   if (o.id !== (st.relOrder && st.relOrder.id)) applyOrder(o);
   else if (st.relGap != null && st.goal && st.goal.rel === o.id && d && (d.mode === 'perch' || o.ex === 'chase')) relGoal(o, { x: d.x - (Math.sign(d.x - st.x) || 1) * st.relGap, y: d.y });   // the bird moved: after it
+  if (f.screen && st.relOrder && !st.pounce && st.mode !== 'prep' && st.mode !== 'climb' && (!st.goal || st.goal.x <= scrollX + HALF_W * 1.5 || st.goal.x >= scrollX + innerWidth - HALF_W * 1.5)) { relEnd('interrupted'); st.relAt = t + 3; return; }   // on the screen's edge an order that leaves him standing (or walking into the screen's side) yields: off the edge first, the bird in 3 s
   const ph = R.phase; st.relBusy = !!(st.relOrder && ph && ph.stage !== 'resolve');
 }
 let returning = false; try { const ls = +localStorage.getItem('hugo.lastSeen') || 0; returning = ls > 0 && Date.now() - ls > 3600e3; localStorage.setItem('hugo.lastSeen', Date.now()); } catch {}   // he remembers you were here
 let bornTries = 0, lastSY = 0, curSY = 0, jumpAt = -1e9;   // lastSY: the scroll before the latest jump, to keep him put on screen across a view switch
-function born() {   // first appearance: a floor in view with standing room
+function born() {   // first appearance (patch 5, item 0): an entrance, never a pop-in. He walks in from the nearer side of the screen along his
+  // target ledge's line and arrives within ~1.5 s: onto the hero name when it is in view (somewhere new along it each load), else onto a
+  // ledge in view that reaches the screen's side; with none, a climb in over the bottom edge, else the drop in from the top.
   const spots = inView => { const c = [];
     for (const f of floors) if ((!inView || (f.y > scrollY && f.y < scrollY + innerHeight)) && f.x2 - f.x1 > 160 && (inView || !f.ground)) {
       const n = Math.ceil((f.x2 - f.x1) / 6);   // small clear gaps are often all there is, so look along the whole ledge
       for (let i = 1; i < n; i++) { const x = f.x1 + (f.x2 - f.x1) * i / n; if (onFloor(f, x) && clear(x, f.y, CFG.size + 4)) c.push({ f, x }); }
     }
     return c; };
-  // First appearance: sitting on top of the hero name, somewhere new along it each load, in one of his sitting poses.
+  let tgt = null, sit = false;
   if (!bornTries && !st.bornOnce) {
-    const xs = []; for (const nm of floors) if (nm.name && nm.y > scrollY && nm.y < scrollY + innerHeight) for (let x = nm.x1 + HALF_W * 0.6; x <= nm.x2 - HALF_W * 0.6; x += 6) if (clear(x, nm.y, SIT_H + 4)) xs.push({ nm, x });   // both words, end to end
-    if (xs.length) { const { nm, x } = xs[(Math.random() * xs.length) | 0]; st.bornOnce = true; st.floor = nm; st.x = x; st.y = footY(nm, x); st.dir = Math.random() < 0.5 ? -1 : 1; st.mode = 'sit'; st.sitK = 1;
-      st.idleUntil = t + 8 + Math.random() * 10; st.pendGest = returning ? { name: 'wave', dur: 2.4, side: 1, amp: 1, any: true } : { name: SIT[(Math.random() * SIT.length) | 0], dur: 3 + Math.random() * 4, side: Math.random() < 0.5 ? -1 : 1, amp: 0.7 + Math.random() * 0.5 }; return true; }
+    const xs = []; for (const nm of floors) if (nm.name && nm.y > scrollY && nm.y < scrollY + innerHeight) for (let x = nm.x1 + HALF_W * 0.6; x <= nm.x2 - HALF_W * 0.6; x += 6) if (clear(x, nm.y, SIT_H + 4)) xs.push({ f: nm, x });   // both words, end to end: he sits on his name (standing there would put his head in the nav)
+    if (xs.length) { tgt = xs[(Math.random() * xs.length) | 0]; sit = true; }
   }
-  let c = spots(true);
-  if (!c.length && (bornTries = (bornTries || 0) + 1) > 90) c = spots(false);   // nothing in view for ~1.5 s: start anywhere he fits
-  if (!c.length) return false;
-  const p = c[(Math.random() * c.length) | 0]; st.floor = p.f; st.x = p.x; st.y = footY(p.f, p.x); st.dir = Math.random() < 0.5 ? -1 : 1; st.bornOnce = true; if (returning) st.pendGest = { name: 'wave', dur: 2.4, side: 1, amp: 1, any: true }; return true;
+  if (!tgt) {
+    let c = spots(true).filter(p => p.f.x1 <= scrollX + 40 || p.f.x2 >= scrollX + innerWidth - 40);   // a ledge that reaches the screen's side: a walk-in
+    if (!c.length && (bornTries = (bornTries || 0) + 1) > 90) c = spots(false);   // nothing for ~1.5 s: start anywhere he fits
+    if (!c.length) { if (bornTries > 6 && (climbIn() || dropIn())) { st.bornOnce = true; st.lostN = 0; window.MORTAL?.signal?.('hugo', 'BODY_READY', { x: st.x, y: st.y, side: 0, dur: 1.2 }); return true; } return false; }   // no ledge to walk in on: in over the bottom edge, else the drop from the top (both enter the frame; not a loss)
+    tgt = c[(Math.random() * c.length) | 0];
+  }
+  const side = tgt.x < scrollX + innerWidth / 2 ? -1 : 1, x0 = side < 0 ? scrollX - HALF_W * 1.6 : scrollX + innerWidth + HALF_W * 1.6;   // from the nearer side, fully off-screen
+  st.enter = { f: tgt.f, x: tgt.x, x0, t0: t, dur: 1.2 + Math.random() * 0.3, sit };
+  st.floor = tgt.f; st.x = x0; st.y = footY(tgt.f, tgt.x); st.dir = -side; st.mode = 'walk'; st.amt = 0; st.ph = Math.random(); st.bornOnce = true;
+  window.MORTAL?.signal?.('hugo', 'BODY_READY', { x: tgt.x, y: st.y, side, dur: st.enter.dur });   // the dove's cue: he is coming in from this side, on this line
+  if (returning) st.pendGest = { name: 'wave', dur: 2.4, side: 1, amp: 1, any: true };
+  return true;
 }
 function refloor(f) {   // the page reflows; keep the floor glued to its element
   if (f.screen) { const E = scrollY + innerHeight - 30; if (E < f.y && f.y - CFG.size < scrollY + innerHeight) f.y = E; return f.y - E > -40; }   // the screen's bottom edge: it carries him up while any of him shows (never out through the bottom), stays put under him once the view has left him below (a climb or the lost case brings him back), and lets go when the view moves on down (he falls to the next ledge)
@@ -1121,7 +1293,7 @@ function stepBody(dt) {
     return;
   }
   const f = st.floor; if (!f) return;
-  if (!refloor(f)) { st.floor = null; if (!f.screen && performance.now() - jumpAt < 800) st.y += scrollY - lastSY; jumpAt = -1e9; st.air = true; st.hop = false; st.vx = 0; st.vy = 0; st.mode = 'walk'; return; }   // his ledge is gone (a view switch, the screen edge moved on): same spot on screen, then he drops to the next one
+  if (!refloor(f)) { poke('ledge gone'); st.floor = null; if (!f.screen && performance.now() - jumpAt < 800) st.y += scrollY - lastSY; jumpAt = -1e9; st.air = true; st.hop = false; st.vx = 0; st.vy = 0; st.mode = 'walk'; return; }   // his ledge is gone (a view switch, the screen edge moved on): same spot on screen, then he drops to the next one
   st.y = footY(f, st.x);
   // the page shifted under him (an app loaded, a block grew): if his spot now runs through words, step off and fall to a clear floor
   const room = () => clear(st.x, f.y - 4, (st.mode === 'sit' ? SIT_H : st.mode === 'crawl' || (st.crawlK || 0) > 0.05 ? CRAWL_H : CFG.size) + 4);   // staying needs less than arriving: his own line settling a few px (fonts, the hero) is no reason to fall; the nav sliding over him is (he steps down out of it)
@@ -1130,7 +1302,7 @@ function stepBody(dt) {
     else { let x = null; for (let k = 1; k < 40 && x == null; k++) for (const q of [st.x + k * 20, st.x - k * 20]) if (q > scrollX + HALF_W && q < scrollX + innerWidth - HALF_W && clear(q, f.y, CFG.size + 4)) { x = q; break; } if (x != null) st.x = x; }
     st.catchTry = 0;
   }
-  if (!f.ground && !f.screen && st.mode !== 'prep' && !room() && !(performance.now() - scanAt > 100 && (scan(), room()))) { st.air = true; st.vx = 0; st.vy = 0; st.floor = null; st.mode = 'walk'; return; }   // a stale scan (the hero settling a few px) is no reason to fall; look again first
+  if (!f.ground && !f.screen && st.mode !== 'prep' && !st.enter && !room() && !(performance.now() - scanAt > 100 && (scan(), room()))) { poke('no room: ' + st.mode); st.air = true; st.vx = 0; st.vy = 0; st.floor = null; st.mode = 'walk'; return; }   // a stale scan (the hero settling a few px) is no reason to fall; look again first
   if ((st.markAt || 0) < t) { seenAt.set(cell(st.x, st.y), t); st.markAt = t + 1; }
   if (!st.anchor || Math.hypot(st.x - st.anchor.x, st.y - st.anchor.y) > 160) st.anchor = { x: st.x, y: st.y, t };
   if (st.mode === 'lane') {   // mid-hop between lanes: nothing else happens until he lands in the new one
@@ -1146,9 +1318,20 @@ function stepBody(dt) {
   if (st.z !== 0 && !(st.route && st.route.length && (st.goal || st.mode === 'lane')) && (t > (st.backUntil || 0) || !st.lanes.includes(st.z)) && st.mode !== 'prep' && st.mode !== 'crawl' && (st.sitK || 0) < 0.04 && (!st.relBusy || t > (st.backUntil || 0) + 3)) {   // a bird order holds the way out for 3 s at most
     if (!laneHop(0) && !(st.goal && st.goal.exit) && (st.backTry || 0) < t) { st.backTry = t + 3; if (!backOut(f) && !st.goal && t > (st.backUntil || 0) + 3) { st.z = 0; st.peek = false; st.floor = null; st.air = true; st.vx = 0; st.vy = 0; st.mode = 'walk'; poke('dropped back out onto the page'); return; } }
   }
-  if (st.mode !== 'prep') relStep(f);
+  if (f.screen && st.idleUntil > t + 1.2) st.idleUntil = t + 1.2;   // the screen's edge is no home: no dwell there (a sit, a sulk, a hemmed-in wait) outlives a second
+  if (st.mode !== 'prep') { if (f.screen && !st.relOrder) autonomy(f); relStep(f); }   // and he decides every frame there, not at REL's beat
   if (st.dazed && st.mode === 'walk') { st.mode = 'idle'; st.idleUntil = t + 0.5; }   // seeing stars: he stands where he is
   if (st.mode === 'walk') {
+    if (st.enter) {   // the entrance: in from the screen's side along the ledge's line, feet in step with the ground, slowing into the spot
+      const E = st.enter, u = E.u = Math.min(1, (E.u || 0) + Math.min(dt, 0.05) / E.dur), e = u < 0.5 ? 2 * u * u : 1 - Math.pow(-2 * u + 2, 2) / 2, nx = E.x0 + (E.x - E.x0) * e;   // in-out: a first step in from the edge, slowing into the spot   // progress per rendered frame (50 ms at most): the heavy first second renders few frames, and the walk must be seen
+      st.ph += Math.abs(nx - st.x) / cycleLen(); st.x = nx; st.amt = u < 0.8 ? Math.min(1, st.amt + dt * 3) : Math.max(0.2, st.amt - dt * 3); st.brake = 1;
+      if (u >= 1) {
+        if (E.sit && !E.moved && !clear(st.x, f.y, SIT_H + 4)) {   // the letters moved under him since he set out (the web font landed): the nearest spot along the name with sitting room, a few more steps
+          let nx = null; for (let k = 1; k < 25 && nx == null; k++) for (const q of [st.x + k * 6, st.x - k * 6]) if (q > f.x1 + HALF_W * 0.6 && q < f.x2 - HALF_W * 0.6 && clear(q, f.y, SIT_H + 4)) { nx = q; break; }
+          if (nx != null) { E.moved = 1; E.x0 = st.x; E.x = nx; E.u = 0; E.dur = 0.3 + Math.abs(nx - st.x) / 160; return; }
+        }
+        st.enter = null; st.amt = 0; const sit = E.sit && clear(st.x, f.y, SIT_H + 4); if (E.sit && !sit) poke('no sitting room at arrival'); st.mode = sit ? 'sit' : 'idle'; st.idleUntil = t + (sit ? 5 + Math.random() * 6 : 0.8 + Math.random() * 0.8); window.MORTAL?.signal?.('hugo', 'ENTERED', { x: st.x, y: st.y, sit }); }   // on the name he sits a while first; the dove hears he is in
+      return; }
     if (st.land > 0) return;   // the landing's beat (st.land decays in frame())
     if ((st.sitK || 0) > 0.04 || (st.crawlK || 0) > 0.05) { st.amt = 0; return; }   // still getting up
     if (st.throwing) { st.amt = Math.max(0, st.amt - dt * 6); return; }   // he plants his feet to throw or lift the bird
@@ -1170,7 +1353,8 @@ function stepBody(dt) {
           const M = window.MORTAL; if (M) { if (g.goalId) M.goalDone('hugo', g.goalId); if (g.auto || g.toView) M.done('hugo'); }
           if (st.z !== 0) { if (!laneHop(0)) { st.mode = 'idle'; st.idleUntil = t + 0.5; } return; }   // behind the page is no place to dwell: out where he fits
           const n = window.REL ? window.REL.needs('hugo') : { energy: 1 };   // there he sits if he is tired (or it is night), else stands a while and looks (a trip ends in a dwell)
-          if (inView() && clear(st.x, f.y, SIT_H + 4) && (n.energy < 0.6 || (M && M.env.night))) { st.mode = 'sit'; st.idleUntil = t + 10 + Math.random() * 20; }
+          if (g.auto) { st.mode = 'idle'; st.idleUntil = t + 0.6; }   // a move of his own: the repertoire (autonomy) decides what the arrival is for
+          else if (inView() && clear(st.x, f.y, SIT_H + 4) && (n.energy < 0.6 || (M && M.env.night))) { st.mode = 'sit'; st.idleUntil = t + 10 + Math.random() * 20; }
           else { st.mode = 'idle'; st.idleUntil = t + 8 + Math.random() * 12; }
           return;
         }
@@ -1229,7 +1413,7 @@ function stepBody(dt) {
       // P.over: the top of the thing in front of him, not a ledge overhead: the hop carries him across onto it
       if (!P.climb) { st.air = true; st.hop = true; st.floor = null; st.vy = -Math.sqrt(2 * G * (P.dh + 26)); st.mode = 'walk';
         st.vx = P.over != null ? (P.over - st.x) / (Math.sqrt(2 * (P.dh + 26) / G) + Math.sqrt(52 / G)) : st.dir * 40; }
-      else { st.mode = 'climb'; st.floor = null; st.climb = { f: P.f, t0: t, y0: st.y, x0: st.x, xTo: P.over, hang: 0.25 + Math.random() * 0.35, pull: 0.75 + Math.random() * 0.35 }; }
+      else { st.mode = 'climb'; st.floor = null; st.climb = { f: P.f, t0: t, y0: st.y, x0: st.x, xTo: P.over, hang: (0.25 + Math.random() * 0.35) * (st.hangK || 1), pull: 0.75 + Math.random() * 0.35 }; }
     }
   } else if (st.mode === 'crawl') {   // on hands and knees under something too low to stand in, until there is room again
     if ((st.crawlK || 0) < 0.9) return;   // still getting down

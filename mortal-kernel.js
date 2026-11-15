@@ -146,7 +146,7 @@
   }
   async function newBeing(who) {
     await ready;
-    const B = beings[who] = create(who);
+    const B = beings[who] = create(who); forget(who);
     fire(who, 'BIRTH', B.id);
     return B.id;
   }
@@ -255,6 +255,115 @@
     if (B.mot.c > .35) return 'curious'; return 'content';
   };
 
+  // ---------------------------------------------------------------- repertoire: utility selection with memory (patch 5)
+  // Dave Mark style scoring (needs x context x novelty) over a wide, parameterised repertoire the body registers, with memory:
+  // no behaviour twice within 90 s, no category twice within 25 s, a novelty bonus for what this visit has not seen, a
+  // per-visitor personality (localStorage seed + visit count: a returning visitor meets a shifted mix), hysteresis (what was
+  // started is finished unless an interrupt or the screen edge scores 1.5x), and plans: 2-4 steps with a purpose. Shimeji and
+  // Animal Crossing draw weighted among the eligible, never the argmax alone, so one situation does not always get one answer.
+  const SAME_ID = 90, EDGE_ID = 10, SAME_CAT = 25, NOVEL = .3, TOP = 3, OVERRIDE = 1.5, EV_TTL = 2, EV_GAP = [8, 12], EV_CAP = 3, EV_WIN = 180, EV_P = .7;
+  const VISITOR = (() => { let r = null; try { r = JSON.parse(store('mortal.v1.visitor')); } catch (e) { r = null; }
+    if (!r || !(r.seed >= 0)) r = { seed: C.getRandomValues(new Uint32Array(1))[0] >>> 0, visits: 0 };
+    r.visits++; stash('mortal.v1.visitor', JSON.stringify(r)); return r; })();
+  const h32 = s => { let h = (2166136261 ^ VISITOR.seed) >>> 0; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
+    h = Math.imul(h ^ (h >>> 15), 2246822507); h = Math.imul(h ^ (h >>> 13), 3266489909); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
+  const persona = cat => .7 + .6 * h32(`cat:${cat}:${VISITOR.visits}`);   // this visitor's Hugo and his taste for each category, .7..1.3
+  const u01 = () => (rng ? rng.u() : Math.random());
+  const b3 = (v, a, b) => Math.min(2, Math.floor(((v - a) / (b - a)) * 3));
+  function vary() {   // no two executions alike: speed .8-1.25x, amplitude .7-1.3x, duration .75-1.4x, side, a pause before (0-.6 s) and after (0-1.2 s)
+    const p = { speed: .8 + .45 * u01(), amp: .7 + .6 * u01(), durK: .75 + .65 * u01(), side: u01() < .5 ? -1 : 1, before: .6 * u01() * u01(), after: 1.2 * u01() * u01() };
+    p.b = `${b3(p.speed, .8, 1.25)}${b3(p.amp, .7, 1.3)}${p.side > 0 ? 'R' : 'L'}`;   // the parameter bucket the harness compares
+    return p;
+  }
+  // The repertoire belongs to the body (it outlives a being); a new being starts with an empty memory of it (forget()).
+  const reps = { hugo: null, dove: null }, blank = () => ({ last: new Map(), lastCat: new Map(), seen: new Set(), cur: null, plan: null, ev: [], catRun: 0, lastC: null, buckets: new Map() });
+  const rep = who => (who in reps ? reps[who] || (reps[who] = { defs: new Map(), plans: [], trace: [], budget: new Map(), ...blank() }) : null);
+  const forget = who => { if (reps[who]) Object.assign(reps[who], blank()); };
+  // defs: [{ id, cat, u: ctx => 0..1, dur (s), on: [event types it reacts to], edge: true (a screen-edge move), move }]
+  function repertoire(who, defs) { const R = rep(who); if (R) for (const d of defs) if (d && d.id) R.defs.set(d.id, { dur: 3, ...d }); }
+  // plans: [{ goal, purpose, when: ctx => 0..1, steps: [id | { id, ...overrides }] }]. A plan is picked like a behaviour (id 'plan:goal',
+  // category = goal) and then runs its steps in order; a step that fails drops the plan (Rain World: a far new goal drops the old path).
+  function plans(who, list) { const R = rep(who); if (R) R.plans = list.filter(p => p && p.goal && p.steps && p.steps.length); }
+  const gauss = () => { let s = 0; for (let i = 0; i < 4; i++) s += u01(); return (s - 2) * Math.sqrt(3); };
+  // The world nudged it (scroll start/stop, a tap, the cursor near, a section change, the dove landing, a crumb, the tab back).
+  // Noticing takes N(220, 40) ms clamped 150-300 (human reaction time); a reaction is budgeted (p .7, a gap of 8-12 s per type,
+  // at most 3 per type per 3 min), so not every nudge gets one: what reacts to everything reads as a tool.
+  function notice(who, type, x) {
+    const R = rep(who); if (!R) return false;
+    const t = now() / 1000, b = R.budget.get(type) || { at: [], nextAt: 0 };
+    b.at = b.at.filter(a => t - a < EV_WIN);
+    if (t < b.nextAt || b.at.length >= EV_CAP || u01() > EV_P) { R.budget.set(type, b); return false; }
+    b.at.push(t); b.nextAt = t + EV_GAP[0] + (EV_GAP[1] - EV_GAP[0]) * u01(); R.budget.set(type, b);
+    R.ev = R.ev.filter(e => e.type !== type); R.ev.push({ type, x, at: t + clamp(.22 + .04 * gauss(), .15, .3), until: t + EV_TTL });
+    return true;
+  }
+  const answers = (d, ev) => !!(ev && d.on && d.on.includes(ev.type));
+  function score(R, d, ctx, t, ev, lax) {
+    let u = Math.min(1, +(typeof d.u === 'function' ? d.u(ctx, ev) : d.u) || 0);
+    if (answers(d, ev)) u = Math.max(u, .8) * 1.5;   // a noticed interrupt it can answer
+    if (!(u > 0) || (d.edge && !ctx.edge)) return 0;
+    if (ctx.edge && !d.edge) { if (ctx.edgeFor > 1) return 0; u *= .5; }   // the screen's edge is no home: after a second only edge moves are left
+    const lid = R.last.get(d.id), lcat = R.lastCat.get(d.cat);
+    let s = u * persona(d.cat) * (R.seen.has(d.id) ? 1 : 1 + NOVEL);
+    if (lid != null && t - lid < (d.edge ? EDGE_ID : SAME_ID)) s *= lax ? .3 : 0;   // the same thing again inside 90 s (10 s for an edge move: the page keeps moving): never, unless nothing else answers the edge or the world
+    if (lcat != null && t - lcat < SAME_CAT) { if (R.catRun >= 2 && R.lastC === d.cat) return 0; if (!(d.edge && ctx.edge)) s *= .15; }   // a third of the same kind running: never
+    return s * (.85 + .3 * u01());   // Dave Mark: a little noise, so near-ties fall either way
+  }
+  function begin(who, R, d, ov, t, planned, ev, ctx) {
+    const used = (R.buckets.get(d.id) || []).filter(x => t - x.t < SAME_ID); let p = vary(); for (let i = 0; i < 12 && used.some(x => x.b === p.b); i++) p = vary();   // a repeat inside 90 s (a plan step, the edge) never in the same way
+    R.buckets.set(d.id, [...used, { t, b: p.b }]); p = { ...p, ...(ov || {}) };
+    const dur = (d.dur || 3) * p.durK, u = Math.min(1, +(typeof d.u === 'function' ? d.u(ctx, ev) : d.u) || 0);
+    R.cur = { id: d.id, cat: d.cat, def: d, p, t0: t, minT: Math.min(dur * .6, 6), maxT: p.before + dur + p.after + 1.5, ev: ev ? ev.type : null, s: planned ? Math.max(.6, u) : u };
+    R.last.set(d.id, t); R.lastCat.set(d.cat, t); R.seen.add(d.id); R.catRun = R.lastC === d.cat ? (R.catRun || 0) + 1 : 1; R.lastC = d.cat;
+    R.trace.push({ t: +t.toFixed(2), id: d.id, cat: d.cat, b: p.b, plan: planned ? R.plan.def.goal : null, ev: R.cur.ev }); if (R.trace.length > 600) R.trace.shift();
+    return { id: d.id, cat: d.cat, p, reason: why(who), ev: R.cur.ev, plan: planned ? R.plan.def : null, step: planned ? R.plan.i : -1, x: ev ? ev.x : undefined };
+  }
+  // The next thing to start, or null (carry on). ctx: whatever the body's utilities read (needs, pointer, edge, edgeFor, ...).
+  function next(who, ctx) {
+    const B = beings[who], R = rep(who); if (!R || !B || !B.alive) return null;
+    ctx = ctx || {}; const t = now() / 1000;
+    R.ev = R.ev.filter(e => t < e.until); const ev = R.ev.find(e => t >= e.at) || null;
+    if (R.cur && t - R.cur.t0 > R.cur.maxT) ended(who, true);   // it never said it finished: that was long enough
+    if (R.cur) {   // committed: only a noticed interrupt or the screen edge may cut in, and only when it clearly scores higher
+      const passing = ctx.edge && ctx.over && !R.cur.def.grab;   // a ledge passing over him on the edge: the grab is always worth dropping a run for
+      if (!(ev || (ctx.edge && !R.cur.def.edge) || passing)) return null;
+      let best = null, bs = 0;
+      for (const lax of [0, 1]) { for (const d of R.defs.values()) { if (d === R.cur.def || !(answers(d, ev) || (ctx.edge && d.edge && (!R.cur.def.edge || (passing && d.grab))))) continue; const s = score(R, d, ctx, t, ev, lax); if (s > bs) { bs = s; best = d; } } if (best) break; }
+      const thr = (ctx.edge && !R.cur.def.edge && ctx.edgeFor > 1) || (passing && best && best.grab) ? 0 : OVERRIDE * .6 * Math.max(.2, R.cur.s);   // on the screen edge for a second: no commitment left
+      if (!best || bs <= thr) return null;
+      ended(who, false); R.plan = null; if (ev) R.ev = R.ev.filter(e => e !== ev);
+      return begin(who, R, best, null, t, false, answers(best, ev) ? ev : null, ctx);
+    }
+    if (R.plan) {   // the plan's next step, as decided (cooldowns do not apply inside a plan: the plan was the decision)
+      const P = R.plan, st = P.def.steps[P.i], id = typeof st === 'string' ? st : st.id, d = R.defs.get(id);
+      if (!d) { R.plan = null; return next(who, ctx); }
+      return begin(who, R, d, typeof st === 'string' ? null : st, t, true, null, ctx);
+    }
+    const c = [];
+    for (const lax of [0, 1]) { for (const d of R.defs.values()) { const s = score(R, d, ctx, t, ev, lax); if (s > 0) c.push([s, d, null]); } if (c.length || !(ctx.edge || ev)) break; }
+    if (!ctx.edge) for (const P of R.plans) { const f0 = R.defs.get(typeof P.steps[0] === 'string' ? P.steps[0] : P.steps[0].id); if (f0 && R.catRun >= 2 && R.lastC === f0.cat) continue;   // its first step would be a third of a kind
+      const s = 1.5 * score(R, { id: 'plan:' + P.goal, cat: P.goal, u: P.when }, ctx, t, ev); if (s > 0) c.push([s, P, 'plan']); }   // a purpose beats a fidget
+    if (!c.length) return null;
+    c.sort((a, b) => b[0] - a[0]); const top = c.slice(0, TOP), sum = top.reduce((n, x) => n + x[0], 0);
+    let r = u01() * sum, pick = top[top.length - 1]; for (const x of top) { r -= x[0]; if (r <= 0) { pick = x; break; } }
+    if (ev) R.ev = R.ev.filter(e => e !== ev);
+    const [, d, kind] = pick;
+    if (kind === 'plan') { R.last.set('plan:' + d.goal, t); R.lastCat.set(d.goal, t); R.seen.add('plan:' + d.goal); R.plan = { def: d, i: 0 }; return next(who, ctx); }
+    return begin(who, R, d, null, t, false, answers(d, ev) ? ev : null, ctx);
+  }
+  // The body finished (ok) or gave up on (!ok) what it was doing. A finished move is progress for the frame's stall count too.
+  function ended(who, ok) {
+    const R = rep(who); if (!R || !R.cur) return;
+    if (R.cur.def.move && ok) { progress(who, 'did ' + R.cur.id); const B = beings[who]; if (B) B.mot.stall = 0; }
+    R.cur = null;
+    if (R.plan) { if (!ok) R.plan = null; else if (++R.plan.i >= R.plan.def.steps.length) R.plan = null; }
+  }
+  function why(who) {
+    const R = rep(who); if (!R || !R.cur) return R && R.plan ? `${R.plan.def.purpose}: between steps` : 'idle';
+    const P = R.plan, c = R.cur;
+    return `${P ? `${P.def.purpose} [${P.i + 1}/${P.def.steps.length}] ` : ''}${c.id}${c.ev ? ` (reacting to ${c.ev})` : ''} x${c.p.speed.toFixed(2)} ${c.p.side > 0 ? 'R' : 'L'}`;
+  }
+
   let ready;
   const MORTAL = {
     YEAR, ACT, SIL_K, STALL_AFTER, BORN, DRIVES, HolyRNG, sampleLifespan, motStep, total, env, sec, speed,
@@ -279,6 +388,12 @@
     // calibration: a visit is too short to wind it down a tick at a time), so it rests until the next stall builds again.
     done(who) { const B = beings[who]; if (B && B.act) { if (B.act.move) { progress(who, 'did ' + B.act.id); B.mot.stall = 0; } B.lastAct = B.act.id; B.act = null; } },
     on(who, f) { subs[who].push(f); },
+    signal: (who, type, x) => fire(who, type, x),   // a body tells the other being's code what happened to it (BODY_READY, ENTERED: the entrance, patch 5 item 0)
+    // patch 5: the repertoire (what it can do), plans (why), interrupts (what it noticed) and the behaviour trace
+    repertoire, plans, notice, next, ended, why, vary, persona,
+    mark(who, id, cat) { const R = rep(who); if (R) { R.trace.push({ t: +(now() / 1000).toFixed(2), id, cat, b: '-', rel: 1 }); if (R.trace.length > 600) R.trace.shift(); } },   // something else moved the body (REL's orders): on the record, not a decision of the kernel
+    trace: who => (reps[who] ? reps[who].trace : []),
+    get visitor() { return { ...VISITOR }; },
     get fetches() { return { used: FETCH.used, budget: FETCH.budget, done: [...FETCH.done] }; },
   };
   if (DEBUG) MORTAL.debug = {   // death/rebirth tests only; never on by default

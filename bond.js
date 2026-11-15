@@ -72,7 +72,7 @@
       tens: { hugo: 0, dove: 0 }, conf: { hugo: 0, dove: 0 }, frameRead: { hugo: .3, dove: .3 },
       bid: { hugo: { answered: .6 }, dove: { answered: .6 } }, bidOpen: { hugo: null, dove: null },
       body: { dove: { ruffled: 0, sore: 0, dazed: 0, hits: 0, lastHit: null, heldBy: null, heldUntil: 0 }, hugo: { ruffled: 0, sore: 0, dazed: 0, hits: 0, lastHit: null, heldBy: null, heldUntil: 0 } },
-      cur: { hugo: null, dove: null }, imp: { hugo: [], dove: [] }, cool: { hugo: {}, dove: {} }, contactAt: { hugo: -9, dove: -9 },
+      cur: { hugo: null, dove: null }, imp: { hugo: [], dove: [] }, cool: { hugo: {}, dove: {} }, exAt: { hugo: {}, dove: {} }, exRun: { hugo: null, dove: null }, contactAt: { hugo: -9, dove: -9 },
       rung: { hugo: {}, dove: {} }, lastShow: { hugo: -9, dove: -9 }, lastStrike: { hugo: -9, dove: -9 },
       hold: { who: null, t0: 0, tier: 0, by: 'visitor', stress: 0 }, lastHold: { hugo: -1e9, dove: -1e9 }, grabAt: -1e9,
       crumb: null, log: [], M: newM(), ph: null, mem: null, acc: 1, ids: 0,
@@ -395,6 +395,8 @@
     const mom = S.cur[who] && S.cur[who].ex === e.id ? 1.25 : 1;
     const tn = clamp(1 + 1.5 * e.esc * (Tstar() - Tnow()), .1, 2);
     const W = S.M.W[who][e.id] != null ? S.M.W[who][e.id] : 1;
+    const run = S.exRun[who];   // patch 5: a third of the same exchange running never happens (a recency penalty on top shifted the sim's class mix past its 8 % lines)
+    if (run && run.id === e.id && run.n >= 2 && !(S.cur[who] && S.cur[who].ex === e.id)) return 0;
     return W * f * distF(e, c) * en * cool * mom * tn * (1 + boostOf(who, e.id)) * U(.85, 1.15);
   }
 
@@ -478,6 +480,7 @@
   function startEx(who, o, c) {
     const ph = S.ph, o2 = OTHER[who], e = EXI[o.ex];
     S.cool[who][o.ex] = S.t; S.lastAct = S.lastAct || {}; S.lastAct[who] = { name: actOf(o), t: S.t };
+    S.exAt[who][o.ex] = S.t; S.exRun[who] = S.exRun[who] && S.exRun[who].id === o.ex ? { id: o.ex, n: S.exRun[who].n + 1 } : { id: o.ex, n: 1 };
     S.drv[who].boredom = clamp(S.drv[who].boredom - .05);
     if (SHOWY.has(o.ex)) S.lastShow[who] = S.t;
     if (ph) {
