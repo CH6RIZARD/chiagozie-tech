@@ -16,6 +16,21 @@ try { if (localStorage.getItem('theme') === 'light') document.documentElement.da
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="frames.css?v=2">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;1,9..144,300&family=Inter:wght@400;500&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.min.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>   <!-- before the module preloads below: a module fetch ahead of the map would void it -->
+<!-- The agents' files, all fetched now in parallel instead of one after another from the end of the page; bootAgents (bottom) runs them in this order. Version tokens live here only. -->
+<link rel="preload" as="script" href="mortal-kernel.js?v=20261113e1" data-agent>
+<link rel="preload" as="script" href="depth.js?v=20261113g4b" data-agent>
+<link rel="preload" as="script" href="bond.js?v=20261113e1" data-agent>
+<link rel="preload" as="script" href="dove-agent.js?v=20261113g4" data-agent>
+<link rel="modulepreload" href="dove3d.js?v=20261113g1" data-agent>
+<link rel="modulepreload" href="hugo3d.js?v=20261113g4" data-agent>
+<link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.min.js">
+<link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/loaders/GLTFLoader.js">
+<link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/utils/BufferGeometryUtils.js">
+<link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/environments/RoomEnvironment.js">
+<link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/libs/meshopt_decoder.module.js">
+<link rel="preload" as="fetch" href="realms/hugo/hugo.glb" crossorigin>
+<link rel="preload" as="fetch" href="dove.glb" crossorigin>
 <style>
 /* ---- tokens: re-skin here ---- */
 :root{
@@ -732,7 +747,6 @@ document.getElementById('copyEmail').addEventListener('click',e=>{e.preventDefau
  const fb=()=>{const x=document.createElement('textarea');x.value=t;x.style.cssText='position:fixed;opacity:0';document.body.append(x);x.select();try{document.execCommand('copy')?ok():location.href='mailto:'+t}catch{location.href='mailto:'+t}x.remove()};
  (navigator.clipboard?navigator.clipboard.writeText(t).then(ok,fb):fb());});
 </script>
-<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
 <script>
 // EZER's web build routes from the URL root, so it is served at its own origin.
 // this browser's scrollbar width: the Revelation phone widens its iframe by exactly that so the scrollbar falls outside the screen
@@ -865,13 +879,17 @@ fitDesk(); addEventListener('resize', fitDesk);
 // Ambient life on the page. SCION the dove and Hugo share one scale: a real dove is about a sixth of Hugo.
 window.SCION_CONFIG = { size: matchMedia('(max-width:760px)').matches ? 16 : 26, lifespan: 3600, sensorWindow: 180, talk: false, maxSpeed: 220, followDist: 1e9, think: [6, 14], agentUrl: /^(127.0.0.1|localhost)$/.test(location.hostname) ? 'http://127.0.0.1:8080' : '' };   // its own bird: never follows the cursor
 // The 3D bodies carry a .wasm suffix on hosts that only serve known extensions (same bytes).
-const bootAgents = ext => {
-  window.SCION_GLB = 'dove.glb' + ext;
-  window.HUGO_CONFIG = { size: matchMedia('(max-width:760px)').matches ? 64 : 150, glb: 'realms/hugo/hugo.glb' + ext };
+// The files are the <head>'s data-agent preloads (already in flight), run in that order: the classic scripts one after another, then both modules.
+{
+  const ext = fetch('dove.glb', { method: 'HEAD' }).then(r => r.ok ? '' : '.wasm', () => '.wasm');   // decided while the scripts run, not before
   const add = (src, type) => new Promise(r => { const s = document.createElement('script'); if (type) s.type = type; s.src = src; s.onload = r; s.onerror = r; document.head.append(s); });
-  add('mortal-kernel.js?v=20261113e1').then(() => add('depth.js?v=20261113g4b')).then(() => add('bond.js?v=20261113e1')).then(() => add('dove-agent.js?v=20261113g4')).then(() => { add('dove3d.js?v=20261113g1', 'module'); add('hugo3d.js?v=20261113g4', 'module'); });
-};
-fetch('dove.glb', { method: 'HEAD' }).then(r => bootAgents(r.ok ? '' : '.wasm')).catch(() => bootAgents('.wasm'));
+  const L = [...document.querySelectorAll('link[data-agent]')], classic = L.filter(l => l.rel === 'preload'), mods = L.filter(l => l.rel === 'modulepreload');
+  classic.reduce((p, l) => p.then(() => add(l.getAttribute('href'))), Promise.resolve()).then(() => ext).then(ext => {
+    window.SCION_GLB = 'dove.glb' + ext;
+    window.HUGO_CONFIG = { size: matchMedia('(max-width:760px)').matches ? 64 : 150, glb: 'realms/hugo/hugo.glb' + ext };
+    for (const l of mods) add(l.getAttribute('href'), 'module');
+  });
+}
 
 // Phones keep an old copy of this page (restored tabs, back-forward cache): if the server has a newer one, reload once.
 addEventListener('pageshow', () => fetch(location.pathname, { method: 'HEAD', cache: 'no-store' }).then(r => {
