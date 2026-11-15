@@ -899,27 +899,40 @@ function relGoal(o, p) {
 }
 function relClear() { if (st.goal && st.goal.rel) st.goal = null; st.relOrder = null; st.spdK = 1; st.crouch = 0; st.relBusy = false; st.relGap = null; }
 function relEnd(result, data) { const o = st.relOrder; if (!o) return; relClear(); st.relAt = result === 'fail' ? t + 0.75 : 0; window.REL.done('hugo', o.id, result, data || {}); }
-// Out of sight (never while any of him shows), he moves over a clear support in view and drops in from just above the top edge
-// onto it: a fall you see entering the frame, never a pop-in. Nothing to stand on in view: the screen's bottom edge catches him.
-// A column that crosses a picture or card is fallen behind (lane -1), so he never materialises inside one.
-// A fall whose column crosses a picture or card is fallen behind it (lane -1, out again right after landing): never through an image
+// Never a fall from the sky (owner, 2026-11-15): out of frame above the view he comes down a card's side hand over hand, in over the
+// top edge as a climber you see, and lets go only for the last body height onto a ledge in view; out of frame below it he climbs up
+// over the bottom edge (climbIn); with neither, he walks in from a side edge along a ledge in view; with no way at all he stays
+// where he is, off-screen, until the visitor scrolls back or a way opens. Never a teleport into view, never a respawn.
 const crossesCard = (x, y0, y1) => cards.some(q => q.r > x - HALF_W * 1.7 && q.l < x + HALF_W * 1.7 && q.b > y0 && q.t < y1 - 2);
 function fallBehind(x, y0, y1) { if (st.z === 0 && crossesCard(x, y0, y1)) { st.z = -1; st.backUntil = t + 1.5 + Math.random() * 2; } }
-function dropIn(p = pickPlace()) {
-  for (let i = 0; p && crossesCard(p.x, scrollY, p.f.y) && i < 5; i++) { const q = pickFloor(true, 0); if (q && !crossesCard(q.x, scrollY, q.f.y)) p = q; }   // a column clear of pictures, when there is one
-  if (!p) p = { f: { y: scrollY + innerHeight - 30, x1: 0, x2: pageW, el: document.body, screen: true, support: true }, x: scrollX + innerWidth * (0.3 + Math.random() * 0.4) };
-  st.goal = null; st.route = null; st.floor = null; st.x = p.x; st.y = scrollY - 12; st.air = true; st.hop = false; st.vx = 0; st.vy = 0; st.dropF = p.f; st.dropIn = true; st.mode = 'walk'; st.away = 0; st.lostN = (st.lostN || 0) + 1;
-  st.z = st.zs = 0; st.peek = false; fallBehind(p.x, scrollY, p.f.y); if (st.z === -1) st.zs = -1;   // a fresh entry comes in on the content (lane 0 is home), behind a picture only when the column crosses one
-  return true; }
+function climbDown() {   // a ledge in view whose end is a card's side with a clear line down to it from the top edge
+  const c = [];
+  for (const f of floors) if (!f.ground && !f.screen && f.y > scrollY + CFG.size * 1.6 && f.y < scrollY + innerHeight * 0.75 && f.x2 - f.x1 > 2 * HALF_W + 24)
+    for (const x of [f.x1 + HALF_W, f.x2 - HALF_W]) if (x > scrollX + HALF_W && x < scrollX + innerWidth - HALF_W && onFloor(f, x) && clear(x, f.y, CFG.size + 4, 0) && !crossesCard(x, scrollY - CFG.size, f.y - CFG.size * 1.1)) c.push({ f, x });
+  if (!c.length) return false;
+  const p = c[(Math.random() * c.length) | 0];
+  st.goal = null; st.route = null; st.floor = null; st.air = false; st.hop = false; st.vx = 0; st.vy = 0; st.dropF = null; st.away = 0; st.z = st.zs = 0; st.peek = false; st.x = p.x; st.dir = p.x < scrollX + innerWidth / 2 ? 1 : -1; st.lostN = (st.lostN || 0) + 1;
+  st.mode = 'climb'; st.climb = { f: p.f, t0: t, down: true, y0: scrollY - CFG.size * 0.2, yTo: p.f.y - CFG.size * 0.9, x0: p.x, xTo: null };   // feet first, in over the top edge
+  return true;
+}
+function walkInSide() {   // a ledge in view that reaches the screen's side: in from that side, as at birth
+  const c = []; for (const f of floors) if (f.y > scrollY + CFG.size && f.y < scrollY + innerHeight - 10 && (f.x1 <= scrollX + 40 || f.x2 >= scrollX + innerWidth - 40) && f.x2 - f.x1 > 160)
+    for (let i = 1; i < 12; i++) { const x = f.x1 + (f.x2 - f.x1) * i / 12; if (x > scrollX + HALF_W && x < scrollX + innerWidth - HALF_W && onFloor(f, x) && clear(x, f.y, CFG.size + 4)) c.push({ f, x }); }
+  if (!c.length) return false;
+  const tgt = c[(Math.random() * c.length) | 0], side = tgt.x < scrollX + innerWidth / 2 ? -1 : 1, x0 = side < 0 ? scrollX - HALF_W * 1.6 : scrollX + innerWidth + HALF_W * 1.6;
+  st.goal = null; st.route = null; st.air = false; st.hop = false; st.vx = 0; st.vy = 0; st.dropF = null; st.away = 0; st.z = st.zs = 0; st.peek = false; st.lostN = (st.lostN || 0) + 1;
+  st.enter = { f: tgt.f, x: tgt.x, x0, t0: t, dur: 1.2 + Math.random() * 0.3, sit: false, again: true };   // a return, not a birth: no ENTERED cue for the dove
+  st.floor = tgt.f; st.x = x0; st.y = footY(tgt.f, tgt.x); st.dir = -side; st.mode = 'walk'; st.amt = 0;
+  return true;
+}
 // Back into the visitor's view like a game character (the viewport is the level): by the route graph when a support in view is
-// reachable (walk, climb, drop), else the drop-in. Elizabeth's rule: relocate only while unseen, and always enter the frame.
+// reachable (walk, climb, drop), else the lost case below. Elizabeth's rule: relocate only while unseen, and always enter the frame.
 function comeBack() {
   const p = pickPlace(); st.goal = null; st.route = null; st.toView = true;
   if (p) { const r = plan(p.f, p.x); if (r && r.length) { st.route = r; if (nextLeg()) return; } }
   st.route = null; if (st.away >= 4.5) lost();   // no route: a relocation only once he has been fully off camera for 4 s
 }
-// The lost case: in by the edge the content comes from. The view went down past him (he is above): a climb in over the bottom edge
-// onto a support within reach of it; up past him (he is below): the drop-in from the top.
+// The lost case: in by the edge he is beyond. Below the view: a climb in over the bottom edge onto a support within reach of it.
 function climbIn() {
   const E = scrollY + innerHeight - 30, c = [];
   for (const f of floors) if (!f.ground && f.y <= E - CFG.size * 1.2 && f.y >= E - CFG.size * 2.2 && f.x2 - f.x1 > 2 * HALF_W + 24) for (let i = 1; i < 8; i++) { const x = f.x1 + (f.x2 - f.x1) * i / 8; if (onFloor(f, x) && clear(x, f.y, CFG.size + 4, 0)) c.push({ f, x }); }
@@ -929,7 +942,7 @@ function climbIn() {
   st.mode = 'climb'; st.climb = { f: p.f, t0: t, y0: scrollY + innerHeight + CFG.size + 10, x0: p.x, xTo: null, hang: 0.3 + Math.random() * 0.3, pull: 0.75 + Math.random() * 0.35 };
   return true;
 }
-const lost = () => st.y < scrollY ? climbIn() || dropIn() : dropIn();
+const lost = () => (st.y > scrollY + innerHeight ? climbIn() : climbDown()) || walkInSide();   // false: no way yet, he stays where he is
 function hopUp(vy) { if (!st.floor || st.mode === 'sit' || (st.sitK || 0) > 0.04) return; st.dropF = st.floor; st.air = true; st.hop = true; st.floor = null; st.vx = 0; st.vy = -vy; st.mode = 'walk'; }   // a hop on the spot comes down on the ledge it left, never past it
 function applyOrder(o) {
   if (st.beh) behEnd(false); window.MORTAL?.mark?.('hugo', 'rel:' + o.ex, 'bond'); st.relRun = (st.relRun || 0) + 1;   // the bond takes his body: the kernel's move stops, and the order goes on the record
@@ -1216,7 +1229,7 @@ let returning = false; try { const ls = +localStorage.getItem('hugo.lastSeen') |
 let bornTries = 0, lastSY = 0, curSY = 0, jumpAt = -1e9;   // lastSY: the scroll before the latest jump, to keep him put on screen across a view switch
 function born() {   // first appearance (patch 5, item 0): an entrance, never a pop-in. He walks in from the nearer side of the screen along his
   // target ledge's line and arrives within ~1.5 s: onto the hero name when it is in view (somewhere new along it each load), else onto a
-  // ledge in view that reaches the screen's side; with none, a climb in over the bottom edge, else the drop in from the top.
+  // ledge in view that reaches the screen's side; with none, a climb in over the bottom edge (never from the top).
   const spots = inView => { const c = [];
     for (const f of floors) if ((!inView || (f.y > scrollY && f.y < scrollY + innerHeight)) && f.x2 - f.x1 > 160 && (inView || !f.ground)) {
       const n = Math.ceil((f.x2 - f.x1) / 6);   // small clear gaps are often all there is, so look along the whole ledge
@@ -1231,7 +1244,7 @@ function born() {   // first appearance (patch 5, item 0): an entrance, never a 
   if (!tgt) {
     let c = spots(true).filter(p => p.f.x1 <= scrollX + 40 || p.f.x2 >= scrollX + innerWidth - 40);   // a ledge that reaches the screen's side: a walk-in
     if (!c.length && (bornTries = (bornTries || 0) + 1) > 90) c = spots(false);   // nothing for ~1.5 s: start anywhere he fits
-    if (!c.length) { if (bornTries > 6 && (climbIn() || dropIn())) { st.bornOnce = true; st.lostN = 0; window.MORTAL?.signal?.('hugo', 'BODY_READY', { x: st.x, y: st.y, side: 0, dur: 1.2 }); return true; } return false; }   // no ledge to walk in on: in over the bottom edge, else the drop from the top (both enter the frame; not a loss)
+    if (!c.length) { if (bornTries > 6 && climbIn()) { st.bornOnce = true; st.lostN = 0; window.MORTAL?.signal?.('hugo', 'BODY_READY', { x: st.x, y: st.y, side: 0, dur: 1.2 }); return true; } return false; }   // no ledge to walk in on: in over the bottom edge (enters the frame; not a loss); else he tries again next frame
     tgt = c[(Math.random() * c.length) | 0];
   }
   const side = tgt.x < scrollX + innerWidth / 2 ? -1 : 1, x0 = side < 0 ? scrollX - HALF_W * 1.6 : scrollX + innerWidth + HALF_W * 1.6;   // from the nearer side, fully off-screen
@@ -1283,13 +1296,13 @@ function stepBody(dt) {
     if (st.x < HALF_W) { st.x = HALF_W; st.vx = Math.abs(st.vx) * 0.5; } else if (st.x > W - HALF_W) { st.x = W - HALF_W; st.vx = -Math.abs(st.vx) * 0.5; }
     swingLimbs(dt, (st.vx - lastVx) / dt, (st.vy - lastVy) / dt + G, 0.7); lastVx = st.vx; lastVy = st.vy;
     st.tilt += ((st.vx * 0.0005) - st.tilt) * Math.min(1, dt * 4);
-    let f = st.dropIn && st.dropF ? null : landingBelow(st.x, py - 1, !st.hop && !st.pounce);   // dropping in from above the screen: only the ledge he aimed for
+    let f = landingBelow(st.x, py - 1, !st.hop && !st.pounce);
     if (st.dropF && (!f || f.y > st.dropF.y)) f = st.dropF;   // the ledge he chose to step down to catches him
     const E = scrollY + innerHeight - 30;   // the screen's bottom edge is a hard floor while any of him shows: never out through the bottom, whatever he was doing in the air
     if (py - CFG.size < scrollY + innerHeight && st.y > E && (!f || f.y > E)) f = { y: E, x1: 0, x2: pageW, el: document.body, screen: true, support: true };
     st.landF = f;   // where his shadow falls while he is up
     const ly = f ? footY(f, st.x) : 0;   // where his feet land: the letter tops under him on a text ledge
-    if (f && st.y >= ly && st.vy > 0) { if (f === st.dropF) st.x = Math.max(f.x1 + HALF_W, Math.min(f.x2 - HALF_W, st.x)); st.dropF = null; st.dropIn = false; st.y = footY(f, st.x); st.floor = f; st.air = false; st.squash = Math.max(0.4, Math.min(1, st.vy / 600)); st.sqAt = t; if (st.vy > 420) kickDust(st.x, st.y, 3 + Math.round(5 * Math.min(1, (st.vy - 420) / 600))); st.vy = 0; st.vx = 0; st.land = 0.23; st.hop = false; st.mode = 'walk'; st.tilt = 0;   // land: a squash (x1.3, y0.7) recovering in ~0.23 s (Celeste's 1.75/s)
+    if (f && st.y >= ly && st.vy > 0) { if (f === st.dropF) st.x = Math.max(f.x1 + HALF_W, Math.min(f.x2 - HALF_W, st.x)); st.dropF = null; st.y = footY(f, st.x); st.floor = f; st.air = false; st.squash = Math.max(0.4, Math.min(1, st.vy / 600)); st.sqAt = t; if (st.vy > 420) kickDust(st.x, st.y, 3 + Math.round(5 * Math.min(1, (st.vy - 420) / 600))); st.vy = 0; st.vx = 0; st.land = 0.23; st.hop = false; st.mode = 'walk'; st.tilt = 0;   // land: a squash (x1.3, y0.7) recovering in ~0.23 s (Celeste's 1.75/s)
       if (st.pounce) { window.REL?.ev('hugo', 'pounceLand', 'dove', 0, { x: st.x, y: st.y }); st.pounce = null; relEnd('ok'); st.mode = 'idle'; st.idleUntil = t + 0.8; }
       else if (gest && gest.rel) st.mode = 'idle';
       if ((st.shaken || 0) > 0.35) { window.REL?.ev('hugo', 'fell', null, Math.min(0.8, st.shaken), { x: st.x, y: st.y }); poke('landed hard'); }
@@ -1302,6 +1315,12 @@ function stepBody(dt) {
   if (st.mode === 'climb') {   // jump, catch the edge, hang a moment, pull himself up and get a knee over
     const C = st.climb; if (!refloor(C.f)) { st.mode = 'walk'; st.air = true; st.climb = null; return; }
     const e = (a, b, u) => a + (b - a) * (u < 0.5 ? 2 * u * u : 1 - Math.pow(-2 * u + 2, 2) / 2);   // ease in-out
+    if (C.down) {   // hand over hand down a card's side (the hang pose, legs swinging), ~110 px/s, then let go above the ledge
+      const k = t - C.t0, dur = Math.max(0.6, (C.yTo - C.y0) / 110); C.ph = 'hang'; C.u = Math.min(1, k / dur);
+      st.y = C.y0 + (C.yTo - C.y0) * C.u; st.x = C.x0 + Math.sin(k * 6) * 1.5;
+      if (C.u >= 1) { st.climb = null; st.mode = 'walk'; st.air = true; st.hop = false; st.vx = 0; st.vy = 0; st.dropF = C.f; }   // the last body height: a drop he lands from
+      return;
+    }
     const T1 = 0.32, T2 = T1 + C.hang, T3 = T2 + C.pull, k = t - C.t0, hangY = C.f.y + CFG.size * 1.02;
     if (k < T1) { C.ph = 'reach'; C.u = k / T1; st.y = e(C.y0, hangY, C.u); }
     else if (k < T2) { C.ph = 'hang'; C.u = (k - T1) / C.hang; st.y = hangY + Math.sin(C.u * Math.PI) * 3; }
@@ -1348,7 +1367,7 @@ function stepBody(dt) {
           let nx = null; for (let k = 1; k < 25 && nx == null; k++) for (const q of [st.x + k * 6, st.x - k * 6]) if (q > f.x1 + HALF_W * 0.6 && q < f.x2 - HALF_W * 0.6 && clear(q, f.y, SIT_H + 4)) { nx = q; break; }
           if (nx != null) { E.moved = 1; E.x0 = st.x; E.x = nx; E.u = 0; E.dur = 0.3 + Math.abs(nx - st.x) / 160; return; }
         }
-        st.enter = null; st.amt = 0; const sit = E.sit && clear(st.x, f.y, SIT_H + 4); if (E.sit && !sit) poke('no sitting room at arrival'); st.mode = sit ? 'sit' : 'idle'; st.idleUntil = t + (sit ? 5 + Math.random() * 6 : 0.8 + Math.random() * 0.8); window.MORTAL?.signal?.('hugo', 'ENTERED', { x: st.x, y: st.y, sit }); }   // on the name he sits a while first; the dove hears he is in
+        st.enter = null; st.amt = 0; const sit = E.sit && clear(st.x, f.y, SIT_H + 4); if (E.sit && !sit) poke('no sitting room at arrival'); st.mode = sit ? 'sit' : 'idle'; st.idleUntil = t + (sit ? 5 + Math.random() * 6 : 0.8 + Math.random() * 0.8); if (!E.again) window.MORTAL?.signal?.('hugo', 'ENTERED', { x: st.x, y: st.y, sit }); }   // on the name he sits a while first; the dove hears he is in
       return; }
     if (st.land > 0) return;   // the landing's beat (st.land decays in frame())
     if ((st.sitK || 0) > 0.04 || (st.crawlK || 0) > 0.05) { st.amt = 0; return; }   // still getting up
@@ -1458,7 +1477,7 @@ function frame(now) {
   else if ((now - scrolledAt > 250 && ((dirty && now - scanAt > 400) || now - scanAt > 2500)) || now - scanAt > 6000) scan();
   if (barInk) { barInk.t = scrollY - 400; barInk.b = scrollY + barInk.h; }   // the nav's wall in viewport space, every frame
   if (inView()) { st.away = 0; st.awayT = t; } else st.away = t - (st.awayT ?? (st.awayT = t));   // the off-camera clock (seconds since any of him last showed) the come-back (1.5 s) and the lost case (4 s) wait on: time, not beats (a beat counter ran ahead whenever an order ended and the next beat came at once)
-  if (!st.floor && !st.air && !st.held && st.mode !== 'climb') { if (!(st.bornOnce ? dropIn() : born())) { canvas.style.visibility = 'hidden'; return; } }   // born once; after that a lost floor is a visible drop-in, never a vanish
+  if (!st.floor && !st.air && !st.held && st.mode !== 'climb') { if (st.bornOnce) { st.air = true; st.hop = false; st.vy = 0; } else if (!born()) { canvas.style.visibility = 'hidden'; return; } }   // born once; after that a lost floor is a fall from where he is (no relocation, no drop from the top), never a vanish
   if (window.REL) {   // H10: what REL's contact did to him; he animates it himself
     const hb = window.REL.body('hugo'); st.dazed = hb.dazed > 0; st.carrying = window.REL.body('dove').heldBy === 'hugo';
     if (hb.hits !== st.hitsSeen) {
