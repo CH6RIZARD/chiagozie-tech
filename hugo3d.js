@@ -1071,6 +1071,10 @@ Object.assign(RUN, {
     st.beh.until = t + 1.1; st.beh.steps = [() => { const q = overMe(); return q ? grab(q, onLedgeX(q), p) : (st.beh.until = t + 0.6, 'timer'); }]; return 'timer'; },
   edge_look_up: p => { lookAt({ x: st.x + p.side * 30, y: scrollY + innerHeight * 0.2, what: 'up there' }, 2); return standGest('lookup', 1.2 + 0.8 * p.durK, p); },   // a hand over the eyes, scanning for a way up
   edge_shrug: p => { lookAt(cursorPt(), 2); return standGest('hips', 1.2 + 0.8 * p.durK, p); },   // "well?" to the visitor, hands on his hips
+  edge_peer_down: p => { st.dir = p.side; lookAt({ x: st.x + p.side * 30, y: scrollY + innerHeight + CFG.size, what: 'down there' }, 1.6); return standGest('peer', 1.1 + 0.7 * p.durK, p); },   // a look down over the bottom of the screen
+  edge_wave: p => { lookAt(cursorPt(), 2.2); return standGest('wave', 1.4 + 0.8 * p.durK, p); },   // a wave up at the visitor from the edge
+  edge_stretch: p => standGest('stretch', 1.6 + 0.9 * p.durK, p),   // waiting for the page to bring something: a stretch
+  edge_tap: p => standGest('tap', 1.2 + 0.8 * p.durK, p),   // a foot tapping at the edge
 });
 // Utilities: needs x context (0..1); the kernel adds novelty, persona and memory. ctx comes from senseCtx() each decision.
 const HUGO_REP = [
@@ -1116,6 +1120,10 @@ const HUGO_REP = [
   { id: 'edge_hop_ledge', cat: 'play', dur: 2.5, move: 1, edge: 1, u: c => (c.edgeFor >= 2 ? 0.8 : 0) },
   { id: 'edge_look_up', cat: 'look', dur: 2, edge: 1, u: 0.6 },
   { id: 'edge_shrug', cat: 'social', dur: 2, edge: 1, u: c => (c.edgeFor >= 1.5 ? 0.5 : 0) },
+  { id: 'edge_peer_down', cat: 'look', dur: 1.8, edge: 1, u: 0.5 },
+  { id: 'edge_wave', cat: 'social', dur: 2.2, edge: 1, u: c => (c.edgeFor >= 1.5 ? 0.45 : 0) },
+  { id: 'edge_stretch', cat: 'rest', dur: 2.5, edge: 1, u: c => (c.edgeFor >= 2 ? 0.4 : 0) },
+  { id: 'edge_tap', cat: 'fidget', dur: 2, edge: 1, u: c => (c.edgeFor >= 1 ? 0.4 : 0) },
 ];
 const HUGO_PLANS = [   // purpose first: a trip has a payoff at its end (the research notes: "walk with no payoff does not exist in the table")
   { goal: 'explore', purpose: 'see what is new here', when: c => (c.freshEl ? 0.5 + 0.5 * c.mo.c : 0), pick: c => c.freshEl && { el: c.freshEl }, steps: ['walk_to', 'look_around', 'sit_edge', 'look_visitor'] },
@@ -1177,7 +1185,7 @@ function autonomy(f) {
   st.decideAt = t + (f && f.screen ? 0.25 : 0.4);
   const ctx = senseCtx(f), o = M.next('hugo', ctx); if (!o) return;
   if (st.beh) { st.goal = null; st.route = null; if (gest && gest.beh) gest = null; st.pendGest = null; st.spdK = 1; st.hangK = null; }   // the kernel cut in (an interrupt, the edge): what he was doing stops here
-  st.beh = { id: o.id, p: o.p, o, ctx, kind: null, startAt: t + (o.ev || ctx.edge ? 0 : o.p.before) }; st.relRun = 0;
+  st.beh = { id: o.id, p: o.p, o, ctx, kind: null, startAt: t + (o.ev || ctx.edge ? 0 : o.p.before) }; if (!ctx.edge) st.relRun = 0;
 }
 function relStep(f) {
   const R = window.REL; if (!R || t < (st.relAt || 0) || st.dead || st.dazed || st.mode === 'crawl' || (st.crawlK || 0) > 0.05) return;   // no standing up under a low ceiling for the bird
@@ -1189,7 +1197,7 @@ function relStep(f) {
   const reach = !!d && d.mode === 'perch' && !d.held && d.y >= st.y - CFG.size * 2.2 && floors.some(q => Math.abs(q.y - d.y) < 6 && d.x > q.x1 && d.x < q.x2);
   const o = R.want('hugo', { reach, floorY: f.y });
   if (!o || (st.away >= 1.5 && !o.goal && !o.pounce) || st.away >= 4.5) { if (st.relOrder) relEnd('interrupted'); autonomy(f); return; }   // fully off camera for 4.5 s: any order yields, nobody sees it   // out of view, an order that keeps him standing (a sulk, a stare) yields to getting back where he is seen
-  if (!st.relOrder && (st.relRun || 0) >= 3) { if (!(st.relHold > 0)) st.relHold = t + 6 + Math.random() * 4; if (t < st.relHold) { autonomy(f); return; } st.relHold = 0; st.relRun = 0; }   // three bond orders in a row: his own life gets a turn (6-10 s) before the bird again
+  if (!st.relOrder && (st.relRun || 0) >= 2) { if (!(st.relHold > 0)) st.relHold = t + 6 + Math.random() * 4; if (t < st.relHold) { autonomy(f); return; } st.relHold = 0; st.relRun = 0; }   // two bond orders without a move of his own between: his own life gets a turn (6-10 s) before the bird again
   if (o.id !== (st.relOrder && st.relOrder.id)) applyOrder(o);
   else if (st.relGap != null && st.goal && st.goal.rel === o.id && d && (d.mode === 'perch' || o.ex === 'chase')) relGoal(o, { x: d.x - (Math.sign(d.x - st.x) || 1) * st.relGap, y: d.y });   // the bird moved: after it
   if (f.screen && st.relOrder && !st.pounce && st.mode !== 'prep' && st.mode !== 'climb' && (!st.goal || st.goal.x <= scrollX + HALF_W * 1.5 || st.goal.x >= scrollX + innerWidth - HALF_W * 1.5)) { relEnd('interrupted'); st.relAt = t + 3; return; }   // on the screen's edge an order that leaves him standing (or walking into the screen's side) yields: off the edge first, the bird in 3 s
@@ -1325,6 +1333,7 @@ function stepBody(dt) {
     if (st.enter) {   // the entrance: in from the screen's side along the ledge's line, feet in step with the ground, slowing into the spot
       const E = st.enter, u = E.u = Math.min(1, (E.u || 0) + Math.min(dt, 0.05) / E.dur), e = u < 0.5 ? 2 * u * u : 1 - Math.pow(-2 * u + 2, 2) / 2, nx = E.x0 + (E.x - E.x0) * e;   // in-out: a first step in from the edge, slowing into the spot   // progress per rendered frame (50 ms at most): the heavy first second renders few frames, and the walk must be seen
       st.ph += Math.abs(nx - st.x) / cycleLen(); st.x = nx; st.amt = u < 0.8 ? Math.min(1, st.amt + dt * 3) : Math.max(0.2, st.amt - dt * 3); st.brake = 1;
+      (st.enterLog || (st.enterLog = [])).length < 400 && st.enterLog.push([Math.round(nx - scrollX), Math.round(st.y - scrollY)]);   // every rendered frame of the walk-in, viewport px (the harness's entrance check)
       if (u >= 1) {
         if (E.sit && !E.moved && !clear(st.x, f.y, SIT_H + 4)) {   // the letters moved under him since he set out (the web font landed): the nearest spot along the name with sitting room, a few more steps
           let nx = null; for (let k = 1; k < 25 && nx == null; k++) for (const q of [st.x + k * 6, st.x - k * 6]) if (q > f.x1 + HALF_W * 0.6 && q < f.x2 - HALF_W * 0.6 && clear(q, f.y, SIT_H + 4)) { nx = q; break; }
