@@ -118,8 +118,8 @@
 
   // ---------------------------------------------------------------- beings
   let rng = null;
-  const beings = { hugo: null, dove: null };
-  const subs = { hugo: [], dove: [] };
+  const beings = { hugo: null, dove: null, void: null };   // void: The Void's mascot (void3d.js), kept out of REL: it has no needs and no bond
+  const subs = { hugo: [], dove: [], void: [] };
   const fire = (who, type, x) => { for (const f of subs[who]) { try { f(type, x); } catch (e) { if (DEBUG) console.error(e); } } };
   function fresh(who, id, born, deathAt) {
     return { who, id, born, deathAt, dt: 0, alive: true, external: false, mot: { ...newMot(), ...BORN }, act: null, visited: new Set(), lastUser: now(), progressAt: now() - STALL_AFTER * 1000, goals: [], ended: null,
@@ -396,7 +396,7 @@
     if (!beings.hugo) return;
     const gate = !(DOM && document.hidden);   // embodied time accrues only while the page is visible
     envUpdate();
-    for (const who of ['hugo', 'dove']) {
+    for (const who in beings) {
       const B = beings[who], s = (sig && sig[who]) || {};
       if (!B || !B.alive) continue;
       if (gate) B.dt += dt;
@@ -444,7 +444,7 @@
     return p;
   }
   // The repertoire belongs to the body (it outlives a being); a new being starts with an empty memory of it (forget()).
-  const reps = { hugo: null, dove: null }, blank = () => ({ last: new Map(), lastCat: new Map(), seen: new Set(), cur: null, plan: null, ev: [], catRun: 0, lastC: null, buckets: new Map() });
+  const reps = { hugo: null, dove: null, void: null }, blank = () => ({ last: new Map(), lastCat: new Map(), seen: new Set(), cur: null, plan: null, ev: [], catRun: 0, lastC: null, buckets: new Map() });
   const rep = who => (who in reps ? reps[who] || (reps[who] = { who, defs: new Map(), plans: [], trace: [], budget: new Map(), ...blank() }) : null);
   const forget = who => { if (reps[who]) Object.assign(reps[who], blank()); };
   // defs: [{ id, cat, u: ctx => 0..1, dur (s), on: [event types it reacts to], edge: true (a screen-edge move), move }]
@@ -591,7 +591,7 @@
   G.MORTAL = MORTAL;
   ready = (async () => {
     try { rng = await HolyRNG(); } catch (e) { rng = { u: () => C.getRandomValues(new Uint32Array(1))[0] / 4294967296 }; rng.bytes = n => C.getRandomValues(new Uint8Array(n)); }
-    beings.hugo = load('hugo'); beings.dove = load('dove');
+    beings.hugo = load('hugo'); beings.dove = load('dove'); beings.void = load('void');
     setTimeout(() => { loadShared('hugo'); loadShared('dove'); }, DOM ? NET.after : 0);   // after the page's own load; not awaited: the beings live while the service answers (or does not)
     if (DOM) { if (document.readyState === 'loading') addEventListener('DOMContentLoaded', watchSections); else watchSections(); }
     return beings;
