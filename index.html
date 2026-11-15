@@ -314,8 +314,10 @@ html{touch-action:manipulation}
   .frame svg{max-height:260px}
 }
 @media (min-width:761px){.swipe-hint,.more{display:none}}
-/* Morgan on desktop: render the build in a real 390px iPhone viewport scaled to the screen (at 268px wide it clipped and showed a scrollbar) */
-@media (min-width:761px){#trading .phone .screen iframe{width:390px;height:calc(100% / var(--sk,1));transform:scale(var(--sk,1));transform-origin:0 0}}
+/* app builds on desktop: render in a real 390px iPhone viewport scaled to the screen (at 268px wide they clipped: Morgan cards, EZER keypad, Void button) */
+@media (min-width:761px){#trading .phone .screen iframe,#ezer .phone .screen iframe,#void .phone .screen iframe{width:390px;height:calc(100% / var(--sk,1));transform:scale(var(--sk,1));transform-origin:0 0}#ezer .phone .screen iframe{top:calc(var(--pw,390px)*.1385);height:calc((100% - var(--pw,390px)*.1385) / var(--sk,1))}}   /* EZER starts below the island as on mobile: its header drew under it */
+/* Morgan fills the whole screen under the status glyphs, as on the phone: its own 126px top pad already clears the status bar, so starting it below the island doubled that inset */
+#trading .phone .screen iframe{top:0;height:calc(100% / var(--sk,1))}
 @media (max-width:760px){
   .head,.head>div,.split>*,.top>*{min-width:0}          /* a swipe row must not widen its column */
   .kicker{flex-wrap:wrap;gap:6px 12px}
@@ -807,7 +809,7 @@ document.getElementById('copyEmail').addEventListener('click',e=>{e.preventDefau
   });
 })();
 const LOCAL = /^(127\.0\.0\.1|localhost)$/.test(location.hostname);
-const BUILD = '20261115m';
+const BUILD = '20261115n';
 const EZER_URL = LOCAL ? 'http://127.0.0.1:8766/' : 'https://ezer-demo.daniel4chigs.workers.dev/';
 // Morgan Futures mobile app (Expo web export), served at its own root like EZER.
 const MORGAN_URL = LOCAL ? 'http://127.0.0.1:8767/' : 'https://morgan-demo.daniel4chigs.workers.dev/app/';
