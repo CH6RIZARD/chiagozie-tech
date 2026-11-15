@@ -1318,6 +1318,7 @@ function stepBody(dt) {
     const C = st.climb; if (!refloor(C.f)) { st.mode = 'walk'; st.air = true; st.climb = null; return; }
     const e = (a, b, u) => a + (b - a) * (u < 0.5 ? 2 * u * u : 1 - Math.pow(-2 * u + 2, 2) / 2);   // ease in-out
     if (C.down) {   // hand over hand down a card's side (the hang pose, legs swinging), ~110 px/s, then let go above the ledge
+      C.yTo = C.f.y - CFG.size * 0.9;   // the ledge as it is now (refloor above): a ledge that shifted mid-climb never leaves him hanging below it, to be snapped up on the drop
       const k = t - C.t0, dur = Math.max(0.6, (C.yTo - C.y0) / 110); C.ph = 'hang'; C.u = Math.min(1, k / dur);
       st.y = C.y0 + (C.yTo - C.y0) * C.u; st.x = C.x0 + Math.sin(k * 6) * 1.5;
       if (C.u >= 1) { st.climb = null; st.mode = 'walk'; st.air = true; st.hop = false; st.vx = 0; st.vy = 0; st.dropF = C.f; }   // the last body height: a drop he lands from
