@@ -322,6 +322,8 @@ function scan() {
   if (bar && !ALT) { const r = bar.getBoundingClientRect(); if (r.height) ink.push(barInk = { l: 0, t: O.y - 400, r: pageW, b: O.y + r.bottom, h: r.bottom, bar: true }); }
   if (od) pass(od, os);
   if (ALT) { const mine = f => f.el === host || host.contains(f.el); floors = floors.filter(mine); seams = seams.filter(mine);   // only his realm's own ledges exist for him
+    const im = !ROOF && host.querySelector('img.th');   // the phone index row: its little phone picture is a thing to be on (the row's hairline was all he had: seated on it he sat on nothing)
+    if (im && im.naturalWidth) { const r = im.getBoundingClientRect(); floors.push({ y: r.top + O.y, x1: r.left + O.x, x2: r.right + O.x, el: im, box: true, support: true }); }   // shortcut: the picture's whole box (its phone is drawn 15..45 of 60 px; a ledge trimmed to that was too narrow for him to get onto), trim when he can use narrow ledges
     if (ROOF) floors.push({ y: groundY(), x1: 0, x2: docW(), el: host, ground: true, support: true }); }   // and its bottom edge, where that has standing room
   else floors.push({ y: groundY(), x1: 0, x2: document.documentElement.scrollWidth, el: document.body, ground: true, support: true });   // the page bottom; Read less: the screen's bottom edge (a one-screen room has a solid floor)
   floors.forEach(fit); seams.forEach(fit);   // only ledges with standing room somewhere along them (no climbing into a gap and crawling there)
@@ -362,6 +364,7 @@ const inkSpot = f => { for (let k = 1; k < 300; k++) for (const x of [st.x + k *
 const sideOf = (x, y) => { const q = textInk.find(q => q.hd && x > q.l && x < q.r && y >= q.t - 3 && y <= q.b); return !q ? 0 : Math.abs(x - (q.r - HALF_W)) <= 6 ? 1 : Math.abs(x - (q.l + HALF_W)) <= 6 ? -1 : null; };
 const legRoom = (x, y) => { const s = sideOf(x, y); if (s === null || (ROOF && y + CFG.size * 0.3 > docH())) return false; const lx = s ? x + s * (HALF_W + CFG.size * 0.14) : x, hw = s ? 8 : HALF_W * 0.8;
   return !textInk.some(q => (s || !q.hd) && q.r > lx - hw && q.l < lx + hw && q.b > y + 3 && q.t < y + CFG.size * 0.3); };
+const onInk = (x, y) => { const f = lineAt(x, y); return !!f && inkUnder(f, x, -33, 9) >= 0.6; };   // strict: past the end of a line of letters is empty space, not a seat (seatInk passes it)
 const sitRoom = (x, y) => clear(x, y, SIT_H + 4) && (ALT ? legRoom(x, y) : seatInk(x, y));
 // ALT: a heading or a small label over a ledge (the title over the phone's top, the kicker over the title) is no wall to WALK past: pass()
 // lets him through, clear() still decides where he may stop, sit, land for good or be born, and an idle there walks on (stepBody).
@@ -1428,6 +1431,8 @@ function stepBody(dt) {
       if (C.wait) { const R = ENV.__pack && ENV.__pack.rope; C.y0 = O.y - CFG.size * 0.2; C.k = -1;
         if (R && R.start()) { C.wait = false; C.k = -R.lead; }
         else if (t - C.t0 > 2.5) { st.fallTo = { f: C.f, sit: C.born.sit }; st.floor = null; st.air = true; st.hop = false; st.y = Math.min(O.y - 8, C.yTo - CFG.size * 2); st.vx = st.vy = 0; st.mode = 'walk'; st.climb = null; return; } }   // no pack after 2.5 s: the plain drop, rather than no Hugo
+      if (C.born && C.born.sit && !C.wait && !onInk(C.x0, C.f.y)) { let bx = null; for (let d = 4; d <= 400 && bx == null; d += 4) for (const x of [C.x0 - d, C.x0 + d]) if (x >= C.f.x1 && x <= C.f.x2 && sitRoom(x, C.f.y) && onInk(x, C.f.y)) { bx = x; break; }
+        if (bx != null) C.x0 += Math.max(-140 * dt, Math.min(140 * dt, bx - C.x0)); }   // his seat was picked before the letters settled: he swings over to real ink on the way down
       if (C.rope && C.ft !== t) { C.ft = t; C.fs = C.wait ? 0 : 0.05; }   // rope: 50 ms of lowering per rendered frame at most (a frame's substeps share it), so a stalled frame never jumps him
       const k = C.rope ? (C.k += Math.max(0, Math.min(dt, C.fs)), C.fs -= Math.min(dt, C.fs), C.k) : t - C.t0, dur = Math.max(0.6, Math.abs(C.yTo - C.y0) / 110); C.ph = 'hang'; C.u = Math.max(0, Math.min(1, k / dur));
       st.y = C.y0 + (C.yTo - C.y0) * C.u; st.x = C.x0 + (C.rope ? Math.sin(k * 2.2) * 3 * (1 - C.u) : Math.sin(k * 6) * 1.5);
@@ -1588,7 +1593,7 @@ function stepBody(dt) {
   } else if (st.mode === 'idle') { if (!st.goal && st.amt < 0.05 && (ALT ? !clear(st.x, f.y, CFG.size + 4) : !st.held && !standInk(f, st.x))) { const x = ALT ? idleSpot(f) : inkSpot(f);   // Hugo on letters: on to where both soles have ink under them
      if (x != null) { if (Math.abs(x - st.x) < 9) st.x += Math.sign(x - st.x) * Math.min(Math.abs(x - st.x), 40 * dt); else { gest = null; goTo(f, x, { auto: 1 }); return; } } }   // stopped in front of a label or the title: he walks on to where he covers nothing
     settle(f, dt); if (t > st.idleUntil && st.goal) { st.mode = 'walk'; restyle(); } }
-  else if (st.mode === 'sit') { settle(f, dt); if (!ALT && f.runs && !seatInk(st.x, f.y)) { let bx = null; for (let d = 6; d <= 120 && bx == null; d += 6) for (const x of [st.x - d, st.x + d]) if (x >= f.x1 + HALF_W * 0.6 && x <= f.x2 - HALF_W * 0.6 && sitRoom(x, f.y)) { bx = x; break; }
+  else if (st.mode === 'sit') { settle(f, dt); if (!ALT && f.runs && !onInk(st.x, f.y)) { let bx = null; for (let d = 4; d <= 400 && bx == null; d += 4) for (const x of [st.x - d, st.x + d]) if (x >= f.x1 && x <= f.x2 && sitRoom(x, f.y) && onInk(x, f.y)) { bx = x; break; }
       if (bx != null) st.x += Math.max(-90 * dt, Math.min(90 * dt, bx - st.x)); else { st.mode = 'idle'; st.idleUntil = t + 1; } }   // he scoots along to the nearest ink still seated (standing up under the nav he stepped off and dropped); none near: up   // the letters moved under his seat (the web font landed): up, and on to honest ink
     st.swingV += (-st.swing * 9 - st.swingV * 1.6) * dt; st.swing += st.swingV * dt;
     if (!st.dead && Math.sin(t * 1.3) * Math.sin(t * 0.37) > 0.995) st.swingV += 2;   // now and then a kick of the legs (a slow beat, not dice)
