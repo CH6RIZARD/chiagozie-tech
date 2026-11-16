@@ -51,10 +51,10 @@ export async function boot({ model, B, rest, st, armMix, mix, springK, body, glb
   const toModel = new THREE.Matrix4().copy(model.matrixWorld).invert(), mp = b => b.getWorldPosition(new THREE.Vector3()).applyMatrix4(toModel);
   const chestM = mp(B.chest), torso = mp(B.head).distanceTo(mp(B.hips)), H = torso * 0.72, D = torso * 0.25;
   const backModel = new THREE.Matrix4().makeBasis(_x.copy(BODY.left).negate(), _y.copy(BODY.up), _z.copy(BODY.fwd).negate())   // pocket side faces back (right-handed: his right, up, back)
-    .scale(_s.setScalar(H)).setPosition(chestM.clone().addScaledVector(BODY.fwd, -D).addScaledVector(BODY.up, -H * 0.5));
+    .scale(_s.setScalar(H)).setPosition(chestM.clone().addScaledVector(BODY.fwd, -D).addScaledVector(BODY.up, -H * 0.42));
   const chestModel = new THREE.Matrix4().copy(B.chest.matrixWorld).premultiply(toModel), backLocal = chestModel.invert().multiply(backModel);   // the pack in the chest's frame
   // His real surface: torso skin vertices (the ones the spine bones carry), sampled at rest; each frame their skinned positions
-  // push the pack out until its near face clears them by 3.5 % of his height, whatever he is doing (leaning, sitting, climbing).
+  // push the pack out until its near face clears them by 1.2 % of his height (flat on his back, no see-through gap), whatever he is doing (leaning, sitting, climbing).
   const skins = []; model.traverse(o => { if (o.isSkinnedMesh) skins.push(o); });
   const torsoV = [], samples = [], up0 = BODY.up.clone(), hipsM = mp(B.hips), headM = mp(B.head); let hMin = 1e9, hMax = -1e9;
   for (const sk of skins) { const sw = sk.geometry.attributes.skinWeight, si = sk.geometry.attributes.skinIndex, bones = sk.skeleton.bones, n = sk.geometry.attributes.position.count, w = new THREE.Vector3();
@@ -63,7 +63,7 @@ export async function boot({ model, B, rest, st, armMix, mix, springK, body, glb
       let best = 0, bi = 0; for (let k = 0; k < 4; k++) { const x = sw.getComponent(i, k); if (x > best) { best = x; bi = si.getComponent(i, k); } }
       if (/spine(?!.?00[456])/i.test(bones[bi].name)) { cand.push(i); torsoV.push([sk, i, w.clone()]); } }
     const stride = Math.max(1, Math.floor(cand.length / 96)); for (let k = 0; k < cand.length; k += stride) samples.push([sk, cand[k]]); }
-  const CLEAR = 0.035 * (hMax - hMin) / H;   // clearance in pack units
+  const CLEAR = 0.012 * (hMax - hMin) / H;   // clearance in pack units
   let capR = 0; { const ab = headM.clone().sub(hipsM), w = new THREE.Vector3();
     for (const [sk, i] of samples) { sk.getVertexPosition(i, w).applyMatrix4(new THREE.Matrix4().multiplyMatrices(toModel, sk.matrixWorld)); const t = Math.max(0, Math.min(1, w.clone().sub(hipsM).dot(ab) / ab.lengthSq())); capR = Math.max(capR, w.distanceTo(hipsM.clone().addScaledVector(ab, t))); } }
   // Straps: each runs pack top -> back of the shoulder -> over it -> down his chest -> under the arm -> pack bottom. The body points are
@@ -95,7 +95,7 @@ export async function boot({ model, B, rest, st, armMix, mix, springK, body, glb
   const no = why => (lastWhy = why, Promise.resolve({ ok: false, item: holding, why }));
   setInterval(() => { if (job && performance.now() - lastPose > 1500) { const j = job; job = null; lastWhy = 'paused: he is not being drawn'; j.res({ ok: false, item: holding, why: lastWhy }); } }, 500);   // off-screen or a hidden tab: no frames, so no hang
   const api = {
-    get busy() { return !!job; }, get holding() { return holding; }, get pack() { return file === 'pack' ? 'quaternius' : file; }, get clearance() { return { pen: +(maxPen * packW).toFixed(2), push: +(pushS * packW).toFixed(2), shoulderGap: +gapS.toFixed(2) }; },
+    get busy() { return !!job; }, get holding() { return holding; }, get pack() { return file === 'pack' ? 'quaternius' : file; }, get rig() { return rig; }, get clearance() { return { pen: +(maxPen * packW).toFixed(2), push: +(pushS * packW).toFixed(2), shoulderGap: +gapS.toFixed(2) }; },
     take(item) { if (!items[item]) return Promise.reject(new Error('take: book or food'));
       if (job) return no('busy: ' + job.kind + ' ' + job.item);
       if (moving()) return no('refused: ' + movingWhy());
@@ -147,21 +147,30 @@ export async function boot({ model, B, rest, st, armMix, mix, springK, body, glb
       const pos = S.mesh.geometry.attributes.position;
       for (let i = 0; i < SN; i++) { const p = spts[i]; _t.subVectors(spts[Math.min(SN - 1, i + 1)], spts[Math.max(0, i - 1)]).normalize(); axisPoint(p, _n); _n.subVectors(p, _n).normalize(); _b.crossVectors(_t, _n).normalize().multiplyScalar(wid / 2);
         pos.setXYZ(i * 2, p.x + _b.x, p.y + _b.y, p.z + _b.z); pos.setXYZ(i * 2 + 1, p.x - _b.x, p.y - _b.y, p.z - _b.z); }
+      let len = 0; for (let i = 1; i < SN; i++) len += spts[i].distanceTo(spts[i - 1]); rig.strap[S.k === 'L' ? 0 : 1] = len / (torso * ms);
       pos.needsUpdate = true; S.mesh.geometry.computeVertexNormals(); S.mesh.geometry.computeBoundingSphere();
     }
   }
   let gapS = 0;
+  const rig = { gap: 0, lat: 0, strap: [0, 0], swing: 0 };   // self-check numbers, in torso lengths: pack's near face to the chest bone, its sideways offset, each strap's length
   function belowShoulder() {   // the pack's centre never rises above the carrying shoulder (the swing arcs round it, not over it)
     const sh = (hand === 'R' ? B.armL : B.armR).getWorldPosition(_a).y, c = _b.set(0, 0.5, 0).applyMatrix4(pack.matrixWorld), lim = sh - packW * 0.12;
     if (c.y > lim) { _m.makeTranslation(0, lim - c.y, 0); root.matrix.premultiply(_m); root.matrixWorldNeedsUpdate = true; root.updateMatrixWorld(true); c.y = lim; }
     gapS = sh - c.y;
   }
-  function clearBody(dt) {   // push the pack out along its own +z until its near face clears his skin (measured every frame)
-    root.updateMatrixWorld(true); _inv.copy(pack.matrixWorld).invert(); let pen = -1e9;
+  let tiltS = 0;
+  function scan() {   // how far his skin stands behind the pack's near face (+z is behind him), for the pack's top half and bottom half
+    root.updateMatrixWorld(true); _inv.copy(pack.matrixWorld).invert(); let top = -1e9, bot = -1e9;
     for (const [sk, i] of samples) { sk.getVertexPosition(i, _w).applyMatrix4(sk.matrixWorld).applyMatrix4(_inv);
       if (_w.x < box.min.x - CLEAR || _w.x > box.max.x + CLEAR || _w.y < box.min.y || _w.y > box.max.y) continue;
-      pen = Math.max(pen, box.min.z + CLEAR - _w.z); }
-    maxPen = pen; const need = Math.max(0, pen);   // measured on the unpushed placement: the push this frame needs
+      const d = _w.z - (box.min.z - CLEAR); if (_w.y > 0.5) top = Math.max(top, d); else bot = Math.max(bot, d); }   // (it was measured from his front, so the pack hung a body's depth off him)
+    return [top, bot];
+  }
+  function clearBody(dt, hug) {   // lay the pack's near face along his back (tilt), then push it out along its own +z until it clears his skin (measured every frame)
+    const [top, bot] = scan(), tilt = top > -1e8 && bot > -1e8 ? Math.max(-0.3, Math.min(0.3, Math.atan((top - bot) / 0.5))) * hug : 0;   // his back is an egg: flat against it means leaning with it
+    tiltS += (tilt - tiltS) * Math.min(1, dt * 10);
+    if (Math.abs(tiltS) > 1e-3) { root.matrix.multiply(_m.makeTranslation(0, 0.5, box.min.z)).multiply(_m.makeRotationX(tiltS)).multiply(_m.makeTranslation(0, -0.5, -box.min.z)); root.matrixWorldNeedsUpdate = true; }
+    const pen = Math.max(...scan()); maxPen = pen; const need = Math.max(0, pen) * hug;   // the push this frame needs; only on his back (swung round to the front it is clear of him already)
     pushS = need >= pushS ? need : pushS + (need - pushS) * Math.min(1, dt * 10);   // out at once, back in over ~0.2 s (no jitter, no pack left hanging off his back)
     if (pushS > 0) { _g.set(0, 0, 1).transformDirection(pack.matrixWorld); _m.makeTranslation(_g.x * pushS * packW, _g.y * pushS * packW, _g.z * pushS * packW); root.matrix.premultiply(_m); root.matrixWorldNeedsUpdate = true; root.updateMatrixWorld(true); }
   }
@@ -217,12 +226,14 @@ export async function boot({ model, B, rest, st, armMix, mix, springK, body, glb
     // the pack: follow-through on a spring driven by the chest's acceleration (it lags a start, swings past a stop)
     B.chest.getWorldPosition(_p); _p.x += scrollX; _p.y -= scrollY;   // page space: a scroll is not a jolt
     if (lastC) { const v = _v.copy(_p).sub(lastC).divideScalar(Math.max(dt, 1e-3)), acc = _x.copy(v).sub(lastV).divideScalar(Math.max(dt, 1e-3)); lastV.copy(v);
-      const fw = _z.copy(BODY.fwd).applyQuaternion(model.getWorldQuaternion(_q2)), T = Math.max(-0.35, Math.min(0.35, acc.dot(fw) * 0.0005 - acc.y * 0.0002)) * (1 - swingU);
+      const fw = _z.copy(BODY.fwd).applyQuaternion(model.getWorldQuaternion(_q2)), T = Math.max(-0.1, Math.min(0.1, acc.dot(fw) * 0.0005 - acc.y * 0.0002)) * (1 - swingU);
       const [pp, pv, vp, vv] = springK(9, 0.3, dt), p = sway[0] - T, v0 = sway[1]; sway[0] = p * pp + v0 * pv + T; sway[1] = p * vp + v0 * vv; }
     lastC = (lastC || new THREE.Vector3()).copy(_p);
+    sway[0] = Math.max(-0.12, sway[0]);   // a few degrees at most: it rides his back, it never hangs off it
     if (sway[0] > 0) { sway[0] = 0; sway[1] = Math.min(0, sway[1]); }   // the follow-through swings out from his back, never in past it
     swing.rotation.x = sway[0];
-    place(swingU); clearBody(dt); belowShoulder(); buildStraps(swingU, offW);
+    place(swingU); clearBody(dt, 1 - swingU); belowShoulder(); buildStraps(swingU, offW);
+    { const T = torso * model.getWorldScale(_v).x; B.chest.getWorldPosition(_a); _b.set(0, 0.5, box.min.z).applyMatrix4(pack.matrixWorld).sub(_a); rig.gap = _b.length() / T; rig.lat = _b.dot(_c.copy(BODY.left).transformDirection(B.chest.matrixWorld)) / T; rig.swing = swingU; }
     lid.rotation.x = OPEN * flapU;
     for (const n of Object.keys(items)) if (n !== itemName) items[n].visible = false;
     if (itemName) placeItem(itemName, itemU);
