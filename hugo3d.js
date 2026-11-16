@@ -14,6 +14,7 @@ import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 const WHO = new URL(import.meta.url).searchParams.get('being') || 'hugo', ALT = WHO === 'hugo' ? null : window.__beings[WHO];
 const ENV = ALT ? ALT.world : window;
 const O = ALT ? { x: 0, y: 0 } : { get x() { return window.scrollX; }, get y() { return window.scrollY; } };   // page coords = client coords + O (ALT: his realm's own corner, so he scrolls with it wherever it is)
+const PIN = () => !!ALT && !!host && !ROOF;   // ALT on the phone index row: seated where he loaded, acting in place; he roams once the project is opened
 let host = null, ROOF = false;   // ALT: the realm he is in now; ROOF: its top edge is a ceiling (a section), not the ledge he lives on (a list row)
 const docW = () => (ALT ? (host ? host.clientWidth : 0) : document.documentElement.clientWidth), docH = () => (ALT ? (host ? host.clientHeight : 0) : document.documentElement.scrollHeight);
 const CFG = Object.assign({ size: 150, perspective: 900, glb: 'realms/hugo/hugo.glb', viewTilt: 6, speed: 34, stride: 46 }, ENV.HUGO_CONFIG || {});
@@ -321,7 +322,7 @@ function scan() {
   if (bar && !ALT) { const r = bar.getBoundingClientRect(); if (r.height) ink.push(barInk = { l: 0, t: O.y - 400, r: pageW, b: O.y + r.bottom, h: r.bottom, bar: true }); }
   if (od) pass(od, os);
   if (ALT) { const mine = f => f.el === host || host.contains(f.el); floors = floors.filter(mine); seams = seams.filter(mine);   // only his realm's own ledges exist for him
-    if (ROOF && parseFloat(getComputedStyle(host).paddingBottom) >= CFG.size + 6) floors.push({ y: groundY(), x1: 0, x2: docW(), el: host, ground: true, support: true }); }   // and its bottom edge, where that has standing room
+    if (ROOF) floors.push({ y: groundY(), x1: 0, x2: docW(), el: host, ground: true, support: true }); }   // and its bottom edge, where that has standing room
   else floors.push({ y: groundY(), x1: 0, x2: document.documentElement.scrollWidth, el: document.body, ground: true, support: true });   // the page bottom; Read less: the screen's bottom edge (a one-screen room has a solid floor)
   floors.forEach(fit); seams.forEach(fit);   // only ledges with standing room somewhere along them (no climbing into a gap and crawling there)
   floors = floors.filter(f => f.ground || f.name || f.x2 - f.x1 < 2 * HALF_W || [0, 1, 2, 3, 4, 5, 6, 7, 8].some(i => clear(f.x1 + HALF_W + (f.x2 - f.x1 - 2 * HALF_W) * i / 8, f.y, CFG.size + 4)));
@@ -592,7 +593,7 @@ hit.addEventListener('pointerdown', e => {
   const now = performance.now();
   if (st.held) return;
   {                                                // press: pick him up (release lets go)
-    st.held = true; st.dropF = null; st.hop = false; st.goal = null; st.air = false; st.floor = null; st.mode = 'walk'; st.amt = 0; st.vx = st.vy = 0;
+    st.held = true; st.fallTo = null; st.dropF = null; st.hop = false; st.goal = null; st.air = false; st.floor = null; st.mode = 'walk'; st.amt = 0; st.vx = st.vy = 0;
     pointerId = e.pointerId; hit.style.cursor = 'grabbing'; document.body.style.cursor = 'grabbing';
     // He is held where you took him: by the head, the chest, or the legs (then he hangs upside down from your hand).
     st.grip = Math.max(0.3, Math.min(1, (st.y - (e.clientY + O.y)) / CFG.size)); st.flip = false;   // held where you took him, always the right way up
@@ -1052,7 +1053,7 @@ function forage(f) {
 const RUN = {};
 const gestOf = (name, dur, p, extra) => ({ name, t0: t, dur, side: p.side, amp: p.amp, f: 0.75 + 0.6 * (p.speed - 0.8) / 0.45, beh: 1, ...(extra || {}) });
 const feedPull = () => { const R = ENV.REL, h = R && R.needs ? R.needs('dove').hunger : 0; return h > 0.3 && !(R.foods || []).some(it => it.main && it.st !== 'gone') ? 0.3 + 0.9 * h : 0; };   // the bird's hunger, with no meal on the page (REL takes one fresh item at a time)
-const standGest = (name, dur, p, extra) => { if (st.mode === 'sit' && !(extra && extra.sit) && st.floor && !clear(st.x, st.floor.y, CFG.size + 4)) return false; if (st.mode === 'sit' && !(extra && extra.sit)) st.mode = 'idle'; if (st.mode !== 'sit') st.mode = 'idle'; st.amt = 0; st.goal = null; st.idleUntil = t + dur + 0.2; gest = gestOf(name, dur, p, extra); return 'gest'; };
+const standGest = (name, dur, p, extra) => { if (PIN() && st.mode === 'sit') extra = { ...extra, sit: 1 }; if (st.mode === 'sit' && !(extra && extra.sit) && st.floor && !clear(st.x, st.floor.y, CFG.size + 4)) return false; if (st.mode === 'sit' && !(extra && extra.sit)) st.mode = 'idle'; if (st.mode !== 'sit') st.mode = 'idle'; st.amt = 0; st.goal = null; st.idleUntil = t + dur + 0.2; gest = gestOf(name, dur, p, extra); return 'gest'; };
 const sitGest = (name, dur, p) => { if (!st.floor || !sitRoom(st.x, st.floor.y)) return false; st.goal = null; st.mode = 'sit'; st.idleUntil = t + dur + 0.5; st.pendGest = { ...gestOf(name, dur, p), any: false }; return 'gest'; };
 const endX = (f, side) => (side > 0 ? f.x2 - HALF_W - 3 : f.x1 + HALF_W + 3);   // the end of his ledge on that side
 const walkOn = (f, x, p, extra) => { if (!f || !pass(x, f.y, CFG.size + 4)) return false; st.spdK = p.speed * ((extra && extra.run) || 1); goTo(f, x, { auto: 1, ...(extra || {}) }); return 'goal'; };
@@ -1104,7 +1105,7 @@ Object.assign(RUN, {
     const sit = () => { st.dir = p.side; return sitGest('kick', 4 + 4 * p.durK, p); }; if (Math.abs(x - st.x) < 12) return sit(); if (!walkOn(f, x, p)) return false; st.beh.steps = [sit]; return 'goal'; },
   lie_down: p => sitGest('lie', 5 + 5 * p.durK, p),
   nap: p => sitGest('nap', 7 + 6 * p.durK, p),
-  stand_up_slow: p => { if (st.mode !== 'sit') return false; st.mode = 'idle'; st.idleUntil = t + 1.2; st.pendGest = { ...gestOf('stretch', 2.5 + p.durK, p), any: true }; st.beh.until = t + 3 + p.durK; return 'timer'; },
+  stand_up_slow: p => { if (st.mode !== 'sit' || PIN()) return false; st.mode = 'idle'; st.idleUntil = t + 1.2; st.pendGest = { ...gestOf('stretch', 2.5 + p.durK, p), any: true }; st.beh.until = t + 3 + p.durK; return 'timer'; },
   stretch: p => standGest('stretch', 2 + 1.5 * p.durK, p),
   yawn: p => standGest('yawn', 2 + p.durK, p, st.mode === 'sit' ? { sit: 1 } : {}),
   // --- fidgets and small business ---
@@ -1203,7 +1204,7 @@ const HUGO_PLANS = [   // purpose first: a trip has a payoff at its end (the res
   { goal: 'study', purpose: 'go and see the card he read about', when: c => (c.know && c.know.card && headingEl(c.know.card.title) ? 0.9 : 0), pick: c => c.know.card && { el: headingEl(c.know.card.title) }, cite: c => c.know.card && c.know.card.b, steps: ['walk_to', 'point_project', 'look_around'] },
   { goal: 'traverse', purpose: 'up, across and down again', when: c => (c.above && c.n.energy > 0.5 ? 0.35 : 0), steps: ['climb_up', 'sprint_across', 'step_down'] },
 ];
-if (ENV.MORTAL && ENV.MORTAL.repertoire) ENV.MORTAL.ready.then(() => { ENV.MORTAL.repertoire(WHO, NOT ? HUGO_REP.filter(r => !NOT.has(r.id)).map(r => (r.move ? { ...r, u: c => 1.8 * (typeof r.u === 'function' ? r.u(c) : r.u) } : r)) : HUGO_REP); ENV.MORTAL.plans(WHO, NOT ? HUGO_PLANS.filter(p => !p.steps.some(s => NOT.has(s))) : HUGO_PLANS); });
+if (ENV.MORTAL && ENV.MORTAL.repertoire) ENV.MORTAL.ready.then(() => { ENV.MORTAL.repertoire(WHO, NOT ? HUGO_REP.filter(r => !NOT.has(r.id)).map(r => (r.move ? { ...r, u: c => (PIN() ? 0 : 1.8) * (typeof r.u === 'function' ? r.u(c) : r.u) } : r)) : HUGO_REP); ENV.MORTAL.plans(WHO, NOT ? HUGO_PLANS.filter(p => !p.steps.some(s => NOT.has(s))) : HUGO_PLANS); });
 // What the world did: noticed by the kernel (150-300 ms), budgeted, answered by the behaviours above that list the event.
 const notice = (type, x) => ENV.MORTAL && ENV.MORTAL.notice && ENV.MORTAL.notice(WHO, type, x);
 let scrollStopT = 0;
@@ -1238,7 +1239,7 @@ function autonomy(f) {
   const M = ENV.MORTAL; if (!M || !M.next || !M.alive(WHO) || st.relOrder || st.food || st.held || st.dead || st.enter) return;
   if (f && f.screen) { st.edgeSince ??= t; } else st.edgeSince = null;
   // Off camera for a moment while the visitor is not scrolling: back into view (a reflex, not a choice); AI otherwise sleeps off camera
-  if (ALT && phone() && st.away >= 1 && performance.now() - scrolledAt > 300 && !st.air && !['prep', 'climb', 'lane', 'crawl'].includes(st.mode)) { if (st.beh) behEnd(false); gest = null; st.pendGest = null; st.idleUntil = t; if (lost()) return; }   // ALT in the phone sheet: out of frame after a scroll, he drops what he was doing and climbs in over the edge onto a ledge in view (Hugo waits out his dwell and 4 s first)
+  if (ALT && ROOF && phone() && st.away >= 1 && performance.now() - scrolledAt > 300 && !st.air && !['prep', 'climb', 'lane', 'crawl'].includes(st.mode)) { if (st.beh) behEnd(false); gest = null; st.pendGest = null; st.idleUntil = t; if (lost()) return; }   // ALT in the phone sheet: out of frame after a scroll, he drops what he was doing and climbs in over the edge onto a ledge in view (Hugo waits out his dwell and 4 s first)
   if (st.away >= 1.5 && performance.now() - scrolledAt > 400 && !['prep', 'climb', 'lane', 'crawl'].includes(st.mode) && !(st.toView && (st.goal || (st.route && st.route.length)))) { if (st.beh) behEnd(false); comeBack(); return; }
   const B = st.beh;
   if (B) {   // something under way
@@ -1307,10 +1308,10 @@ function born() {   // first appearance (patch 5, item 0): an entrance, never a 
     if (!c.length) { if (bornTries > 6 && climbIn()) { st.bornOnce = true; st.lostN = 0; ENV.MORTAL?.signal?.(WHO, 'BODY_READY', { x: st.x, y: st.y, side: 0, dur: 1.2 }); return true; } return false; }   // no ledge to walk in on: in over the bottom edge (enters the frame; not a loss); else he tries again next frame
     tgt = c[(Math.random() * c.length) | 0];
   }
-  const side = tgt.x < O.x + innerWidth / 2 ? -1 : 1, x0 = side < 0 ? O.x - HALF_W * 1.6 : O.x + innerWidth + HALF_W * 1.6;   // from the nearer side, fully off-screen
-  st.enter = { f: tgt.f, x: tgt.x, x0, t0: t, dur: 1.2 + Math.random() * 0.3, sit };
-  st.floor = tgt.f; st.x = x0; st.y = footY(tgt.f, tgt.x); st.dir = -side; st.mode = 'walk'; st.amt = 0; st.ph = Math.random(); st.bornOnce = true;
-  ENV.MORTAL?.signal?.(WHO, 'BODY_READY', { x: tgt.x, y: st.y, side, dur: st.enter.dur });   // the dove's cue: he is coming in from this side, on this line
+  // He drops in from above the view onto his spot and lands with his own squash (the owner: no running in from empty space).
+  const ty = footY(tgt.f, tgt.x); st.fallTo = { f: tgt.f, sit };
+  st.floor = null; st.air = true; st.hop = false; st.x = tgt.x; st.y = Math.min(O.y - 8, ty - CFG.size * 2); st.vx = 0; st.vy = 0; st.dir = tgt.x < O.x + innerWidth / 2 ? 1 : -1; st.mode = 'walk'; st.amt = 0; st.ph = Math.random(); st.bornOnce = true;
+  ENV.MORTAL?.signal?.(WHO, 'BODY_READY', { x: tgt.x, y: ty, side: 0, dur: 0.7 });   // the dove's cue: he is coming down here
   if (returning) st.pendGest = { name: 'wave', dur: 2.4, side: 1, amp: 1, any: true };
   return true;
 }
@@ -1359,17 +1360,19 @@ function stepBody(dt) {
     swingLimbs(dt, (st.vx - lastVx) / dt, (st.vy - lastVy) / dt + G, 0.7); lastVx = st.vx; lastVy = st.vy;
     st.tilt += ((st.vx * 0.0005) - st.tilt) * Math.min(1, dt * 4);
     let f = landingBelow(st.x, py - 1, !st.hop && !st.pounce);
+    if (st.fallTo) f = st.fallTo.f;   // his birth: nothing on the way catches him
     if (st.dropF && (!f || f.y > st.dropF.y)) f = st.dropF;   // the ledge he chose to step down to catches him
     const E = O.y + innerHeight - 30;   // the screen's bottom edge catches him only when he falls through it from above: a view that moved up past him never snaps him up onto it
     if (!ALT && py <= E && st.y > E && (!f || f.y > E)) f = { y: E, x1: 0, x2: pageW, el: document.body, screen: true, support: true };
     st.landF = f;   // where his shadow falls while he is up
     const ly = f ? footY(f, st.x) : 0;   // where his feet land: the letter tops under him on a text ledge
-    if (f && st.y >= ly && st.vy > 0) { if (f === st.dropF) st.x = Math.max(f.x1 + HALF_W, Math.min(f.x2 - HALF_W, st.x)); st.dropF = null; st.y = footY(f, st.x); st.floor = f; st.air = false; st.squash = Math.max(0.4, Math.min(1, st.vy / 600)); st.sqAt = t; if (st.vy > 420) kickDust(st.x, st.y, 3 + Math.round(5 * Math.min(1, (st.vy - 420) / 600))); st.vy = 0; st.vx = 0; st.land = 0.23; st.hop = false; st.mode = 'walk'; st.tilt = 0;   // land: a squash (x1.3, y0.7) recovering in ~0.23 s (Celeste's 1.75/s)
+    if (f && st.y >= ly && st.vy > 0) { const born = st.fallTo; st.fallTo = null; if (f === st.dropF) st.x = Math.max(f.x1 + HALF_W, Math.min(f.x2 - HALF_W, st.x)); st.dropF = null; st.y = footY(f, st.x); st.floor = f; st.air = false; st.squash = Math.max(0.4, Math.min(1, st.vy / 600)); st.sqAt = t; if (st.vy > 420) kickDust(st.x, st.y, 3 + Math.round(5 * Math.min(1, (st.vy - 420) / 600))); st.vy = 0; st.vx = 0; st.land = 0.23; st.hop = false; st.mode = 'walk'; st.tilt = 0;   // land: a squash (x1.3, y0.7) recovering in ~0.23 s (Celeste's 1.75/s)
       if (st.pounce) { ENV.REL?.ev(WHO, 'pounceLand', 'dove', 0, { x: st.x, y: st.y }); st.pounce = null; relEnd('ok'); st.mode = 'idle'; st.idleUntil = t + 0.8; }
       else if (gest && gest.rel) st.mode = 'idle';
       if ((st.shaken || 0) > 0.35) { ENV.REL?.ev(WHO, 'fell', null, Math.min(0.8, st.shaken), { x: st.x, y: st.y }); poke('landed hard'); }
       if ((st.shaken || 0) > 0.35) { st.mode = 'idle'; st.idleUntil = t + 2.5 + st.shaken * 5; gest = { name: st.shaken > 0.65 ? 'breathe' : pickOf(['dust', 'breathe', 'look']), t0: t, dur: 2.5 + st.shaken * 5, side: Math.random() < 0.5 ? -1 : 1, amp: 0.7 + st.shaken * 0.5, f: 1 }; }
-      st.shaken = 0; st.stress = (st.stress || 0) * 0.5; for (const L of Object.values(limbs)) { L[0] = 0; L[1] = 0; } }
+      st.shaken = 0; st.stress = (st.stress || 0) * 0.5; for (const L of Object.values(limbs)) { L[0] = 0; L[1] = 0; }
+      if (born) { const sit = born.sit && sitRoom(st.x, f.y); st.mode = sit ? 'sit' : 'idle'; st.idleUntil = t + (sit ? 5 + Math.random() * 6 : 0.8 + Math.random() * 0.8); ENV.MORTAL?.signal?.(WHO, 'ENTERED', { x: st.x, y: st.y, sit }); } }
     else if (st.y > docH() + (ALT ? CFG.size : 400)) { if (ALT) st.bornOnce = false; st.air = false; st.floor = null; st.pounce = null; relEnd('interrupted'); }   // fell off the world: born again
     return;
   }
@@ -1573,6 +1576,7 @@ function frame(now) {
     }
   }
   if (st.dead && st.floor && !st.held && !st.air && st.mode !== 'climb') { st.goal = null; st.amt = 0; st.idleUntil = t + 1; st.mode = sitRoom(st.x, st.floor.y) ? 'sit' : 'idle'; }   // he can still fall or be carried
+  if (PIN() && st.bornOnce && st.floor && !st.held && !st.air && (st.mode !== 'sit' || st.goal)) { st.goal = null; st.route = null; st.prep = null; st.amt = 0; st.mode = 'sit'; }
   if (!reduced) { for (let r = dt; r > 1e-6; r -= 0.05) step(Math.min(0.05, r)); } else st.mode = 'idle';
   st.land = Math.max(0, (st.land || 0) - dt);
   if (st.air && !st.wasAir) st.airAt = t; if (!st.air && st.wasAir && st.floor) st.landT = 0.35; st.wasAir = st.air;   // takeoff and touchdown moments: the stretch and the follow-through hang off them
