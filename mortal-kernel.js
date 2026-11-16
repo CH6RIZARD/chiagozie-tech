@@ -357,15 +357,17 @@
     const B = beings[who], w = B && B.wonder; if (!w || B.looking || !B.alive) return null;
     B.looking = w; B.asked.add(w.key); B.lookAt = Date.now(); B.wonder = null;
     const R = rep(who); R.trace.push({ t: +(now() / 1000).toFixed(2), id: 'lookup', cat: 'learn', b: '-', topic: w.topic || w.kind, look: 1 });
-    let got = [];
+    const tell = (phase, x) => { if (DOM && typeof CustomEvent === 'function') G.dispatchEvent(new CustomEvent('mortal:lookup', { detail: { who, phase, topic: w.topic || w.kind, ...x } })); };   // readtag.js shows Hugo's reads
+    let got = [], summary = null; tell('start');
     try {
       let srv = null;
       if (SRV.up && (w.kind === 'wiki' || w.kind === 'gh') && B.net < NET.max) {   // its own kind it reads in full itself (the service has the summary only), then shares
         B.net++; NET.log.push({ who, host: 'belief-service', at: Date.now() });
-        const j = await api('/lookup', { being: who, topic: w.kind === 'gh' ? 'github' : w.topic }); srv = j && (Array.isArray(j) ? j : j.beliefs || j.facts);
+        const j = await api('/lookup', { being: who, topic: w.kind === 'gh' ? 'github' : w.topic }); srv = j && (Array.isArray(j) ? j : j.beliefs || j.facts); summary = j && typeof j.summary === 'string' ? j.summary : null;   // the service's LLM gist, when it made one
         if (srv) srv = srv.map(f => fromSrv(f, w.key)).filter(Boolean); if (srv && srv[0] && Array.isArray(j.candidates)) srv[0].related = [...(srv[0].related || []), ...j.candidates]; }   // candidates: new topics the service suggests
       got = srv && srv.length ? srv.map(f => ({ ...f, shared: 1 })) : (await LOOK[w.kind](B, w.topic)) || [];
     } catch (e) { got = []; if (!B.asked.has('retry:' + w.key)) { B.asked.delete(w.key); B.asked.add('retry:' + w.key); } if (DEBUG) console.warn('lookup failed', w.key, String(e)); } finally { B.looking = null; }   // a timeout or a dropped connection: it may wonder once more later (the fetch cap still holds)
+    tell('end', { summary: got.length && got[0].shared ? summary : null, n: got.length });
     if (beings[who] !== B || !B.alive) return null;   // it died while it read
     const bs = got.map(f => believe(who, { ...f, from: w.key, kind: w.kind, topic: w.topic || w.kind }, !!f.shared)).filter(Boolean);
     grow(B, w, got);
@@ -618,6 +620,8 @@
     kill: (who, cause) => die(who, cause || 'debug'),
     lifespan(who, s) { const B = beings[who]; if (B) { B.deathAt = Date.now() + s * 1000; stash(KEY(who), JSON.stringify({ id: B.id, born: B.born, seal: seal(B.id, B.deathAt) })); } },
     fetchNow: () => { NET.after = 0; NET.gap = 0; },
+    look(who, topic) { const B = beings[who]; if (!B) return null; NET.after = 0; NET.gap = 0; B.net = 0; B.looking = null;   // force one real lookup (readtag harness)
+      B.wonder = topic === 'github' ? { key: 'gh', kind: 'gh', topic: null, s: 1 } : { key: 'w:' + topic.toLowerCase(), kind: 'wiki', topic, s: 1 }; return lookup(who); },
   };
   G.MORTAL = MORTAL;
   ready = (async () => {
