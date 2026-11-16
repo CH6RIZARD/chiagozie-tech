@@ -67,6 +67,7 @@
   };
 })();
 </script>
+<script src="../../mortal-kernel.js?v=20261115s1v"></script>
 </head>
 <body>
 <div id="hud"></div>
@@ -783,8 +784,8 @@ loadTHREE(function(){
     location.hash='';
   }
   // Served locally (127.0.0.1 / localhost): connect to the Mortal Agent Frame's dorm body (mortal_agent
-  // adapters/mujoco_dorm/body.py --serve, :8775) unless a wss:// hash says otherwise. Unreachable or public: replay a
-  // recorded run of that same simulation (dorm-replay.json), labelled as a recording.
+  // adapters/mujoco_dorm/body.py --serve, :8775) unless a wss:// hash says otherwise. Unreachable or public: recorded
+  // clips of that same simulation (dorm-clips.json), sequenced by his kernel and labelled as recorded.
   const _mjLocal=/^(127\.0\.0\.1|localhost)$/.test(location.hostname);
   let MUJOCO_URL = _hashUrl.startsWith('wss://') ? _hashUrl
     : _mjLocal ? 'ws://127.0.0.1:8775' : (localStorage.getItem('mjURL')||'');
@@ -887,21 +888,74 @@ loadTHREE(function(){
   const mjCaption=(d,head)=>{mjCap.style.display='block';
     mjCap.textContent=head+(d&&d.act?` · ${d.act.replace(/_/g,' ')}`:'')+(d&&d.why&&d.why!=='idle'&&d.why!==d.act?` (${d.why.replace(/ x\d\.\d+/,'')})`:'')+
     (d&&/wander|go_home/.test(d.act||'')?' · his walk is still a slow balance shuffle (~1 cm/s); a real gait is not built yet':'');};
-  let _rp=null;   // {frames, i, timer, head}
+  // No live server (every public visit): his Mortal kernel (mortal-kernel.js, the page mascots' kernel) picks what he does
+  // next, and the body plays that behaviour's clip: real MuJoCo motion of the dorm body, recorded by dorm_clips.py and cut at
+  // each command. A clip starts where he stands (rigid shift + turn of the whole clip; the floor is the same everywhere),
+  // joints cross-fade over 0.4 s, and the shift of a clip tied to a place (a turn, the bed) eases out at 0.5 cm/s.
+  let _rp=null;   // {timer}
   function mjReplay(){
     if(_rp||(_mj&&_mj.readyState===1))return;
-    _rp={frames:null,i:0,timer:null};
-    fetch('dorm-replay.json').then(r=>r.ok?r.json():Promise.reject(r.status)).then(j=>{
+    _rp={timer:null};
+    Promise.all([fetch('dorm-clips.json?v=20261116a').then(r=>r.ok?r.json():Promise.reject(r.status)),
+      window.MORTAL?MORTAL.ready:Promise.reject('no kernel')]).then(([j])=>{
       if(!_rp)return;
-      const m=j.meta;_rp.frames=j.frames;
-      _rp.head=`RECORDED RUN of the real MuJoCo ${m.mujoco} sim (Mortal Agent Frame dorm body, ${m.recorded}, ${m.seconds} s, looped)`;
-      HugoAgent.state.physicsMode='mujoco-replay';setPhysicsBadge(true,'▶ PHYSICS: MUJOCO (RECORDED RUN)');
-      _rp.timer=setInterval(()=>{const f=_rp.frames[_rp.i++%_rp.frames.length];_mjReady=true;_mjData=f;applyMjDataToHugo(f);
-        if(_rp.i%15===0)mjCaption(f,_rp.head);},1000/(m.fps||30));
-    }).catch(e=>{console.warn('[MuJoCo] replay unavailable',e);_rp=null;setPhysicsBadge(false);});}
+      const m=j.meta,JN=m.row.slice(2,12),BN=m.row.slice(12,22),FPS=30,QUATS=[3,...BN.map((_,q)=>17+4*q)];
+      const head=`RECORDED CLIPS of the real MuJoCo ${m.mujoco} sim (Mortal Agent Frame dorm body, ${m.recorded}); his Mortal kernel picks what comes next, live`;
+      const S={node:'H',energy:1,clip:null,i:0,n:0,last:null,from:null,off:[0,0,0],blend:1,keep:false,act:'',why:''};
+      const D=window.__dorm={n:0,log:[]};   // what he did, for dorm_probe.py
+      const yawOf=r=>Math.atan2(2*(r[3]*r[6]+r[4]*r[5]),1-2*(r[5]*r[5]+r[6]*r[6])),wrap=a=>Math.atan2(Math.sin(a),Math.cos(a));
+      const inPlace=c=>c.from==='H'&&c.to==='H';   // standing gestures: the same anywhere he stands
+      const clipFor=id=>j.clips.find(c=>c.id===id&&(c.from===S.node||(inPlace(c)&&S.node!=='B')));
+      const sit0=j.clips.find(c=>c.id==='sit').frames[0];
+      const B=(id,cat,again,u,words)=>({id,cat,again,words,dur:j.clips.find(c=>c.id===id).frames.length/m.fps,u:c=>clipFor(id)?u(c):0});
+      // utilities as in the frame's dorm repertoire (mortal_agent adapters/mujoco_dorm/body.py); energy is the work his joints did in each clip
+      MORTAL.repertoire('hugo',[
+        B('stand_still','rest',1,c=>.25),
+        B('reach_left','gesture',40,c=>.3),B('reach_right','gesture',40,c=>.3),
+        B('stretch','gesture',50,c=>.25+.3*c.tired,['stretch','morning','~sun']),
+        B('look_left','look',70,c=>.45,['window','curious']),B('look_right','look',70,c=>.45,['window','curious']),
+        B('look_far_left','look',90,c=>.4,['window','curious']),B('look_far_right','look',90,c=>.4,['window','curious']),
+        B('listen_at_door','look',90,c=>.3,['door','visitor','friend']),
+        B('face_room','return',1,c=>.5),
+        B('wander','move',120,c=>.5*c.energy,['explore','walk','room']),
+        B('go_home','return',1,c=>.6),
+        B('sit','bed',45,c=>0,['tired','sleep','rest','bed','~night','~rain']),   // a step of the plan below
+        B('rest','bed',1,c=>.6+.4*c.tired,['sleep','tired','~night','~rain']),
+        B('stand_up','move',1,c=>.3+.5*c.energy)]);
+      MORTAL.plans('hugo',[{goal:'sit on the bed',purpose:'rest his legs',steps:['sit','rest','stand_up'],
+        when:c=>clipFor('sit')&&c.sitOk?.3+.7*c.tired:0}]);   // only where the bed is under him
+      function pick(){
+        const l=S.last,now=performance.now();
+        if(S.clip){MORTAL.ended('hugo',true);S.energy=Math.min(1,Math.max(0,S.energy+S.clip.de));if(!inPlace(S.clip))S.node=S.clip.to;D.log[D.log.length-1].t1=now;}
+        const a=MORTAL.next('hugo',{node:S.node,seated:S.node==='B',energy:S.energy,tired:1-S.energy,
+          sitOk:!l||(Math.hypot(l[0]-sit0[0],l[1]-sit0[1])<.06&&Math.abs(wrap(yawOf(l)-yawOf(sit0)))<.2)});   // the frame's rule: within 12 cm of home
+        S.act=a?a.id:S.node==='B'?'rest':'stand_still';   // the kernel had nothing: he stays as he is (dorm_probe.py fails on this)
+        S.why=!a?'':a.plan?a.plan.purpose:a.reason.includes(' ← ')?'because '+a.reason.split(' ← ')[1]:'';
+        const c=S.clip=clipFor(S.act),f=c.frames[0];S.i=0;S.keep=inPlace(c);S.from=l;S.blend=l?0:1;
+        S.off=l?[l[0]-f[0],l[1]-f[1],wrap(yawOf(l)-yawOf(f))]:[0,0,0];
+        D.log.push({t0:now,id:S.act,node:S.node,by:a?'kernel':'idle',energy:+S.energy.toFixed(3)});if(D.log.length>400)D.log.shift();}
+      _rp.timer=setInterval(()=>{
+        if(!hugoRoot||!_mjBoneMap)return;   // no body to move yet
+        if(!S.clip||S.i>S.clip.frames.length-1)pick();
+        const F=S.clip.frames,i0=Math.floor(S.i),fa=F[i0],fb=F[Math.min(i0+1,F.length-1)],k=S.i-i0,c0=F[0];
+        const r=fa.map((v,n)=>v+(fb[n]-v)*k);   // 15 Hz rows, played at 30
+        const [ox,oy,oa]=S.off,cs=Math.cos(oa),sn=Math.sin(oa),dx=r[0]-c0[0],dy=r[1]-c0[1],hw=Math.cos(oa/2),hz=Math.sin(oa/2),[w,x,y,z]=r.slice(3,7);
+        r[0]=c0[0]+dx*cs-dy*sn+ox;r[1]=c0[1]+dx*sn+dy*cs+oy;
+        r[3]=hw*w-hz*z;r[4]=hw*x-hz*y;r[5]=hw*y+hz*x;r[6]=hw*z+hz*w;
+        if(!S.keep){const q=Math.max(0,1-.005/FPS/(Math.hypot(ox,oy)||1));S.off=[ox*q,oy*q,oa-Math.sign(oa)*Math.min(Math.abs(oa),.01/FPS)];}
+        if(S.blend<1){S.blend=Math.min(1,S.blend+1/12);const t=S.blend*S.blend*(3-2*S.blend),p=S.from;
+          for(const g of QUATS)if(p[g]*r[g]+p[g+1]*r[g+1]+p[g+2]*r[g+2]+p[g+3]*r[g+3]<0)for(let n=g;n<g+4;n++)p[n]=-p[n];
+          for(let n=2;n<r.length;n++)r[n]=p[n]+(r[n]-p[n])*t;}
+        S.last=r;S.i+=m.fps/FPS;D.n=++S.n;
+        const d={pos:r.slice(0,3),quat:r.slice(3,7),bones:{},feel:{chest:r[57],head:r[58],head_yaw:r[59]},act:S.act,why:S.why};
+        JN.forEach((n,q)=>d[n]=r[7+q]);BN.forEach((n,q)=>d.bones[n]=r.slice(17+4*q,21+4*q));
+        _mjReady=true;_mjData=d;applyMjDataToHugo(d);
+        if(S.n%15===0)mjCaption(d,head);},1000/FPS);
+      HugoAgent.state.physicsMode='mujoco-replay';setPhysicsBadge(true,'▶ PHYSICS: MUJOCO (RECORDED CLIPS)');
+    }).catch(e=>{console.warn('[MuJoCo] clips unavailable',e);_rp=null;setPhysicsBadge(false);});}
   function mjStopReplay(){if(_rp){clearInterval(_rp.timer);_rp=null;}}
   function mjConnect(){
-    if(_rp)return;   // the recording is playing (no live server answered); a dev server started later takes over on reload
+    if(_rp)return;   // the clips are playing (no live server answered); a dev server started later takes over on reload
     if(!MUJOCO_URL){
       mjReplay();
       return;}
@@ -932,7 +986,7 @@ loadTHREE(function(){
         HugoAgent.state.physicsMode='procedural';
         setPhysicsBadge(false);
         _mjRetry++;
-        if(_mjRetry>=2){mjReplay();return;}   // no live server: show the recorded run instead of a procedural gait
+        if(_mjRetry>=2){mjReplay();return;}   // no live server: the recorded clips instead of a procedural gait
         const delay=Math.min(5000,500*_mjRetry);
         setTimeout(mjConnect,delay);
         if(_mjRetry===1)show(`MuJoCo disconnected — retrying`);};}
