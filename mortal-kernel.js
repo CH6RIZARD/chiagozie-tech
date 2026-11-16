@@ -495,6 +495,32 @@
     R.trace.push({ t: +t.toFixed(2), id: d.id, cat: d.cat, b: p.b, plan: planned ? R.plan.def.goal : null, ev: R.cur.ev, ...(because ? { bel: because } : {}) }); if (R.trace.length > 600) R.trace.shift();
     return { id: d.id, cat: d.cat, p, reason: why(who), ev: R.cur.ev, plan: planned ? R.plan.def : null, step: planned ? R.plan.i : -1, x: ev ? ev.x : undefined, belief: bel };
   }
+  // The fleet's mind (patch 7): while a Void fleet node polls the relay (a Cloudflare Worker; the node's local model, hugo-mind.py's
+  // prompt), it is asked what the being does next. Never waited for: the kernel's own pick starts at once, and the mind's answer is
+  // taken at the next free choice if it is still something the body could do then (an id outside the repertoire is dropped). Sent:
+  // the being, the ids it could do, what it just did, the section it is on, its pressure. Nothing about the visitor. Public origins
+  // only (the relay's CORS admits no other); localhost keeps its own minds (bond.js HUGO_MIND, the dove's agentUrl).
+  const MIND = { url: G.MORTAL_RELAY || (DOM && /^(chiagozie\.tech|ch6rizard\.github\.io)$/.test(location.hostname) ? 'https://agent-relay.daniel4chigs.workers.dev' : ''),
+    up: false, at: -1e9, busy: false, askAt: {}, life: Math.random().toString(36).slice(2, 10), hint: {}, asked: 0, got: 0, used: 0 };
+  const MID = /^[\w:.-]{1,40}$/;   // the relay's id shape
+  // a string body goes as text/plain: a simple request, no CORS preflight
+  const mfetch = (path, body, ms) => fetch(MIND.url + path, { method: body ? 'POST' : 'GET', credentials: 'omit', referrerPolicy: 'no-referrer', mode: 'cors', body: body ? JSON.stringify(body) : undefined, signal: AbortSignal.timeout ? AbortSignal.timeout(ms) : undefined });
+  async function mindUp() {   // is a node there? asked once, then every 30 s while the page is visible
+    if (now() - MIND.at < 30000 || (DOM && document.hidden)) return; MIND.at = now();
+    try { const r = await mfetch('/health', null, 4000); MIND.up = r.ok && !!(await r.json()).up; } catch (e) { MIND.up = false; }
+  }
+  async function mindAsk(who, R, opts) {   // opts: the defs it could start now, best first, without the one the kernel just began
+    if (!MIND.url || typeof fetch !== 'function') return;
+    mindUp(); const B = beings[who]; opts = opts.filter(d => MID.test(d.id)).slice(0, 12);
+    if (!MIND.up || MIND.busy || opts.length < 2 || now() - (MIND.askAt[who] || -1e9) < 10000 || Date.now() - scrollAt < 400) return;
+    MIND.busy = true; MIND.askAt[who] = now(); MIND.asked++;
+    try {
+      const r = await mfetch('/decide', { who, life: MIND.life, options: opts.map(d => ({ id: d.id, cat: MID.test(d.cat) ? d.cat : '' })),
+        now: { just_did: R.trace.slice(-5).map(e => e.id), on: B.section ? B.section.slice(0, 60) : null, pressure: +(B.p || 0).toFixed(2), alive_for_s: Math.round(B.dt) } }, 9000);
+      const a = r.ok ? await r.json() : null;
+      if (a && typeof a.act === 'string' && R.defs.has(a.act)) { MIND.got++; MIND.hint[who] = { id: a.act, until: now() + 30000 }; }   // only what this body registered
+    } catch (e) { /* slow or gone: the kernel decides */ } finally { MIND.busy = false; }
+  }
   // The next thing to start, or null (carry on). ctx: whatever the body's utilities read (needs, pointer, edge, edgeFor, ...).
   function next(who, ctx) {
     const B = beings[who], R = rep(who); if (!R || !B || !B.alive) return null;
@@ -525,7 +551,11 @@
     c.sort((a, b) => b[0] - a[0]); const top = c.slice(0, TOP), sum = top.reduce((n, x) => n + x[0], 0);
     let r = u01() * sum, pick = top[top.length - 1]; for (const x of top) { r -= x[0]; if (r <= 0) { pick = x; break; } }
     if (ev) R.ev = R.ev.filter(e => e !== ev);
+    const h = MIND.hint[who], hx = h && now() < h.until && c.find(x => !x[2] && x[1].id === h.id);   // the fleet mind's wish, if the body can do it now
+    if (h && (hx || now() >= h.until)) delete MIND.hint[who]; if (hx) { pick = hx; MIND.used++; }
     const [, d, kind] = pick;
+    if (!kind) mindAsk(who, R, c.filter(x => !x[2] && x[1] !== d).map(x => x[1]));
+    if (hx) { const o = begin(who, R, d, null, t, false, answers(d, ev) ? ev : null, ctx); R.trace[R.trace.length - 1].mind = 'relay'; return o; }
     if (kind === 'plan') { R.last.set('plan:' + d.goal, t); R.lastCat.set(d.goal, t); R.seen.add('plan:' + d.goal); const bel = d.cite ? d.cite(ctx) : null; if (bel) B.studied.add(bel.key); R.plan = { def: d, i: 0, bel }; return next(who, ctx); }
     return begin(who, R, d, null, t, false, answers(d, ev) ? ev : null, ctx);
   }
@@ -579,6 +609,7 @@
     get looks() { return LOOKS.slice(); },
     get said() { return [...SAID]; },
     service: SRV,   // { api, up, fails }
+    mind: MIND,   // the fleet's mind through the relay: { url, up, asked, got, used }
     grown: who => (beings[who] ? beings[who].grow.slice() : []),
     get fetches() { return { used: NET.log.length, max: NET.max, log: NET.log.slice(), hugo: beings.hugo ? beings.hugo.net : 0, dove: beings.dove ? beings.dove.net : 0 }; },
     NET,
