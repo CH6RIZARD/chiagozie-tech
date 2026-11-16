@@ -1,7 +1,7 @@
 // Hugo's read tag: while he reads for a real lookup (the kernel's 'mortal:lookup' start), "(web fetch)" sits beside his head;
 // when the result lands with the belief service's LLM gist (2-5 words), that replaces it, holds ~3 s and rolls out. No gist: the
 // tag just goes. Text only (no bubble, owner 2026-11-15), Hugo only (the dove reads silently, the Void mascot never looks things up).
-// Style: ?tag=N or <html data-tag="N">, N = 1..6. A style is one function (el, text, phase 'in'|'out', k 0..1); only 1 is drawn yet.
+// Style: ?tag=N or <html data-tag="N">. A style is one function (el, text, phase 'in'|'out', k 0..1); 1 and 10 are drawn, 10 is the default.
 (() => {
   const GLYPHS = 'abcdefghijklmnopqrstuvwxyz0123456789#%&*+=/<>_';
   const rnd = () => GLYPHS[(Math.random() * GLYPHS.length) | 0];
@@ -22,9 +22,42 @@
     el.style.textShadow = e ? `${-1.5 * e}px 0 rgba(255,0,80,${0.7 * e}), ${1.5 * e}px 0 rgba(0,200,255,${0.7 * e}), ${SHADOW}` : SHADOW;
     el.style.translate = e ? `${Math.round((Math.random() - 0.5) * 2 * e)}px 0` : '';
   }
-  const STYLES = { 1: scramble };   // shortcut: 2-6 map to 1 until the owner picks; add STYLES[n] = fn to draw one
-  const pick = +(new URLSearchParams(location.search).get('tag') || document.documentElement.dataset.tag || 1);
-  const STYLE = STYLES[pick] || STYLES[1];
+  // 10: pixel dust, static tune-in (owner's pick 2026-11-16, tile 10 of the Claude Design sheet "Hugo Tag Animations"). The text is
+  // sampled onto a 2 px dot grid; no dot moves: each flickers in place like TV static, more often as k rises, and holds at its own
+  // moment. At k = 1 the real text takes over. Out is the same run backwards.
+  const dust = document.createElement('canvas'), dctx = dust.getContext('2d'), CELL = 2;
+  Object.assign(dust.style, { position: 'absolute', left: 0, top: 0, pointerEvents: 'none' });
+  let dots = null, dotsFor = '';
+  function sample(el, text) {
+    const cs = getComputedStyle(el), w = el.offsetWidth, h = el.offsetHeight, m = document.createElement('canvas'), c = m.getContext('2d', { willReadFrequently: true });
+    m.width = w; m.height = h; c.font = cs.font; c.letterSpacing = cs.letterSpacing; c.textBaseline = 'middle'; c.fillText(text, 0, h / 2 + 0.5);
+    const px = c.getImageData(0, 0, w, h).data; dots = [];
+    for (let y = 0; y < h; y += CELL) for (let x = 0; x < w; x += CELL) {
+      let a = 0; for (let j = 0; j < CELL; j++) for (let i = 0; i < CELL; i++) if (x + i < w && y + j < h) a += px[((y + j) * w + x + i) * 4 + 3];
+      if (a > 150) dots.push({ x, y, r: Math.random() });   // r: when this dot holds
+    }
+    const d = devicePixelRatio || 1; dust.width = w * d; dust.height = h * d; dust.style.width = w + 'px'; dust.style.height = h + 'px'; dctx.setTransform(d, 0, 0, d, 0, 0);
+    dctx.fillStyle = cs.color; dotsFor = text;
+  }
+  function tune(el, text, phase, k) {
+    if (phase === 'out') k = 1 - k;
+    if (el.firstChild?.nodeValue !== text) el.textContent = text;
+    el.style.translate = '';
+    if (k >= 1) { el.style.color = 'var(--muted)'; el.style.textShadow = SHADOW; dust.remove(); return; }
+    if (dotsFor !== text) { el.style.color = 'var(--muted)'; sample(el, text); }   // reads his text colour, so before it goes transparent
+    el.style.color = 'transparent'; el.style.textShadow = 'none';   // the text keeps its room (placement reads its width); only the dots show
+    if (dust.parentNode !== el) el.append(dust);
+    dctx.clearRect(0, 0, dust.width, dust.height);
+    const p = 0.1 + 0.55 * k;   // how often an unheld dot is lit this frame
+    for (const o of dots) {
+      const held = k >= 0.3 + 0.65 * o.r;
+      if (!held && Math.random() > p) continue;
+      dctx.globalAlpha = held ? 1 : 0.6; dctx.fillRect(o.x, o.y, 1.5, 1.5);
+    }
+  }
+  const STYLES = { 1: scramble, 10: tune };   // other numbers fall back to 10; add STYLES[n] = fn to draw one
+  const pick = +(new URLSearchParams(location.search).get('tag') || document.documentElement.dataset.tag || 10);
+  const STYLE = STYLES[pick] || STYLES[10];
   const still = matchMedia('(prefers-reduced-motion: reduce)');
   const IN = 0.75, HOLD = 3, OUT = 0.55, MIN_TAG = 0.9;   // seconds
 
@@ -74,7 +107,7 @@
   }
   addEventListener('mortal:lookup', e => {
     const d = e.detail || {}; if (d.who !== 'hugo') return;
-    if (d.phase === 'start') { cur = { kind: 'tag', t0: now() }; pend = null; el.style.transition = 'none'; el.style.opacity = 0; el.textContent = '(web fetch)'; place(); el.offsetWidth; el.style.transition = 'opacity .2s'; }
+    if (d.phase === 'start') { cur = { kind: 'tag', t0: now() }; pend = null; dust.remove(); el.style.color = 'var(--muted)'; el.style.textShadow = SHADOW; el.style.transition = 'none'; el.style.opacity = 0; el.textContent = '(web fetch)'; place(); el.offsetWidth; el.style.transition = 'opacity .2s'; }
     else if (d.phase === 'end' && cur && cur.kind === 'tag') pend = { summary: valid(d.summary) };
     if (cur && !raf) raf = requestAnimationFrame(frame);
   });
