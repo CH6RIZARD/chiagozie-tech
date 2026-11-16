@@ -36,6 +36,7 @@ export function bootRope({ st, armMix, handGrip, pack, hand, moving, setHolding,
     if (R.ph === 'stow') {   // the coil is in his hand: into the pack, where it is seen
       svg.style.display = 'none';
       if (pack.holding !== 'rope' && !pack.busy) return finish();
+      if (!drawn) { if (pack.holding === 'rope') pack.stow(); return finish(); }   // scrolled out of sight mid-stow: put away unseen, so he is free to come back (it waited here up to 40 s)
       if (drawn && !R.stowing) { R.stowing = true; pack.stow().then(() => { if (R && R.ph === 'stow') { if (pack.holding === 'rope') R.stowing = false; else finish(); } }); }
       return;
     }

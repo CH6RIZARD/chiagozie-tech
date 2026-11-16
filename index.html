@@ -24,10 +24,10 @@ try { if (localStorage.getItem('theme') === 'light') document.documentElement.da
 <link rel="preload" as="script" href="bond.js?v=20261115s3" data-agent>
 <link rel="preload" as="script" href="dove-agent.js?v=20261115s1" data-agent>
 <link rel="modulepreload" href="dove3d.js?v=20261115s1" data-agent>
-<link rel="modulepreload" href="hugo3d.js?v=20261116u2" data-agent>
+<link rel="modulepreload" href="hugo3d.js?v=20261116u5" data-agent>
 <link rel="modulepreload" href="void3d.js?v=20261116b">
-<link rel="modulepreload" href="backpack.js?v=20261116r2">
-<link rel="modulepreload" href="rope.js?v=20261116r1">
+<link rel="modulepreload" href="backpack.js?v=20261116r3">
+<link rel="modulepreload" href="rope.js?v=20261116r2">
 <link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.min.js">
 <link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/loaders/GLTFLoader.js">
 <link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/utils/BufferGeometryUtils.js">
@@ -483,7 +483,7 @@ body.simple>section,body.simple>footer,body.simple>.mindex{display:none!importan
 
 <nav class="mindex" aria-label="Projects"><div class="wrap">
   <span class="lbl">Tap for stack</span>
-  <button class="mrow" type="button" data-open="void"><img class="th dv" loading="lazy" src="realms/thumbs/dev-void.webp" alt="" width="60" height="60"><span class="tx"><span class="k">Live cams · mobile</span><span class="n">THE VOID</span><span class="sp">Supabase Postgres + PostGIS, RLS, HLS live streams, libsignal E2E DMs.</span></span><svg class="ch" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></button>
+  <button class="mrow" type="button" data-open="void"><img class="th dv" loading="lazy" src="realms/thumbs/dev-void.webp" alt="" width="60" height="60"><span class="tx"><span class="k">Live on Google Play · social</span><span class="n">THE VOID</span><span class="sp">Supabase Postgres + PostGIS, RLS, HLS live streams, libsignal E2E DMs.</span></span><svg class="ch" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></button>
   <button class="mrow" type="button" data-open="ezer"><img class="th dv" loading="lazy" src="realms/thumbs/dev-ezer.webp" alt="" width="60" height="60"><span class="tx"><span class="k">Live on Google Play · fintech</span><span class="n">EZER</span><span class="sp">Fastify + Prisma (19 models), double-entry ledger, Plaid Transfer ACH.</span><span class="l">Subscriptions become decisions.</span></span><svg class="ch" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></button>
   <button class="mrow" type="button" data-open="hugo"><img class="th dv" loading="lazy" src="realms/thumbs/dev-hugo.png" alt="" width="60" height="60"><span class="tx"><span class="k">Walkable · in dev</span><span class="n">Hugo</span><span class="sp">Three.js, 120 Hz fixed-step physics, MuJoCo skeleton over WebSocket.</span></span><svg class="ch" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></button>
   <button class="mrow" type="button" data-open="trading"><img class="th dv" loading="lazy" src="realms/thumbs/dev-morgan.png" alt="" width="60" height="60"><span class="tx"><span class="k">Live bot · mobile</span><span class="n">Morgan Futures</span><span class="sp">Python + Flask on Railway, Kraken data, Claude API gate, Rithmic execution.</span></span><svg class="ch" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></button>
@@ -504,15 +504,15 @@ body.simple>section,body.simple>footer,body.simple>.mindex{display:none!importan
     <div class="cap"><h3>Live media and geo data</h3><p>A globe of live public camera streams with per-region discourse, Postgres plus PostGIS with row-level security, spatial triggers, and HLS playback.</p><div class="ev">THE VOID · Expo · Supabase · hls.js · below</div></div>
     <div class="cap"><h3>Resilient services</h3><p>A publishing backend whose storage layer degrades across three backends while keeping transactional integrity, with live view counts over Server-Sent Events.</p><div class="ev">Revelation · Express · SSE · live at revelati6n.com</div></div>
     <div class="cap"><h3>Privacy engineering</h3><p>End-to-end encrypted DMs over libsignal where the server only relays ciphertext, on-device inbox scanning so raw email never leaves the phone, and schemas that make location leaks impossible by omission.</p><div class="ev">THE VOID · EZER · refused to ship the interim non-E2EE version</div></div>
-    <div class="cap"><h3>Mobile delivery from nothing</h3><p>Shipped EZER, a React Native app, live on Google Play and built iOS without a Mac: Swift cross-compiled in WSL2 against the iOS SDK pulled from Xcode, code-signed, and sideloaded to the phone over USB.</p><div class="ev">EZER · Expo · xtool · documented as an agent-ready guide</div></div>
+    <div class="cap"><h3>Mobile delivery from nothing</h3><p>Shipped EZER and The Void, React Native apps live on Google Play, and built iOS without a Mac: Swift cross-compiled in WSL2 against the iOS SDK pulled from Xcode, code-signed, and sideloaded to the phone over USB.</p><div class="ev">EZER · Expo · xtool · documented as an agent-ready guide</div></div>
   </div></div></div>
 </div></section>
 
 <!-- THE VOID -->
 <section class="realm" id="void"><div class="wrap">
   <div class="top">
-    <div><div class="kicker"><span class="st live">Live cams</span><span class="st">Mobile · social</span></div><h2>THE VOID</h2></div>
-    <div><p class="about">A physiological ranking algorithm rather than standard behavior modeling. On-device sensing reads camera pulse (rPPG), fingertip heart rate and HRV, Bluetooth heart-rate straps, facial expression, touch dynamics and hand tremor, scores each against your own baseline and maps it to arousal, attention and valence on the media the user engages with. An on-device model learns from that behavior and serves more of what moves you, mixed by a fusion ranker (social, interest, behavioral, physio-affinity and controversy signals, Thompson-sampling weights) into an almost addictive feed. Built as a mobile app on Supabase Postgres with PostGIS and row-level security, HLS live streams and libsignal end-to-end encrypted DMs. Wrapped in the UI of international news, niche live streams, reels and feeds, and a unique polls and discussion module.</p><p class="how">Tap a nation · live rooms, polls and the feed · anonymous by default</p></div>
+    <div><div class="kicker"><span class="st live">Live · Google Play</span><span class="st">Mobile · social</span></div><h2>THE VOID</h2></div>
+    <div><p class="about">A physiological ranking algorithm rather than standard behavior modeling. On-device sensing reads camera pulse (rPPG), fingertip heart rate and HRV, Bluetooth heart-rate straps, facial expression, touch dynamics and hand tremor, scores each against your own baseline and maps it to arousal, attention and valence on the media the user engages with. An on-device model learns from that behavior and serves more of what moves you, mixed by a fusion ranker (social, interest, behavioral, physio-affinity and controversy signals, Thompson-sampling weights) into an almost addictive feed. Built as a mobile app on Supabase Postgres with PostGIS and row-level security, HLS live streams and libsignal end-to-end encrypted DMs. Wrapped in the UI of international news, niche live streams, reels and feeds, and a unique polls and discussion module.</p><p class="how">Tap a nation · live rooms, polls and the feed · anonymous by default</p><p class="get"><a class="btn primary" href="https://play.google.com/store/apps/details?id=com.voidArchive" target="_blank" rel="noopener"><svg viewBox="0 0 24 24"><path d="M6 4l14 8-14 8z"/></svg>Get it on Google Play</a></p></div>
   </div>
   <div class="split with-phone">
     <div class="aside">
@@ -570,7 +570,7 @@ body.simple>section,body.simple>footer,body.simple>.mindex{display:none!importan
       <div><b>Stack</b><span>TypeScript · Fastify · Prisma · Postgres · Plaid · Expo · Railway</span></div>
       <div><b>Backend</b><span>Fastify and Prisma across 19 models. Double-entry ledger for goal savings so every cent is traceable; Plaid Transfer for ACH.</span></div>
       <div><b>Detection</b><span>Transaction recurrence detection plus Gmail and Outlook scanning on the device. Raw email never leaves the phone.</span></div>
-      <div><b>Mobile</b><span>Expo / React Native. Live on Google Play. iOS without a Mac: Swift cross-compiled in WSL2, signed and sideloaded.</span></div>
+      <div><b>Mobile</b><span>Expo / React Native. Live on Google Play, iOS in review. iOS built without a Mac: Swift cross-compiled in WSL2, signed and sideloaded.</span></div>
       <div><b>Card</b><span>Pay-in-4 virtual card designed; sequenced debit-first until a sponsor bank is in place. Not marketed until the program exists.</span></div>
     </div></div>
     <div class="phone-wrap"><div class="phone tiPhone"><i class="tiBtn b1"></i><i class="tiBtn b2"></i><i class="tiBtn b3"></i><i class="tiBtn b4"></i><i class="home"></i><div class="island"></div><div class="screen tiScreen stage" data-src="__EZER__" data-allow="clipboard-write">
@@ -926,7 +926,7 @@ addEventListener('pageshow', () => fetch(location.pathname, { method: 'HEAD', ca
     if (on) { prev = prev || r.dataset.theme; r.dataset.theme = 'dark'; } else if (prev) { r.dataset.theme = prev; prev = null; }
     document.body.classList.toggle('simple', on); os.hidden = !on; b.setAttribute('aria-pressed', on);
     b.setAttribute('aria-label', on ? 'Read less view on. Switch to scroll view' : 'Scroll view on. Switch to read less view');
-    if (on && !f) { f = document.createElement('iframe'); const sm = new URLSearchParams(location.search).get('scrollMode'); const src = 'OS.dc.html?v=stack1116t&fb=74' + (sm ? '&scrollMode=' + encodeURIComponent(sm) : ''); f.title = 'Projects'; f.allow = 'fullscreen; pointer-lock; autoplay; clipboard-write';
+    if (on && !f) { f = document.createElement('iframe'); const sm = new URLSearchParams(location.search).get('scrollMode'); const src = 'OS.dc.html?v=stack1116u&fb=74' + (sm ? '&scrollMode=' + encodeURIComponent(sm) : ''); f.title = 'Projects'; f.allow = 'fullscreen; pointer-lock; autoplay; clipboard-write';
       // invisible until the frame's own dark page exists (it posts chaze-homed from its <head>): its blank first document never paints white
       f.style.visibility = 'hidden'; f.onload = () => { if (f.getAttribute('src')) show(); }; os.append(f); showT = setTimeout(show, 1500);   // fail-safe: never left hidden
       // The frame loads these without a version token: revalidate them first so a phone never runs a cached old build.
