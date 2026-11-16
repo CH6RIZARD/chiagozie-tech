@@ -25,7 +25,7 @@ try { if (localStorage.getItem('theme') === 'light') document.documentElement.da
 <link rel="modulepreload" href="dove3d.js?v=20261115s1" data-agent>
 <link rel="modulepreload" href="hugo3d.js?v=20261115s3" data-agent>
 <link rel="modulepreload" href="backpack.js?v=20261115p9">
-<link rel="modulepreload" href="void3d.js?v=20261115e">
+<link rel="modulepreload" href="void3d.js?v=20261115f">
 <link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.min.js">
 <link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/loaders/GLTFLoader.js">
 <link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/utils/BufferGeometryUtils.js">
@@ -477,7 +477,7 @@ body.simple>section,body.simple>footer,body.simple>.mindex{display:none!importan
 
 
 <nav class="mindex" aria-label="Projects"><div class="wrap">
-  <span class="lbl">Tap any product to open the real build</span>
+  <span class="lbl">Tap for stack</span>
   <button class="mrow" type="button" data-open="void"><img class="th dv" loading="lazy" src="realms/thumbs/dev-void.webp" alt="" width="60" height="60"><span class="tx"><span class="k">Live cams · mobile</span><span class="n">THE VOID</span><span class="sp">Supabase Postgres + PostGIS, RLS, HLS live streams, libsignal E2E DMs.</span></span><svg class="ch" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></button>
   <button class="mrow" type="button" data-open="ezer"><img class="th dv" loading="lazy" src="realms/thumbs/dev-ezer.webp" alt="" width="60" height="60"><span class="tx"><span class="k">Store-ready · fintech</span><span class="n">EZER</span><span class="sp">Fastify + Prisma (19 models), double-entry ledger, Plaid Transfer ACH.</span><span class="l">Subscriptions become decisions.</span></span><svg class="ch" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></button>
   <button class="mrow" type="button" data-open="hugo"><img class="th dv" loading="lazy" src="realms/thumbs/dev-hugo.png" alt="" width="60" height="60"><span class="tx"><span class="k">Walkable · in dev</span><span class="n">Hugo</span><span class="sp">Three.js, 120 Hz fixed-step physics, MuJoCo skeleton over WebSocket.</span></span><svg class="ch" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></button>
@@ -902,7 +902,7 @@ window.SCION_CONFIG = { size: matchMedia('(max-width:760px)').matches ? 16 : 26,
 }
 
 // The Void mascot (void3d.js): independent of the agents; lives only with the Void project.
-{ const s = document.createElement('script'); s.type = 'module'; s.src = 'void3d.js?v=20261115e'; document.head.append(s); }
+{ const s = document.createElement('script'); s.type = 'module'; s.src = 'void3d.js?v=20261115f'; document.head.append(s); }
 
 // Phones keep an old copy of this page (restored tabs, back-forward cache): if the server has a newer one, reload once.
 addEventListener('pageshow', () => fetch(location.pathname, { method: 'HEAD', cache: 'no-store' }).then(r => {
