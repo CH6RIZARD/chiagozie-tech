@@ -347,13 +347,22 @@ const support = q => ALT ? (q.text ? q.heading && q.fontSize >= 18 : true) : ENV
 // serif, never floating over the lowercase); a stretch with no ink under him (a space) has no top, the line's cap top stands in.
 const runTop = (runs, x) => { let y = null; for (const u of runs) if (u.x2 > x - HALF_W && u.x1 < x + HALF_W && (y === null || u.top < y)) y = u.top; return y; };
 const footY = (f, x) => (f.runs && runTop(f.runs, x)) ?? f.y;
+// That line is the highest letter top across his whole width, so over a lower letter or a gap beside a tall one he rests on nothing
+// (the owner, 2026-11-16: "invisible edge"). inkUnder: the share of [x + a, x + b] where the ink itself comes up to his line (2 px).
+// Seated (he faces a little left: thighs and seat reach from -33 to +9 px of his x at size 150, read off his render) most of that span
+// must be ink; standing, each sole needs ink under a good part of it. Where it does not hold he sits or stops somewhere else (inkSpot).
+const inkUnder = (f, x, a, b) => { const y = footY(f, x); let n = 0, k = 0; for (let p = x + a * K; p <= x + b * K; p += 2, n++) if (f.runs.some(u => u.x1 <= p && u.x2 >= p && Math.abs(u.top - y) <= 2)) k++; return k / n; };
+const lineAt = (x, y) => { let f = null; for (const q of floors) if (q.runs && x >= q.x1 && x <= q.x2 && q.y <= y + 3 && y - q.y < 80 && (!f || q.y > f.y)) f = q; return f; };
+const seatInk = (x, y) => { const f = lineAt(x, y); return !f || inkUnder(f, x, -33, 9) >= 0.6; };
+const standInk = (f, x) => !f.runs || (inkUnder(f, x, -18, -3) >= 0.4 && inkUnder(f, x, 3, 18) >= 0.4);
+const inkSpot = f => { for (let k = 1; k < 300; k++) for (const x of [st.x + k * 2, st.x - k * 2]) if (onFloor(f, x) && standInk(f, x)) return x; return null; };
 // ALT sits with his shins over the edge: never over body text (a heading's own letters and a box's face are fine), never out of his realm's bottom
 // On a heading's letters he sits only at the END of the line, turned outward, so his shins hang beside the ink, not over it (sideOf: 1 / -1 the end he
 // is on, null on letters but not at an end, 0 not on letters). Anywhere else on the letters he stands.
 const sideOf = (x, y) => { const q = textInk.find(q => q.hd && x > q.l && x < q.r && y >= q.t - 3 && y <= q.b); return !q ? 0 : Math.abs(x - (q.r - HALF_W)) <= 6 ? 1 : Math.abs(x - (q.l + HALF_W)) <= 6 ? -1 : null; };
 const legRoom = (x, y) => { const s = sideOf(x, y); if (s === null || (ROOF && y + CFG.size * 0.3 > docH())) return false; const lx = s ? x + s * (HALF_W + CFG.size * 0.14) : x, hw = s ? 8 : HALF_W * 0.8;
   return !textInk.some(q => (s || !q.hd) && q.r > lx - hw && q.l < lx + hw && q.b > y + 3 && q.t < y + CFG.size * 0.3); };
-const sitRoom = (x, y) => clear(x, y, SIT_H + 4) && (!ALT || legRoom(x, y));
+const sitRoom = (x, y) => clear(x, y, SIT_H + 4) && (ALT ? legRoom(x, y) : seatInk(x, y));
 // ALT: a heading or a small label over a ledge (the title over the phone's top, the kicker over the title) is no wall to WALK past: pass()
 // lets him through, clear() still decides where he may stop, sit, land for good or be born, and an idle there walks on (stepBody).
 let PASS = false;
@@ -1518,7 +1527,8 @@ function stepBody(dt) {
       if (!(st.edgeAt > 0) && !(ALT && (t - (st.edgeT ?? -9) < 4 || (st.goal && st.goal.toView)))) { st.edgeT = t; st.edgeAt = t + 0.3 + Math.random() * 0.3; st.mode = 'idle'; st.idleUntil = st.edgeAt; st.amt = 0; if (inView()) gest = { name: 'peer', t0: t, dur: 1, side: st.dir, amp: 1, f: 1 }; return; }
       st.edgeAt = 0;
       if (ALT && st.goal) { const q = gapHop(f); if (q && q.f === st.goal.f) { st.dropF = q.f; st.mode = 'prep'; st.prep = { f: q.f, dh: 0, until: t + 0.18 + Math.random() * 0.14, climb: false, over: q.x }; st.amt = 0; return; } }
-      if (dropTo(nx, f.y)) { st.mode = 'prep'; st.prep = { f: st.dropF, until: t + 0.12, drop: true, nx }; st.amt = 0; return; }   // a crouch, then a small forward arc onto the ledge he looked at (prep below), not past it (behind a picture in the way)
+      if (dropTo(nx, f.y)) { st.mode = 'prep'; st.prep = { f: st.dropF, until: t + 0.12, drop: true, nx }; st.amt = 0; return; }
+      if (ALT && st.goal) { const q = gapHop(f); if (q) { st.dropF = q.f; st.mode = 'prep'; st.prep = { f: q.f, dh: 0, until: t + 0.18 + Math.random() * 0.14, climb: false, over: q.x }; st.amt = 0; return; } }   // ALT: no drop from this end, but the next ledge across the gap: a stepping stone on the way (the phone top's end to the Tech rule)   // a crouch, then a small forward arc onto the ledge he looked at (prep below), not past it (behind a picture in the way)
       if (st.goal && st.goal.toView && st.away >= 4 && lost()) return;   // left off camera with no ledge he can step down to: the lost case
       if (st.goal) giveUp('no way down');   // nothing to step down to: that place is not reachable from here (no pacing to the edge and back)
       st.dir = -st.dir; st.mode = 'idle'; st.idleUntil = t + 0.8 + Math.random() * 1.5; return;
@@ -1551,9 +1561,10 @@ function stepBody(dt) {
     if (past) { if (dropTo(nx, f.y)) { st.air = true; st.hop = true; st.vx = st.dir * 60; st.vy = -60; st.x = nx; st.mode = 'walk'; } else st.dir = -st.dir; return; }
     if (pass(nx + st.dir * 10, f.y, CRAWL_H + 4)) { st.x = nx; st.ph += dt * 0.85 * k; }
     else { walls.push({ f, dir: st.dir, t, crawl: true }); st.dir = -st.dir; st.crawlT = t; poke('a dead end, even crawling'); missed('dead end'); }   // remembered, so he does not crawl straight back in   // too tight even on all fours: back out the way he came
-  } else if (st.mode === 'idle') { if (ALT && !st.goal && st.amt < 0.05 && !clear(st.x, f.y, CFG.size + 4)) { const x = idleSpot(f); if (x != null) { if (Math.abs(x - st.x) < 9) st.x += Math.sign(x - st.x) * Math.min(Math.abs(x - st.x), 40 * dt); else { gest = null; goTo(f, x, { auto: 1 }); return; } } }   // stopped in front of a label or the title: he walks on to where he covers nothing
+  } else if (st.mode === 'idle') { if (!st.goal && st.amt < 0.05 && (ALT ? !clear(st.x, f.y, CFG.size + 4) : !st.held && !standInk(f, st.x))) { const x = ALT ? idleSpot(f) : inkSpot(f);   // Hugo on letters: on to where both soles have ink under them
+     if (x != null) { if (Math.abs(x - st.x) < 9) st.x += Math.sign(x - st.x) * Math.min(Math.abs(x - st.x), 40 * dt); else { gest = null; goTo(f, x, { auto: 1 }); return; } } }   // stopped in front of a label or the title: he walks on to where he covers nothing
     settle(f, dt); if (t > st.idleUntil && st.goal) { st.mode = 'walk'; restyle(); } }
-  else if (st.mode === 'sit') { settle(f, dt);
+  else if (st.mode === 'sit') { settle(f, dt); if (!ALT && f.runs && !seatInk(st.x, f.y)) { st.mode = 'idle'; st.idleUntil = t + 1; }   // the letters moved under his seat (the web font landed): up, and on to honest ink
     st.swingV += (-st.swing * 9 - st.swingV * 1.6) * dt; st.swing += st.swingV * dt;
     if (!st.dead && Math.sin(t * 1.3) * Math.sin(t * 0.37) > 0.995) st.swingV += 2;   // now and then a kick of the legs (a slow beat, not dice)
     if (t > st.idleUntil && st.goal) st.mode = 'walk';   // he gets up when there is somewhere to go
@@ -1704,7 +1715,7 @@ function frame(now) {
   const str = st.air && st.vy < 0 && t - (st.airAt || -1) < 0.12 ? 1 - (t - st.airAt) / 0.12 : 0;   // takeoff: a 0.12 s stretch up from the feet
   view.scale.set(lsc * (1 + 0.3 * sq - 0.12 * str), lsc * (1 - 0.3 * sq + 0.15 * str), lsc);
   renderer.toneMappingExposure = 1 - 0.22 * Math.max(0, -st.zs);   // the back lane sits in the page's haze: a little dimmer (Inside, Silksong)
-  view.position.set(st.x - O.x - innerWidth / 2, innerHeight / 2 - vy + bob + crouch + THIGH * crawlE, 0);
+  view.position.set(st.x - O.x - innerWidth / 2, innerHeight / 2 - vy + bob + crouch + THIGH * crawlE - (!ALT && st.floor && st.floor.runs ? 5 * K * sitE : 0), 0);   // on letters his seat touches the ink (his seat point sits a few px under his body: fine on a rule, a visible gap on type)
   { const d = ENV.__scion; let best = null;   // H1: his hand (the one nearer the bird) in page coords
     for (const b of [B.handL || B.foreL, B.handR || B.foreR]) { if (!b) continue; b.getWorldPosition(_hv);
       const x = _hv.x + innerWidth / 2 + O.x, y = innerHeight / 2 - _hv.y + O.y;

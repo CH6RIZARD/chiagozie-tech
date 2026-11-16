@@ -174,9 +174,29 @@
   // range.getClientRects()), runs [{x1, x2, top}] relative to that rect's left and top. Memo per node + font + text + element
   // width (a rewrap); measured again once the web fonts land.
   let runMemo = new WeakMap();
+  // A character's box top is not its outline: an h is ascender-high only over its stem, a C or an o falls away to both sides, and
+  // whoever rests on the box top sits in the air there. So each glyph is drawn once and its ink top read per pixel column:
+  // runs [{x1, x2, top}] from the glyph's origin, top measured down from the font's ascent line (as before).
+  const colMemo = new Map(); let colCtx = null;
+  function glyphCols(font, ch, asc) {
+    const k = font + '|' + ch, m0 = colMemo.get(k); if (m0) return m0;
+    const mt = inkCtx.measureText(ch), box = [{ x1: 0, x2: mt.width, top: Math.max(0, asc - (mt.actualBoundingBoxAscent || 0)) }]; let out = box;
+    try {
+      const pad = 12, w = Math.ceil(mt.width) + pad * 2, base = Math.ceil(asc) + 2, h = base + 2;   // down to the baseline: what starts lower holds nobody
+      colCtx = colCtx || document.createElement('canvas').getContext('2d', { willReadFrequently: true });
+      colCtx.canvas.width = w; colCtx.canvas.height = h; colCtx.font = font; colCtx.textBaseline = 'alphabetic'; colCtx.fillStyle = '#000'; colCtx.fillText(ch, pad, base);
+      const px = colCtx.getImageData(0, 0, w, h).data, runs = []; let run = null;
+      for (let x = 0; x < w; x++) { let y = 0; while (y < h && px[(y * w + x) * 4 + 3] < 110) y++;
+        if (y >= h) { run = null; continue; }
+        const top = Math.max(0, y - (base - asc));
+        if (run && Math.abs(run.t0 - top) < 2) { run.x2 = x + 1 - pad; run.top = Math.min(run.top, top); } else runs.push(run = { x1: x - pad, x2: x + 1 - pad, top, t0: top }); }
+      if (runs.length) out = runs.map(u => ({ x1: u.x1, x2: u.x2, top: u.top }));
+    } catch (e) { out = box; }
+    colMemo.set(k, out); return out;
+  }
   // document.fonts.status reads 'loaded' before a web font is even requested, so an early scan can memo the fallback font's tops;
   // when the real fonts land, forget every measurement and make the agents rescan (their resize handlers mark the scene dirty).
-  if (DOM && document.fonts && document.fonts.addEventListener) document.fonts.addEventListener('loadingdone', () => { inkMemo.clear(); runMemo = new WeakMap(); window.dispatchEvent(new Event('resize')); });
+  if (DOM && document.fonts && document.fonts.addEventListener) document.fonts.addEventListener('loadingdone', () => { inkMemo.clear(); colMemo.clear(); runMemo = new WeakMap(); window.dispatchEvent(new Event('resize')); });
   function inkRuns(el, node) {
     if (!DOM || !el || !node || node.nodeType !== 3) return null;
     const cs = getComputedStyle(el), font = `${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`, loaded = !document.fonts || document.fonts.status === 'loaded';
@@ -189,8 +209,8 @@
       range.setStart(node, i); range.setEnd(node, i + 1); const r = range.getClientRects()[0]; if (!r || !r.width) continue;
       if (!L || Math.abs(r.top - L.top) > 2) { lines.push(L = { top: r.top, left: r.left, runs: [] }); run = null; }
       if (/\s/.test(text[i])) { run = null; continue; }
-      const top = Math.max(0, asc - (inkCtx.measureText(text[i]).actualBoundingBoxAscent || 0)), x1 = r.left - L.left, x2 = r.right - L.left;
-      if (run && Math.abs(run.top - top) < 2 && x1 <= run.x2 + 1) { run.x2 = x2; run.top = Math.min(run.top, top); } else L.runs.push(run = { x1, x2, top });
+      for (const g of glyphCols(font, text[i], asc)) { const top = g.top, x1 = r.left - L.left + g.x1, x2 = r.left - L.left + g.x2;
+        if (run && Math.abs(run.top - top) < 2 && x1 <= run.x2 + 1) { run.x2 = Math.max(run.x2, x2); run.top = Math.min(run.top, top); } else L.runs.push(run = { x1, x2, top }); }
     }
     const out = [];
     for (const l of lines) { const i = all.findIndex(r => Math.abs(r.top - l.top) < 2 && r.left - 1 <= l.left && r.right + 1 >= l.left); if (i >= 0) out[i] = l.runs.map(u => ({ x1: u.x1 + l.left - all[i].left, x2: u.x2 + l.left - all[i].left, top: u.top })); }
