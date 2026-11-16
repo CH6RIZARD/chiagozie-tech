@@ -347,7 +347,11 @@ const support = q => ALT ? (q.text ? q.heading && q.fontSize >= 18 : true) : ENV
 const runTop = (runs, x) => { let y = null; for (const u of runs) if (u.x2 > x - HALF_W && u.x1 < x + HALF_W && (y === null || u.top < y)) y = u.top; return y; };
 const footY = (f, x) => (f.runs && runTop(f.runs, x)) ?? f.y;
 // ALT sits with his shins over the edge: never over body text (a heading's own letters and a box's face are fine), never out of his realm's bottom
-const legRoom = (x, y) => !(ROOF && y + CFG.size * 0.3 > docH()) && !textInk.some(q => !q.hd && q.r > x - HALF_W * 0.8 && q.l < x + HALF_W * 0.8 && q.b > y + 3 && q.t < y + CFG.size * 0.3);
+// On a heading's letters he sits only at the END of the line, turned outward, so his shins hang beside the ink, not over it (sideOf: 1 / -1 the end he
+// is on, null on letters but not at an end, 0 not on letters). Anywhere else on the letters he stands.
+const sideOf = (x, y) => { const q = textInk.find(q => q.hd && x > q.l && x < q.r && y >= q.t - 3 && y <= q.b); return !q ? 0 : Math.abs(x - (q.r - HALF_W)) <= 6 ? 1 : Math.abs(x - (q.l + HALF_W)) <= 6 ? -1 : null; };
+const legRoom = (x, y) => { const s = sideOf(x, y); if (s === null || (ROOF && y + CFG.size * 0.3 > docH())) return false; const lx = s ? x + s * (HALF_W + CFG.size * 0.14) : x, hw = s ? 8 : HALF_W * 0.8;
+  return !textInk.some(q => (s || !q.hd) && q.r > lx - hw && q.l < lx + hw && q.b > y + 3 && q.t < y + CFG.size * 0.3); };
 const sitRoom = (x, y) => clear(x, y, SIT_H + 4) && (!ALT || legRoom(x, y));
 // ALT: a heading or a small label over a ledge (the title over the phone's top, the kicker over the title) is no wall to WALK past: pass()
 // lets him through, clear() still decides where he may stop, sit, land for good or be born, and an idle there walks on (stepBody).
@@ -975,7 +979,7 @@ function comeBack() {
 function climbIn() {
   if (ALT && O.y + innerHeight > docH()) return false;   // the bottom of his realm is in view: nothing below it to climb in from
   const E = O.y + innerHeight - 30, c = [];
-  for (const f of floors) if (!f.ground && f.y <= E - CFG.size * 1.2 && f.y >= E - CFG.size * (ALT ? 3.5 : 2.2) && f.x2 - f.x1 > 2 * HALF_W + 24) for (let i = 1; i < 8; i++) { const x = f.x1 + (f.x2 - f.x1) * i / 8; if (onFloor(f, x) && clear(x, f.y, CFG.size + 4, 0)) c.push({ f, x }); }
+  for (const f of floors) if (!f.ground && f.y <= E - CFG.size * 1.2 && f.y >= E - CFG.size * (ALT ? (phone() ? 5 : 3.5) : 2.2) && f.x2 - f.x1 > 2 * HALF_W + 24) for (let i = 1; i < 8; i++) { const x = f.x1 + (f.x2 - f.x1) * i / 8; if (onFloor(f, x) && clear(x, f.y, CFG.size + 4, 0)) c.push({ f, x }); }
   if (!c.length) return false;
   const p = c[(Math.random() * c.length) | 0];
   st.goal = null; st.route = null; st.floor = null; st.air = false; st.hop = false; st.vx = 0; st.vy = 0; st.dropF = null; st.away = 0; st.z = st.zs = 0; st.peek = false; st.x = p.x; st.dir = p.x < O.x + innerWidth / 2 ? 1 : -1; st.lostN = (st.lostN || 0) + 1;
@@ -1234,6 +1238,7 @@ function autonomy(f) {
   const M = ENV.MORTAL; if (!M || !M.next || !M.alive(WHO) || st.relOrder || st.food || st.held || st.dead || st.enter) return;
   if (f && f.screen) { st.edgeSince ??= t; } else st.edgeSince = null;
   // Off camera for a moment while the visitor is not scrolling: back into view (a reflex, not a choice); AI otherwise sleeps off camera
+  if (ALT && phone() && st.away >= 1 && performance.now() - scrolledAt > 300 && !st.air && !['prep', 'climb', 'lane', 'crawl'].includes(st.mode)) { if (st.beh) behEnd(false); gest = null; st.pendGest = null; st.idleUntil = t; if (lost()) return; }   // ALT in the phone sheet: out of frame after a scroll, he drops what he was doing and climbs in over the edge onto a ledge in view (Hugo waits out his dwell and 4 s first)
   if (st.away >= 1.5 && performance.now() - scrolledAt > 400 && !['prep', 'climb', 'lane', 'crawl'].includes(st.mode) && !(st.toView && (st.goal || (st.route && st.route.length)))) { if (st.beh) behEnd(false); comeBack(); return; }
   const B = st.beh;
   if (B) {   // something under way
@@ -1656,7 +1661,7 @@ function frame(now) {
   if (packPose) packPose(dt);   // backpack.js: swing the pack off, reach into the pocket, hold or read the item (after gestures, before the springs)
   applyPose(dt, st.held || st.air); applyArms(dt, st.held || st.air); if (ALT) alt.pose();
   const yawGoal = st.mode === 'lane' && st.hopL ? (st.hopL.to < 0 ? st.dir * (Math.PI / 2 + 0.7) : st.dir * (Math.PI / 2 - 0.9)) :   // into the page or out of it, through profile
-    st.mode === 'climb' ? Math.PI : crawlE > 0.3 ? (st.dir > 0 ? Math.PI / 2 : -Math.PI / 2) :(st.mode === 'sit' || sitE > 0.5) && !st.air ? -0.35 : st.dir > 0 ? Math.PI / 2 - 0.45 : -Math.PI / 2 + 0.45;
+    st.mode === 'climb' ? Math.PI : crawlE > 0.3 ? (st.dir > 0 ? Math.PI / 2 : -Math.PI / 2) :(st.mode === 'sit' || sitE > 0.5) && !st.air ? (ALT && st.floor && st.floor.text && sideOf(st.x, st.y) ? sideOf(st.x, st.y) * (Math.PI / 2 - 0.15) : -0.35) : st.dir > 0 ? Math.PI / 2 - 0.45 : -Math.PI / 2 + 0.45;
   if (st.yaw == null) st.yaw = yawGoal;
   // A reversal is never a mirror flip: he turns through profile over 0.2 s (eased), the direction locked for the turn; small
   // changes of bearing ease in as before.
