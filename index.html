@@ -23,7 +23,7 @@ try { if (localStorage.getItem('theme') === 'light') document.documentElement.da
 <link rel="preload" as="script" href="bond.js?v=20261115s3" data-agent>
 <link rel="preload" as="script" href="dove-agent.js?v=20261115s1" data-agent>
 <link rel="modulepreload" href="dove3d.js?v=20261115s1" data-agent>
-<link rel="modulepreload" href="hugo3d.js?v=20261116b" data-agent>
+<link rel="modulepreload" href="hugo3d.js?v=20261116c" data-agent>
 <link rel="modulepreload" href="void3d.js?v=20261116a">
 <link rel="modulepreload" href="backpack.js?v=20261115p9">
 <link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.min.js">
@@ -376,6 +376,7 @@ html{touch-action:manipulation}
   .msheet .stage.desk{max-height:40vh}
   .msheet .split.with-phone{display:flex;flex-direction:column;align-items:center;gap:12px}
   .msheet .split.with-phone>*{width:100%}
+  .msheet #void .kicker{margin-bottom:64px}   /* and over the title, so he can stop on its letters without covering the label */
   .msheet #void .phone-wrap{margin-top:60px}   /* headroom over the phone: The Void's mascot lives on its top edge and never covers the text above it */
   .msheet .split.with-phone>.phone-wrap{order:-1;display:flex;justify-content:center}
   .msheet .phone{width:min(100%,300px,max(200px,calc((96dvh - 360px) * 430 / 902)))}   /* the whole phone fits in the sheet; never hangs below the screen */

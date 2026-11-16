@@ -17,6 +17,7 @@ const O = ALT ? { x: 0, y: 0 } : { get x() { return window.scrollX; }, get y() {
 let host = null, ROOF = false;   // ALT: the realm he is in now; ROOF: its top edge is a ceiling (a section), not the ledge he lives on (a list row)
 const docW = () => (ALT ? (host ? host.clientWidth : 0) : document.documentElement.clientWidth), docH = () => (ALT ? (host ? host.clientHeight : 0) : document.documentElement.scrollHeight);
 const CFG = Object.assign({ size: 150, perspective: 900, glb: 'realms/hugo/hugo.glb', viewTilt: 6, speed: 34, stride: 46 }, ENV.HUGO_CONFIG || {});
+const UP = CFG.size * (ALT && matchMedia('(max-width:760px)').matches ? 3.5 : 2.2);   // how high he leaps and climbs in one go (ALT on phones: the sheet's ledges stand further apart)
 const K = CFG.size / 150;
 const calm = matchMedia('(prefers-reduced-motion: reduce)').matches;   // no bracing or glancing for visitors who asked for less motion   // px amplitudes scale with his size: the phone's 64 px reads like the desktop's 150
 const reduced = /[?&]still/.test(location.search);   // walking is gentle motion; a reduce-motion setting no longer freezes him
@@ -370,7 +371,7 @@ function pickFloor(furniture, z = st.z) {   // furniture: anywhere he can stand 
   if (!c.length) return null;
   // weighted by novelty: somewhere he has not been for a while is far more likely than where he just was
   const opts = [];
-  for (const k of c) { if ((avoid.get(k.f) || 0) > t) continue; for (const x of k.xs) opts.push({ f: k.f, x, w: (0.05 + novelty(x, k.f.y) ** 2 + (Math.abs(x - st.x) + Math.abs(k.f.y - st.y)) / 900) * (Math.sign(x - st.x) === st.dir ? 1.6 : 1) * (k.f.y < st.y - CFG.size * 2.2 ? 0.25 : k.f.y < st.y - 8 ? 1.7 : 1) }); }
+  for (const k of c) { if ((avoid.get(k.f) || 0) > t) continue; for (const x of k.xs) opts.push({ f: k.f, x, w: (0.05 + novelty(x, k.f.y) ** 2 + (Math.abs(x - st.x) + Math.abs(k.f.y - st.y)) / 900) * (Math.sign(x - st.x) === st.dir ? 1.6 : 1) * (k.f.y < st.y - UP ? 0.25 : k.f.y < st.y - 8 ? 1.7 : 1) }); }
   if (!opts.length) return null;
   let r = Math.random() * opts.reduce((a, o) => a + o.w, 0);
   for (const o of opts) if ((r -= o.w) <= 0) return o;
@@ -793,7 +794,7 @@ function blocked(f) {
   const x0 = st.x + st.dir * (HALF_W + 14);   // where the thing in his way stands
   let up = null;
   for (const q of floors) {
-    if (q === f || q.y > f.y - 8 || q.y < f.y - CFG.size * 2.2 || x0 < q.x1 || x0 > q.x2) continue;
+    if (q === f || q.y > f.y - 8 || q.y < f.y - UP || x0 < q.x1 || x0 > q.x2) continue;
     const ux = Math.max(q.x1 + HALF_W + 10, Math.min(q.x2 - HALF_W - 10, x0 + st.dir * (HALF_W + 24)));   // well onto the top, not on its lip
     if (onFloor(q, ux) && clear(ux, q.y, CFG.size + 4) && (!up || q.y > up.q.y)) up = { q, ux };   // the lowest top he can stand on
   }
@@ -842,7 +843,7 @@ function graph(tf, tx, tz) {   // the route graph around him (floors, seams and 
   if (!(fl.includes(cur) || sm.includes(cur)) || (tf && !fl.includes(tf))) return null;
   const seed = [[cur, st.x, st.z]]; if (tf) seed.push([tf, tx, tz]); if (cur.support !== false) seed.push([cur, st.x, st.z ? 0 : -1]);
   const gaps = []; if (ALT) for (const f of fl) for (const dir of [-1, 1]) { const q = gapHop(f, dir); if (q && fl.includes(q.f)) { gaps.push([f, dir, q]); seed.push([q.f, q.x, 0]); } }   // ALT: his gap hops are routes too
-  const g = D.buildGraph(fl, sm, { half: HALF_W, reach: CFG.size * 2.2, vh: innerHeight, h: CFG.size + 4, seed, cards: cards.filter(c => c.b > O.y - innerHeight * 0.5 && c.t < O.y + innerHeight * 1.5),
+  const g = D.buildGraph(fl, sm, { half: HALF_W, reach: UP, vh: innerHeight, h: CFG.size + 4, seed, cards: cards.filter(c => c.b > O.y - innerHeight * 0.5 && c.t < O.y + innerHeight * 1.5),
     clear: (x, y, z) => pass(x, y, CFG.size + 4, z), lanes: y => D.at(y, { noFront: true }).lanes });
   for (const [f, dir, q] of gaps) g.edges.get(g.node(f, dir < 0 ? f.x1 + HALF_W : f.x2 - HALF_W, 0).id).push({ to: g.node(q.f, q.x, 0).id, c: 50, kind: 'jump' });
   g.me = g.node(cur, st.x, st.z); return g;
@@ -888,7 +889,7 @@ function pickToward(dir) {
   for (const f of floors) {
     if (f === st.floor || f.x2 - f.x1 < 2 * HALF_W + 8) continue;
     const dy = st.y - f.y;
-    if (dir < 0 ? (dy > 6 && dy < CFG.size * 2.2) : (dy < -10 && f.y < O.y + innerHeight - 40)) {
+    if (dir < 0 ? (dy > 6 && dy < UP) : (dy < -10 && f.y < O.y + innerHeight - 40)) {
       const x = Math.max(f.x1 + HALF_W + 6, Math.min(f.x2 - HALF_W - 6, st.x));
       if (clear(x, f.y, CFG.size + 4)) c.push({ f, x, score: dir < 0 ? -f.y : -Math.abs(f.y - (O.y + innerHeight * 0.6)) });
     }
@@ -906,7 +907,8 @@ function gapHop(f, dir = st.dir) { const e = dir > 0 ? f.x2 : f.x1; let best = n
 // Stepping off a ledge: never a drop that ends a screen or more down at the page bottom (he vanished from view for good)
 // Every screen: only onto a real ledge that ends inside the view (or above it, on the way back to it), and that ledge catches
 // him (dropF), so he never falls past it to the page bottom.
-const dropTo = (x, y) => { const g = st.goal && st.goal.f, f = g && g.screen && g.y > y + 4 ? g : landingBelow(x, y), ok = f && (!f.screen || f === g) && !(f.ground && f.y - y > innerHeight * 0.8) && f.y <= O.y + innerHeight - 10; st.dropF = ok ? f : null; return ok ? f : null; };
+const dropTo = (x, y) => dropTo0(x, y) || (ALT && phone() ? dropTo0(x + st.dir * HALF_W * 2, y) : null);   // ALT on phones: the ledge under a box's side starts a step past its edge (his push-off carries him there)
+const dropTo0 = (x, y) => { const g = st.goal && st.goal.f, f = g && g.screen && g.y > y + 4 ? g : landingBelow(x, y), ok = f && (!f.screen || f === g) && !(f.ground && f.y - y > innerHeight * 0.8) && f.y <= O.y + innerHeight - 10; st.dropF = ok ? f : null; return ok ? f : null; };
 function landingBelow(x, y, vis) {   // nearest floor under (x, y) within a screen and a half; vis: a drop, so it must be one you can see
   let best = null;
   const visBottom = O.y + innerHeight - 30, lim = vis && visBottom > y + 2 ? visBottom : Infinity;
@@ -928,7 +930,7 @@ const TRACK = new Set(['approach', 'follow', 'chase', 'stalk', 'groom', 'comfort
 const relLeft = o => Math.max(1, o.until - ENV.REL.t);   // seconds left on an order (engine clock)
 const faceDove = () => { const d = ENV.__scion; if (d) st.dir = Math.sign(d.x - st.x) || st.dir; };
 function relGoal(o, p) {
-  const f = p && floorFor(p); if (!f || f.y < st.y - CFG.size * 2.2 || f.y > O.y + innerHeight - 10) return false;   // no floor there, one too high to climb to, or one below the screen (the page bottom under a flying bird): he stays and faces it instead
+  const f = p && floorFor(p); if (!f || f.y < st.y - UP || f.y > O.y + innerHeight - 10) return false;   // no floor there, one too high to climb to, or one below the screen (the page bottom under a flying bird): he stays and faces it instead
   st.goal = { f, x: Math.max(f.x1 + HALF_W, Math.min(f.x2 - HALF_W, p.x)), until: t + relLeft(o), rel: o.id };
   return true;
 }
@@ -1259,7 +1261,7 @@ function relStep(f) {
   if (forage(f)) return;
   if (st.z !== 0 && st.route && st.route.length) { if (!st.goal && st.mode !== 'lane') nextLeg(); return; }   // mid-transit behind the page: the bird's orders wait, he finishes the crossing (an order that stopped him here would leave him hidden)
   const d = ENV.__scion;
-  const reach = !!d && d.mode === 'perch' && !d.held && d.y >= st.y - CFG.size * 2.2 && floors.some(q => Math.abs(q.y - d.y) < 6 && d.x > q.x1 && d.x < q.x2);
+  const reach = !!d && d.mode === 'perch' && !d.held && d.y >= st.y - UP && floors.some(q => Math.abs(q.y - d.y) < 6 && d.x > q.x1 && d.x < q.x2);
   const o = R.want(WHO, { reach, floorY: f.y });
   if (!o || (st.away >= 1.5 && !o.goal && !o.pounce) || st.away >= 4.5) { if (st.relOrder) relEnd('interrupted'); autonomy(f); return; }   // fully off camera for 4.5 s: any order yields, nobody sees it   // out of view, an order that keeps him standing (a sulk, a stare) yields to getting back where he is seen
   if (!st.relOrder && (st.relRun || 0) >= 2) { if (!(st.relHold > 0)) st.relHold = t + 6 + Math.random() * 4; if (t < st.relHold) { autonomy(f); return; } st.relHold = 0; st.relRun = 0; }   // two bond orders without a move of his own between: his own life gets a turn (6-10 s) before the bird again
@@ -1372,9 +1374,9 @@ function stepBody(dt) {
     const e = (a, b, u) => a + (b - a) * (u < 0.5 ? 2 * u * u : 1 - Math.pow(-2 * u + 2, 2) / 2);   // ease in-out
     if (C.down) {   // hand over hand down a card's side (the hang pose, legs swinging), ~110 px/s, then let go above the ledge
       C.yTo = C.f.y - CFG.size * 0.9;   // the ledge as it is now (refloor above): a ledge that shifted mid-climb never leaves him hanging below it, to be snapped up on the drop
-      const k = t - C.t0, dur = Math.max(0.6, (C.yTo - C.y0) / 110); C.ph = 'hang'; C.u = Math.min(1, k / dur);
+      const k = t - C.t0, dur = Math.max(0.6, Math.abs(C.yTo - C.y0) / 110); C.ph = 'hang'; C.u = Math.min(1, k / dur);
       st.y = C.y0 + (C.yTo - C.y0) * C.u; st.x = C.x0 + Math.sin(k * 6) * 1.5;
-      if (C.u >= 1) { st.climb = null; st.mode = 'walk'; st.air = true; st.hop = false; st.vx = 0; st.vy = 0; st.dropF = C.f; }   // the last body height: a drop he lands from
+      if (C.u >= 1) { st.climb = null; st.mode = 'walk'; st.air = true; st.hop = false; st.vx = C.up ? Math.sign((C.f.x1 + C.f.x2) / 2 - st.x) * (HALF_W * 2 + 6) / Math.sqrt(2 * CFG.size * 0.9 / G) : 0; st.vy = 0; st.dropF = C.f; }   // the last body height: a drop he lands from
       return;
     }
     const T1 = 0.32, T2 = T1 + C.hang, T3 = T2 + C.pull, k = t - C.t0, hangY = C.f.y + CFG.size * 1.02;
@@ -1454,8 +1456,10 @@ function stepBody(dt) {
         st.dir = Math.sign(g.x - st.x) || st.dir; st.brake = Math.abs(g.x - st.x) / (walkSpeed() * 0.6);   // the last 0.6 s of the way: shorter, slower steps into the stop
       } else if (g.f.y < f.y - 4) {   // above him
         const dh = f.y - g.f.y, under = st.x >= g.f.x1 + HALF_W - 1 && st.x <= g.f.x2 - HALF_W + 1 && pass(st.x, g.f.y, CFG.size + 4);   // a goal clamped to the ledge's end counts as under it (a strict test had him turning on the spot for 25 s)   // under it, and with room on top right here (else he walks to the spot he chose first)
-        if (dh > CFG.size * 2.2) {   // too high in one go: climb the highest thing he can reach from here, a stepping stone toward it
-          const reach = CFG.size * 2.2; let q = null;
+        const side = ALT && phone() && dh > UP && g.f.box ? [g.f.x1 - HALF_W, g.f.x2 + HALF_W].filter(x => onFloor(f, x) && pass(x, f.y, CFG.size + 4)).sort((a, b) => Math.abs(a - st.x) - Math.abs(b - st.x))[0] : null;   // ALT on phones: a box too tall to leap (the phone mock) is climbed by its side, hand over hand, the way he comes down one
+        if (side != null) { if (Math.abs(side - st.x) < 6) { st.mode = 'climb'; st.floor = null; st.amt = 0; st.climb = { f: g.f, t0: t, down: true, up: true, y0: st.y, x0: st.x, xTo: null }; return; } st.dir = Math.sign(side - st.x) || st.dir; }
+        else if (dh > UP) {   // too high in one go: climb the highest thing he can reach from here, a stepping stone toward it
+          const reach = UP; let q = null;
           for (const c of floors) if (c !== f && !c.ground && c.y < f.y - 8 && c.y >= f.y - reach && st.x > c.x1 + HALF_W && st.x < c.x2 - HALF_W && clear(st.x, c.y, CFG.size + 4) && (!q || c.y < q.y)) q = c;
           if (q) { st.mode = 'prep'; st.prep = { f: q, dh: f.y - q.y, until: t + 0.18 + Math.random() * 0.14, climb: f.y - q.y > CFG.size * 1.2 }; st.amt = 0; return; }
           let nb = null;   // none right above him: walk to the nearest one he could climb, then climb it
