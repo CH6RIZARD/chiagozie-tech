@@ -586,7 +586,7 @@ ENV.__hugo = st;   // read-only peek for debugging
 if (!ALT) ENV.__hugoHead = () => { if (!skull || canvas.style.visibility === 'hidden') return null; skull.getWorldPosition(_hv); return { x: _hv.x + innerWidth / 2, y: innerHeight / 2 - _hv.y, r: CFG.size * 0.1 }; };   // his head in viewport px, for readtag.js
 ENV.__hugoFloors = () => allFloors;   // the ledges he scans are the food's colliders too (bond.js skips support:false seams)
 if (/[?&]debug/.test(location.search)) ENV.__hugoDbg = { get inner() { return thoughts; }, get gph() { return gest && gest.ph; }, feed: () => { if (st.air || st.held || st.mode === 'climb' || st.mode === 'sit' || (st.sitK || 0) > 0.001) return false; if (st.beh) behEnd(false); st.goal = null; st.route = null; st.amt = 0; st.mode = 'idle'; st.idleUntil = t + 9; gest = { name: 'feed', t0: t, dur: 7, side: st.dir, amp: 1, f: 1 }; return true; }, get floors() { return floors; }, get t() { return t; }, get gest() { return gest && gest.name; }, miss: why => missed(why), clear: (x, y, h) => clear(x, y, h), get ink() { return ink; }, transits: () => { const g = graph(); return g ? g.transits : null; }, route: () => transitRoute(), graph: () => graph(), go: () => { const r = transitRoute(); if (r) { st.goal = null; st.route = r; nextLeg(); } return !!r; }, get sq() { return st.sq || 0; }, bones: () => { const o = {}; for (const [k, b] of Object.entries({ head: skull, chest: B.chest, hips: B.hips })) { b.getWorldPosition(_hv); o[k] = [+(_hv.x + innerWidth / 2 + O.x).toFixed(1), +(innerHeight / 2 - _hv.y + O.y).toFixed(1)]; } return o; }, get lid() { return eyes[0] ? eyes[0].scale.y : 1; }, get shade() { return shadeCss; }, get att() { return att; }, get brace() { return st.brace || 0; }, get why() { return pokeWhy; }, get intent() { return ENV.MORTAL && ENV.MORTAL.why ? ENV.MORTAL.why(WHO) : null; }, know: () => (ENV.MORTAL && ENV.MORTAL.beliefs ? ENV.MORTAL.beliefs(WHO) : []), get beh() { return st.beh ? { id: st.beh.id, kind: st.beh.kind, b: st.beh.p.b } : null; },
-  walk: dx => { const f = st.floor; if (!f) return false; st.goal = { f, x: Math.max(f.x1 + HALF_W, Math.min(f.x2 - HALF_W, st.x + dx)), until: t + 20 }; st.route = null; if (st.mode !== 'walk') { st.mode = 'walk'; restyle(); } return true; }, park: s => { st.goal = null; st.route = null; if (st.mode === 'walk') st.mode = 'idle'; st.idleUntil = t + s; }, hop: v => hopUp(v) };   // scripted beats for the harness
+  walk: dx => { const f = st.floor; if (!f) return false; st.goal = { f, x: Math.max(f.x1 + HALF_W, Math.min(f.x2 - HALF_W, st.x + dx)), until: t + 20 }; st.route = null; if (st.mode !== 'walk') { st.mode = 'walk'; restyle(); } return true; }, park: s => { st.goal = null; st.route = null; if (st.mode === 'walk') st.mode = 'idle'; st.idleUntil = t + s; }, hop: v => hopUp(v), down: () => climbDown() };   // scripted beats for the harness
 st.dims = { THIGH, ARMLEN, SPINE, PITCH, CRAWL_H, size: CFG.size };
 // Hit area follows him; the canvas itself never takes the pointer.
 const hit = document.createElement('div'); hit.id = WHO + '-hit'; hit.setAttribute('aria-label', ALT ? ALT.label : 'Hugo. Press to pick him up, let go to drop him.');
@@ -971,6 +971,9 @@ function climbDown() {   // a ledge in view whose end is a card's side with a cl
   const p = c[(Math.random() * c.length) | 0];
   st.goal = null; st.route = null; st.floor = null; st.air = false; st.hop = false; st.vx = 0; st.vy = 0; st.dropF = null; st.away = 0; st.z = st.zs = 0; st.peek = false; st.x = p.x; st.dir = p.x < O.x + innerWidth / 2 ? 1 : -1; st.lostN = (st.lostN || 0) + 1;
   st.mode = 'climb'; st.climb = { f: p.f, t0: t, down: true, y0: O.y - CFG.size * 0.2, yTo: p.f.y - CFG.size * 0.9, x0: p.x, xTo: null };   // feet first, in over the top edge
+  const R = !ALT && ENV.__pack && ENV.__pack.rope, edge = cards.some(q => q.t < O.y && q.b > p.f.y - CFG.size && Math.min(Math.abs(q.l - p.x), Math.abs(q.r - p.x)) < HALF_W * 2.2);   // a card's side right beside him all the way down: his hands have an edge (crossesCard keeps 1.7 half widths clear)
+  if (!edge && R && R.start()) { st.climb.rope = true; st.climb.k = -R.lead; }   // nothing to hold: down a rope out of his pack (rope.js), all the way onto the ledge
+  (st.downLog || (st.downLog = [])).push({ t, edge, rope: !!st.climb.rope });
   return true;
 }
 function walkInSide() {   // a ledge in view that reaches the screen's side: in from that side, as at birth
@@ -1254,7 +1257,7 @@ function behEnd(ok) { const B = st.beh; if (!B) return; st.beh = null; st.spdK =
 const tryRun = fn => { try { return fn(); } catch (e) { if (!tryRun.warned) { tryRun.warned = 1; console.warn('hugo behaviour failed', st.beh && st.beh.id, e); } return false; } };   // one bad move never stalls the frame
 function behFree() { return !st.goal && !(st.route && st.route.length) && !st.air && !['prep', 'climb', 'lane', 'crawl'].includes(st.mode) && !(st.mode === 'walk' && st.amt >= 0.05); }
 function autonomy(f) {
-  const M = ENV.MORTAL; if (!M || !M.next || !M.alive(WHO) || st.relOrder || st.food || st.held || st.dead || st.enter) return;
+  const M = ENV.MORTAL; if (!M || !M.next || !M.alive(WHO) || st.relOrder || st.food || st.held || st.dead || st.enter || (ENV.__pack && ENV.__pack.rope && ENV.__pack.rope.ph)) return;
   if (f && f.screen) { st.edgeSince ??= t; } else st.edgeSince = null;
   // Off camera for a moment while the visitor is not scrolling: back into view (a reflex, not a choice); AI otherwise sleeps off camera
   if (ALT && ROOF && st.away >= 0.3 && performance.now() - scrolledAt > 150 && !st.air && !['prep', 'climb', 'lane', 'crawl'].includes(st.mode) && !(st.toView && (st.goal || (st.route && st.route.length)))) { if (st.beh) behEnd(false); gest = null; st.pendGest = null; st.idleUntil = t; comeBack(); st.spdK = 4; return; }   // (round 5: at a run, from where he is; never a relocation)   // ALT in the phone sheet: out of frame after a scroll, he drops what he was doing and climbs in over the edge onto a ledge in view (Hugo waits out his dwell and 4 s first)
@@ -1406,8 +1409,11 @@ function stepBody(dt) {
     const e = (a, b, u) => a + (b - a) * (u < 0.5 ? 2 * u * u : 1 - Math.pow(-2 * u + 2, 2) / 2);   // ease in-out
     if (C.down) {   // hand over hand down a card's side (the hang pose, legs swinging), ~110 px/s, then let go above the ledge
       C.yTo = C.f.y - CFG.size * 0.9;   // the ledge as it is now (refloor above): a ledge that shifted mid-climb never leaves him hanging below it, to be snapped up on the drop
-      const k = t - C.t0, dur = Math.max(0.6, Math.abs(C.yTo - C.y0) / 110); C.ph = 'hang'; C.u = Math.min(1, k / dur);
-      st.y = C.y0 + (C.yTo - C.y0) * C.u; st.x = C.x0 + Math.sin(k * 6) * 1.5;
+      if (C.rope) C.yTo = footY(C.f, C.x0);   // on a rope he lowers himself the whole way
+      if (C.rope && C.ft !== t) { C.ft = t; C.fs = 0.05; }   // rope: 50 ms of lowering per rendered frame at most (a frame's substeps share it), so a stalled frame never jumps him
+      const k = C.rope ? (C.k += Math.max(0, Math.min(dt, C.fs)), C.fs -= Math.min(dt, C.fs), C.k) : t - C.t0, dur = Math.max(0.6, Math.abs(C.yTo - C.y0) / 110); C.ph = 'hang'; C.u = Math.max(0, Math.min(1, k / dur));
+      st.y = C.y0 + (C.yTo - C.y0) * C.u; st.x = C.x0 + (C.rope ? Math.sin(k * 2.2) * 3 * (1 - C.u) : Math.sin(k * 6) * 1.5);
+      if (C.u >= 1 && C.rope) { st.floor = C.f; st.x = C.x0; st.y = C.yTo; st.mode = 'walk'; st.land = 0.25; st.climb = null; ENV.__pack.rope.landed(); return; }   // feet on the ledge: tug, coil, into the pack (rope.js), then autonomy again
       if (C.u >= 1) { st.climb = null; st.mode = 'walk'; st.air = true; st.hop = false; st.vx = C.up ? Math.sign((C.f.x1 + C.f.x2) / 2 - st.x) * (HALF_W * 2 + 6) / Math.sqrt(2 * CFG.size * 0.9 / G) : 0; st.vy = 0; st.dropF = C.f; }   // the last body height: a drop he lands from
       return;
     }
@@ -1772,4 +1778,4 @@ document.addEventListener('scroll', e => {
 new MutationObserver(ms => { if (ms.some(m => m.target !== hit && m.target !== hud && !(m.target.closest && m.target.closest(skipSel)))) dirty = true; }).observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class', 'open', 'style'] });
 requestAnimationFrame(frame);
 // The backpack (backpack.js, realms/hugo/pack): loaded after his first frame so it never delays him; it owns ENV.__pack.
-let packPose = null; if (!ALT) requestAnimationFrame(() => setTimeout(() => import('./backpack.js?v=20261116p10').then(m => m.boot({ model, B, rest, st, armMix, mix, springK, body: () => BODY, glb: CFG.glb })).then(f => { packPose = f; }, e => console.warn('backpack', e)), 0));
+let packPose = null; if (!ALT) requestAnimationFrame(() => setTimeout(() => import('./backpack.js?v=20261116r2').then(m => m.boot({ model, B, rest, st, armMix, mix, springK, body: () => BODY, glb: CFG.glb, size: CFG.size, persp: CFG.perspective, canvas })).then(f => { packPose = f; }, e => console.warn('backpack', e)), 0));

@@ -5,6 +5,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
+import { makeCoil, bootRope } from './rope.js?v=20261116r1';
 
 const sm = x => { x = Math.max(0, Math.min(1, x)); return x * x * (3 - 2 * x); };
 const _m = new THREE.Matrix4(), _m2 = new THREE.Matrix4(), _p = new THREE.Vector3(), _p2 = new THREE.Vector3(), _q = new THREE.Quaternion(), _q2 = new THREE.Quaternion(), _s = new THREE.Vector3(), _s2 = new THREE.Vector3(), _v = new THREE.Vector3(), _x = new THREE.Vector3(), _y = new THREE.Vector3(), _z = new THREE.Vector3();
@@ -25,7 +26,7 @@ function makeSeedBag() {   // a little burlap sack tied at the neck
   return g;
 }
 
-export async function boot({ model, B, rest, st, armMix, mix, springK, body, glb }) {
+export async function boot({ model, B, rest, st, armMix, mix, springK, body, glb, size, persp, canvas }) {
   const BODY = body(); if (!BODY || !B.chest || !B.handR) return null;
   const pick = new URLSearchParams(location.search).get('pack'), file = pick === 'quaternius' ? 'pack' : 'leather';
   const url = new URL(`realms/hugo/pack/${file}.meshopt.glb` + (/\.wasm$/.test(glb || '') ? '.wasm' : ''), document.baseURI).href;
@@ -78,7 +79,7 @@ export async function boot({ model, B, rest, st, armMix, mix, springK, body, glb
     for (let i = 0; i < SN - 1; i++) { const a = i * 2; idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); } g.setIndex(idx);
     S.mesh = new THREE.Mesh(g, strapMat); S.mesh.frustumCulled = false; scene.add(S.mesh); }
 
-  const items = { book: makeBook(), food: makeSeedBag() }, ITEM_H = { book: 0.5, food: 0.46 };
+  const items = { book: makeBook(), food: makeSeedBag(), rope: makeCoil(mat) }, ITEM_H = { book: 0.5, food: 0.46, rope: 0.4 };
   for (const it of Object.values(items)) { it.visible = false; it.traverse(o => { if (o.isMesh) o.frustumCulled = false; }); scene.add(it); }
   // crumbs: a few seeds that fall from the bag's mouth when he shakes it (the food system gets one real drop per shake)
   const CN = 10, cpos = new Float32Array(CN * 3).fill(1e5), crumbs = Array.from({ length: CN }, () => ({ life: 0, v: new THREE.Vector3(), p: new THREE.Vector3() }));
@@ -102,10 +103,12 @@ export async function boot({ model, B, rest, st, armMix, mix, springK, body, glb
       if (holding === item) return Promise.resolve({ ok: true, item, why: 'already holding it' });
       return holding ? api.stow().then(() => api.take(item)) : run('take', item); },   // busy at once, so a caller's next check sees it
     get why() { return lastWhy; },
-    stow() { if (!holding && !job) return Promise.resolve({ ok: true, item: null, why: 'nothing in hand' }); if (job) return new Promise(r => { const j = job, f = j.res; j.res = v => { f(v); r(api.stow()); }; }); return run('stow', holding); },
+    stow() { if (holding === 'rope' && api.rope && api.rope.out) return no('busy: the rope is out');   // he is on it, or tugging it free: rope.js stows it itself
+      if (!holding && !job) return Promise.resolve({ ok: true, item: null, why: 'nothing in hand' }); if (job) return new Promise(r => { const j = job, f = j.res; j.res = v => { f(v); r(api.stow()); }; }); return run('stow', holding); },
     shake() { if (holding !== 'food' || job) return false; shakeT = 1.1; return true; },
   };
   window.__pack = api;
+  const rope = api.rope = canvas ? bootRope({ st, armMix, handGrip: (s, o) => handGrip(s, o), pack: api, hand: () => hand, moving, setHolding: v => { if (job) { const j = job; job = null; j.res({ ok: false, item: null, why: 'interrupted: the rope' }); } holding = v; }, size, persp, canvas }) : null;   // the rope down when there is no edge (rope.js)
 
   // world placement of things
   const handGrip = (side, out) => { const h = side === 'L' ? B.handL : B.handR, f = side === 'L' ? B.foreL : B.foreR; h.getWorldPosition(out); f.getWorldPosition(_g); return out.addScaledVector(_g.sub(out).negate(), 0.55); };   // a little past the wrist, into the palm
@@ -192,12 +195,13 @@ export async function boot({ model, B, rest, st, armMix, mix, springK, body, glb
   const pose = dt => {
     dt = Math.min(dt, 0.1);
     lastPose = performance.now();
-    if (moving() && (holding || job) && !(job && job.kind === 'stow')) {
+    const out = !!(rope && rope.out);   // the rope is out as a line: no coil in his hand, his arms are the rope's
+    if (moving() && (holding || job) && !(job && job.kind === 'stow') && !(out && holding === 'rope')) {
       const why = 'interrupted: ' + movingWhy();
       if (job) { const j = job; lastWhy = why; job = { kind: 'stow', item: j.item, u: 1 - j.u, dur: 0.55, res: () => {} }; j.res({ ok: false, item: null, why }); }   // reversed from where it was
       else { lastWhy = 'stowed: ' + movingWhy(); run('stow', holding, true); } }
     // the take timeline (stow plays it backwards): swing off, flap open, item out into the hand, flap shut, swing back
-    let u = 1, swingU = 0, flapU = 0, itemU = holding ? 1 : 0, itemName = holding, wShoulder = 0, wPocket = 0, wHold = holding ? 1 : 0, wPack = 0;
+    let u = 1, swingU = 0, flapU = 0, itemU = holding && !out ? 1 : 0, itemName = holding, wShoulder = 0, wPocket = 0, wHold = holding && !out ? 1 : 0, wPack = 0;
     if (job) {
       job.u = Math.min(1, job.u + dt / job.dur); u = job.kind === 'take' ? job.u : 1 - job.u; itemName = job.item;
       swingU = Math.min(sm(u / 0.3), 1 - sm((u - 0.82) / 0.18)); flapU = Math.min(sm((u - 0.26) / 0.14), 1 - sm((u - 0.72) / 0.12));
@@ -216,6 +220,7 @@ export async function boot({ model, B, rest, st, armMix, mix, springK, body, glb
       if (reading > 0.01) { armMix('L', [0.12, -0.75, 0.55], [-0.4, 0.45, 0.85], reading); armMix('R', [0.12, -0.75, 0.55], [-0.4, 0.45, 0.85], reading); mix(B.head, 0.32, 0, 0, reading); }
       if (reading < 0.99) armMix(hand, [0.15, -0.8, 0.4], [0.1, shakeT > 0 ? 0.35 + Math.sin(shakeT * 28) * 0.45 : 0.1, 1], wHold * (1 - reading));
     }
+    if (rope) rope.pose();
     const offW = job ? Math.min(sm(u / 0.12), 1 - sm((u - 0.88) / 0.12)) : 0;   // the arm slips out first and back in last
     F = { dt, swingU, flapU, itemU, itemName, offW };
   };
