@@ -98,7 +98,10 @@ nav a.cta{color:var(--accent)}
 @keyframes blink{50%{opacity:.25}}
 @media (prefers-reduced-motion:reduce){.st.live::before{animation:none}}
 .realm .about{font-size:16px;max-width:60ch;margin:0}
-.realm .get{margin-top:20px}
+.realm .ttl{display:flex;align-items:center;gap:6px 16px;flex-wrap:wrap}
+.gplay{display:inline-flex;align-items:center;gap:8px;border:0;font:500 15px/1 var(--sans);color:var(--ink);opacity:.8;white-space:nowrap}
+.gplay:hover{opacity:1;color:var(--ink)}
+.gplay svg{width:16px;height:16px}
 .realm .how{font-family:var(--mono);font-size:12px;color:var(--muted);margin-top:14px;letter-spacing:.02em}
 
 .stage{position:relative;background:var(--rule);border:1px solid var(--line);border-radius:4px;overflow:hidden;aspect-ratio:16/9;max-height:78vh}
@@ -511,8 +514,8 @@ body.simple>section,body.simple>footer,body.simple>.mindex{display:none!importan
 <!-- THE VOID -->
 <section class="realm" id="void"><div class="wrap">
   <div class="top">
-    <div><div class="kicker"><span class="st live">Live · Google Play</span><span class="st">Mobile · social</span></div><h2>THE VOID</h2></div>
-    <div><p class="about">A physiological ranking algorithm rather than standard behavior modeling. On-device sensing reads camera pulse (rPPG), fingertip heart rate and HRV, Bluetooth heart-rate straps, facial expression, touch dynamics and hand tremor, scores each against your own baseline and maps it to arousal, attention and valence on the media the user engages with. An on-device model learns from that behavior and serves more of what moves you, mixed by a fusion ranker (social, interest, behavioral, physio-affinity and controversy signals, Thompson-sampling weights) into an almost addictive feed. Built as a mobile app on Supabase Postgres with PostGIS and row-level security, HLS live streams and libsignal end-to-end encrypted DMs. Wrapped in the UI of international news, niche live streams, reels and feeds, and a unique polls and discussion module.</p><p class="how">Tap a nation · live rooms, polls and the feed · anonymous by default</p><p class="get"><a class="btn primary" href="https://play.google.com/store/apps/details?id=com.voidArchive" target="_blank" rel="noopener"><svg viewBox="0 0 24 24"><path d="M6 4l14 8-14 8z"/></svg>Get it on Google Play</a></p></div>
+    <div><div class="kicker"><span class="st live">Live · Google Play</span><span class="st">Mobile · social</span></div><div class="ttl"><h2>THE VOID</h2><a class="gplay" href="https://play.google.com/store/apps/details?id=com.voidArchive" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#00C3FF" d="M3 2l10.5 10L3 22z"/><path fill="#00E676" d="M3 2l13.9 7.7-3.4 2.3z"/><path fill="#FF3D47" d="M3 22l13.9-7.7-3.4-2.3z"/><path fill="#FFD500" d="M16.9 9.7L21 12l-4.1 2.3-3.4-2.3z"/></svg>Google Play</a></div></div>
+    <div><p class="about">A physiological ranking algorithm rather than standard behavior modeling. On-device sensing reads camera pulse (rPPG), fingertip heart rate and HRV, Bluetooth heart-rate straps, facial expression, touch dynamics and hand tremor, scores each against your own baseline and maps it to arousal, attention and valence on the media the user engages with. An on-device model learns from that behavior and serves more of what moves you, mixed by a fusion ranker (social, interest, behavioral, physio-affinity and controversy signals, Thompson-sampling weights) into an almost addictive feed. Built as a mobile app on Supabase Postgres with PostGIS and row-level security, HLS live streams and libsignal end-to-end encrypted DMs. Wrapped in the UI of international news, niche live streams, reels and feeds, and a unique polls and discussion module.</p><p class="how">Tap a nation · live rooms, polls and the feed · anonymous by default</p></div>
   </div>
   <div class="split with-phone">
     <div class="aside">
@@ -562,8 +565,8 @@ body.simple>section,body.simple>footer,body.simple>.mindex{display:none!importan
 <!-- EZER -->
 <section class="realm" id="ezer"><div class="wrap">
   <div class="top">
-    <div><div class="kicker"><span class="st live">Live · Google Play</span><span class="st">Fintech</span></div><h2>EZER</h2></div>
-    <div><p class="about">Turn subscriptions into explicit decisions. Link a bank, see every recurring charge including trials caught by on-device inbox scanning, cancel without dead ends, and sweep what you cancel into savings goals. This is the actual app build running in a phone against the production API.</p><p class="how">Tap through the onboarding · <a href="https://ezersaves.com">ezersaves.com</a></p><p class="get"><a class="btn primary" href="https://play.google.com/store/apps/details?id=com.ezersaves.app" target="_blank" rel="noopener"><svg viewBox="0 0 24 24"><path d="M6 4l14 8-14 8z"/></svg>Get it on Google Play</a></p></div>
+    <div><div class="kicker"><span class="st live">Live · Google Play</span><span class="st">Fintech</span></div><div class="ttl"><h2>EZER</h2><a class="gplay" href="https://play.google.com/store/apps/details?id=com.ezersaves.app" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#00C3FF" d="M3 2l10.5 10L3 22z"/><path fill="#00E676" d="M3 2l13.9 7.7-3.4 2.3z"/><path fill="#FF3D47" d="M3 22l13.9-7.7-3.4-2.3z"/><path fill="#FFD500" d="M16.9 9.7L21 12l-4.1 2.3-3.4-2.3z"/></svg>Google Play</a></div></div>
+    <div><p class="about">Turn subscriptions into explicit decisions. Link a bank, see every recurring charge including trials caught by on-device inbox scanning, cancel without dead ends, and sweep what you cancel into savings goals. This is the actual app build running in a phone against the production API.</p><p class="how">Tap through the onboarding · <a href="https://ezersaves.com">ezersaves.com</a></p></div>
   </div>
   <div class="split with-phone">
     <div class="aside"><div class="spec">
