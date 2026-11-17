@@ -322,8 +322,7 @@ function scan() {
   if (bar && !ALT) { const r = bar.getBoundingClientRect(); if (r.height) ink.push(barInk = { l: 0, t: O.y - 400, r: pageW, b: O.y + r.bottom, h: r.bottom, bar: true }); }
   if (od) pass(od, os);
   if (ALT) { const mine = f => f.el === host || host.contains(f.el); floors = floors.filter(mine); seams = seams.filter(mine);   // only his realm's own ledges exist for him
-    const im = !ROOF && host.querySelector('img.th');   // the phone index row: its little phone picture is a thing to be on (the row's hairline was all he had: seated on it he sat on nothing)
-    if (im && im.naturalWidth) { const r = im.getBoundingClientRect(); floors.push({ y: r.top + O.y, x1: r.left + O.x, x2: r.right + O.x, el: im, box: true, support: true }); }   // shortcut: the picture's whole box (its phone is drawn 15..45 of 60 px; a ledge trimmed to that was too narrow for him to get onto), trim when he can use narrow ledges
+    // the phone index row: his seat is the row's own top hairline, the divider above it, not its phone picture (owner 2026-11-16)
     if (ROOF) floors.push({ y: groundY(), x1: 0, x2: docW(), el: host, ground: true, support: true }); }   // and its bottom edge, where that has standing room
   else floors.push({ y: groundY(), x1: 0, x2: document.documentElement.scrollWidth, el: document.body, ground: true, support: true });   // the page bottom; Read less: the screen's bottom edge (a one-screen room has a solid floor)
   floors.forEach(fit); seams.forEach(fit);   // only ledges with standing room somewhere along them (no climbing into a gap and crawling there)
