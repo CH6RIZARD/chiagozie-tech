@@ -1309,6 +1309,7 @@ function relStep(f) {
 }
 let returning = false; try { const ls = +localStorage.getItem(WHO + '.lastSeen') || 0; returning = ls > 0 && Date.now() - ls > 3600e3; localStorage.setItem(WHO + '.lastSeen', Date.now()); } catch {}   // he remembers you were here
 let bornTries = 0, lastSY = 0, curSY = 0, jumpAt = -1e9;   // lastSY: the scroll before the latest jump, to keep him put on screen across a view switch
+const ropeTop = () => O.y - (barInk ? 0 : CFG.size * 0.2);   // where his feet wait for the rope: at the view's top edge, hidden behind the nav bar (none: a little above the view). Not higher: every px up there is a wait nobody sees
 function born() {   // first appearance (patch 5, item 0): an entrance, never a pop-in. He walks in from the nearer side of the screen along his
   // target ledge's line and arrives within ~1.5 s: onto the hero name when it is in view (somewhere new along it each load), else onto a
   // ledge in view that reaches the screen's side; with none, a climb in over the bottom edge (never from the top).
@@ -1348,7 +1349,7 @@ function born() {   // first appearance (patch 5, item 0): an entrance, never a 
   const ty = footY(tgt.f, tgt.x);
   if (!ALT) {   // down the rope out of his pack, never a bare fall (owner 2026-11-16); seated once the coil is away. He waits just above the view until the pack has loaded (the pack must size itself on a posed body, so he is born first)
     st.goal = null; st.route = null; st.dropF = null; st.away = 0; st.z = st.zs = 0; st.peek = false; st.floor = null; st.air = false; st.hop = false; st.x = tgt.x; st.vx = st.vy = 0; st.dir = tgt.x < O.x + innerWidth / 2 ? 1 : -1; st.amt = 0; st.ph = Math.random(); st.bornOnce = true;
-    st.mode = 'climb'; st.climb = { f: tgt.f, t0: t, down: true, y0: O.y - CFG.size * 0.2, yTo: ty, x0: tgt.x, xTo: null, rope: true, k: -1, wait: true, born: { sit } };
+    st.mode = 'climb'; st.climb = { f: tgt.f, t0: t, down: true, y0: ropeTop(), yTo: ty, x0: tgt.x, xTo: null, rope: true, k: -1, wait: true, born: { sit } };
     (st.downLog || (st.downLog = [])).push({ t, edge: false, rope: true, born: true });
     ENV.MORTAL?.signal?.(WHO, 'BODY_READY', { x: tgt.x, y: ty, side: 0, dur: 1.5 }); if (returning) st.pendGest = { name: 'wave', dur: 2.4, side: 1, amp: 1, any: true };
     return true;
@@ -1428,7 +1429,7 @@ function stepBody(dt) {
     if (C.down) {   // hand over hand down a card's side (the hang pose, legs swinging), ~110 px/s, then let go above the ledge
       C.yTo = C.f.y - CFG.size * 0.9;   // the ledge as it is now (refloor above): a ledge that shifted mid-climb never leaves him hanging below it, to be snapped up on the drop
       if (C.rope) C.yTo = footY(C.f, C.x0);   // on a rope he lowers himself the whole way
-      if (C.wait) { const R = ENV.__pack && ENV.__pack.rope; C.y0 = O.y - CFG.size * 0.2; C.k = -1;
+      if (C.wait) { const R = ENV.__pack && ENV.__pack.rope; C.y0 = ropeTop(); C.k = -1;
         if (R && R.start()) { C.wait = false; C.k = -R.lead; }
         else if (t - C.t0 > 2.5) { st.fallTo = { f: C.f, sit: C.born.sit }; st.floor = null; st.air = true; st.hop = false; st.y = Math.min(O.y - 8, C.yTo - CFG.size * 2); st.vx = st.vy = 0; st.mode = 'walk'; st.climb = null; return; } }   // no pack after 2.5 s: the plain drop, rather than no Hugo
       if (C.born && C.born.sit && !C.wait && !onInk(C.x0, C.f.y)) { let bx = null; for (let d = 4; d <= 400 && bx == null; d += 4) for (const x of [C.x0 - d, C.x0 + d]) if (x >= C.f.x1 && x <= C.f.x2 && sitRoom(x, C.f.y) && onInk(x, C.f.y)) { bx = x; break; }
