@@ -123,7 +123,7 @@
   const fire = (who, type, x) => { for (const f of subs[who]) { try { f(type, x); } catch (e) { if (DEBUG) console.error(e); } } };
   function fresh(who, id, born, deathAt) {
     return { who, id, born, deathAt, dt: 0, alive: true, external: false, mot: { ...newMot(), ...BORN }, act: null, visited: new Set(), lastUser: now(), progressAt: now() - STALL_AFTER * 1000, goals: [], ended: null,
-      know: loadKnow(who, id), kv: 0, mc: new Map(), net: 0, asked: new Set(), grow: [], lookAt: 0, studied: new Set(), looking: null, wonder: null, ageK: 0, ageBel: null, section: null };
+      know: loadKnow(who, id), kv: 0, mc: new Map(), net: 0, asked: new Set(), grow: [], lookAt: 0, studied: new Set(), looking: null, wonder: null, tc: 0, narr: {}, ageK: 0, ageBel: null, section: null };
   }
   function create(who) {
     const id = uuid(rng), born = Date.now(), deathAt = born + sampleLifespan(rng) * 1000;
@@ -343,9 +343,20 @@
     for (const f of got) for (const r of f.related || []) take(r);
     for (const f of got) for (const m of String(f.text || '').slice(1).matchAll(/\b([A-Z][a-z]{3,}(?: [A-Z][a-z]+){0,2})\b/g)) take(m[1]);
   }
+  // Ported from the frame (agent_core): his web search hangs off the hidden clock, the narrator and the wander loop.
+  // mortal_agent.py _update_meaning_tension: tension = .05 + .95 * age / lifespan. The lifespan stays sealed; he is never told the time.
+  const tension = B => Math.min(1, Math.max(0, .05 + .95 * (Date.now() - B.born) / Math.max(1, B.deathAt - B.born)));
+  function fetchTurn(B) {   // is this turn a fetch (true) or a wander step (false)?
+    const tn = tension(B);
+    if (B.narr.tc !== B.tc) B.narr = { tc: B.tc, yes: tn > .4 && u01() < .35 };   // narrator.py generate_narrator_proposal: past .4 the inner voice proposes a fetch (p .35), once a turn
+    if (B.narr.yes) return true;
+    if (!((now() - B.lastUser) / 1000 >= 10 || tn > .4)) return false;   // _autonomous_planner_loop: only when left alone 10 s, or tense
+    return !(tn < .6 && B.tc % 3 !== 0);   // same loop: two wander steps, then a fetch; past .6 every turn
+  }
   function wonder(who) {   // what it does not know and could look up now, scored by how close it is to it
     const B = beings[who];
     if (!B || B.looking || now() < NET.after || Date.now() - B.lookAt < NET.gap || B.net >= NET.max || (G.navigator && G.navigator.onLine === false) || (DOM && document.hidden)) return null;
+    if (!SILENT[who] && !fetchTurn(B)) return null;   // the dove reads on its own tick; a body with a behaviour loop fetches on the frame's turns
     const known = key => B.asked.has(key) || B.know.some(b => b.from === key && confOf(b) > .3);
     let best = null; const ask = (key, kind, topic, s) => { if (!known(key) && (!best || s > best.s)) best = { key, kind, topic, s }; };
     ask('self', 'self', SPECIES[who], .7); ask('sky', 'sky', null, .55); ask('gh', 'gh', null, who === 'hugo' ? .75 : .3);   // Hugo stands on his maker's work
@@ -493,7 +504,7 @@
     const dur = (d.dur || 3) * p.durK, u = Math.min(1, +(typeof d.u === 'function' ? d.u(ctx, ev) : d.u) || 0);
     R.cur = { id: d.id, cat: d.cat, def: d, p, t0: t, minT: Math.min(dur * .6, 6), maxT: p.before + dur + p.after + 1.5, ev: ev ? ev.type : null, s: planned ? Math.max(.6, u) : u };
     R.last.set(d.id, t); R.lastCat.set(d.cat, t); R.seen.add(d.id); R.catRun = R.lastC === d.cat ? (R.catRun || 0) + 1 : 1; R.lastC = d.cat;
-    R.cur.because = because;
+    R.cur.because = because; if (B) B.tc++;   // one more turn of the wander loop (the frame's turn_count)
     R.trace.push({ t: +t.toFixed(2), id: d.id, cat: d.cat, b: p.b, plan: planned ? R.plan.def.goal : null, ev: R.cur.ev, ...(because ? { bel: because } : {}) }); if (R.trace.length > 600) R.trace.shift();
     return { id: d.id, cat: d.cat, p, reason: why(who), ev: R.cur.ev, plan: planned ? R.plan.def : null, step: planned ? R.plan.i : -1, x: ev ? ev.x : undefined, belief: bel };
   }

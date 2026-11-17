@@ -1198,7 +1198,7 @@ const HUGO_REP = [
   { id: 'stretch', cat: 'rest', dur: 3, words: ['limb'], u: c => 0.2 + 0.3 * c.fatigue, on: ['tab_back'] },
   { id: 'yawn', cat: 'rest', dur: 2.5, words: ['~night', '~dusk'], u: c => 0.1 + 0.5 * c.fatigue + 0.3 * c.env.sleepy },
   { id: 'scratch', cat: 'fidget', dur: 2.5, u: 0.25 },
-  { id: 'read_up', cat: 'learn', dur: 3, again: 25, u: c => (c.wonder ? 0.5 + 0.5 * c.wonder.s : 0) },   // patch 6: something it does not know about, looked up (the kernel's wonder())
+  { id: 'read_up', cat: 'learn', dur: 3, again: 25, u: c => (c.wonder ? 1 : 0) },   // patch 6: something it does not know about, looked up (the kernel's wonder())
   { id: 'hips', cat: 'fidget', dur: 3, u: 0.2 },
   { id: 'cross_arms', cat: 'fidget', dur: 3.5, u: c => 0.15 + 0.3 * c.mo.s },
   { id: 'dance', cat: 'play', dur: 4.5, words: ['animat', 'danc'], avoid: ['~night', '~cold'], u: c => 0.1 + 0.4 * (c.n.energy > 0.7 ? 1 : 0) },
